@@ -16,7 +16,7 @@ and the design is [RFC 0001](docs/rfc/0001-architecture.md).
 - [Privacy](docs/privacy.md): how the framework keeps apps from phoning home
 
 The same pages, with a reference for every package, are a docs site built with @xcwds itself
-(`site/`), deployed to GitHub Pages from `main`.
+(`site/`), deployed to GitHub Pages from `main` at [docs.xcwds.com](https://docs.xcwds.com).
 
 ## Packages
 

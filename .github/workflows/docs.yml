@@ -1,5 +1,6 @@
 # Deploys the docs site (site/) to GitHub Pages once CI has passed on main.
-# Needs Settings → Pages → Source: GitHub Actions.
+# Needs Settings → Pages → Source: GitHub Actions, and the custom domain docs.xcwds.com there
+# (a CNAME record for docs pointing at xcwds.github.io).
 name: Docs
 
 on:
@@ -53,10 +54,8 @@ jobs:
         run: pnpm build
 
       - name: Build the docs site
+        # Served from the root of docs.xcwds.com, so no base path.
         run: pnpm --filter @xcwds/site exec vite build
-        env:
-          # A project site lives under /<repo>.
-          BASE_PATH: /${{ github.event.repository.name }}
 
       - name: Upload the site
         uses: actions/upload-pages-artifact@v3
