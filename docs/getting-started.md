@@ -4,19 +4,6 @@ An @xcwds app is a static site that installs like an app, works offline and keep
 save on their own device. You describe it in one config file: its name, icon and colours, and a
 list of plugins. This page takes you from nothing to an app on your phone.
 
-> **Not on npm yet.** The packages will be published with the first release
-> ([#26](https://github.com/xcwds/xcwds/issues/26)). Until then, try it from a clone of
-> [xcwds/xcwds](https://github.com/xcwds/xcwds):
->
-> ```sh
-> pnpm install && pnpm build
-> node packages/create/dist/create.js examples/my-app --workspace
-> pnpm install
-> ```
->
-> `--workspace` makes the new app use the packages in the clone. Everything below works the
-> same, from `examples/my-app`.
-
 ## Make an app
 
 ```sh

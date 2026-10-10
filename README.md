@@ -4,7 +4,7 @@ Everyday tools that never phone home, as a framework: make your own installable,
 PWA from a config file and a list of plugins. Modelled on [Fastify](https://fastify.dev)'s
 plugin system and extracted from [xcwds.github.io](https://github.com/xcwds/xcwds.github.io).
 
-Work in progress; nothing is published to npm yet. The plan is [#1](https://github.com/xcwds/xcwds/issues/1)
+On npm as `@xcwds/*` (0.x, so a minor release can still change APIs). The plan is [#1](https://github.com/xcwds/xcwds/issues/1)
 and the design is [RFC 0001](docs/rfc/0001-architecture.md).
 
 ## Docs

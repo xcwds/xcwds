@@ -57,10 +57,8 @@
 				>npm create @xcwds my-app</code
 			></pre>
 		<p class="text-sm text-(--xcwds-shell-muted)">
-			Not on npm yet: <a class="underline" href={resolve('/docs/getting-started')}
-				>Getting started</a
-			>
-			shows how to try it from a clone until the first release.
+			<a class="underline" href={resolve('/docs/getting-started')}>Getting started</a> takes it from there
+			to an app on your phone.
 		</p>
 	</section>
 	<PageList pages={start} />
