@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-tools",
-	"version": "1.0.0",
+	"version": "0.1.0",
 	"description": "A tool registry for @xcwds apps: an index page of small tools, pinned and recently used tools on Home, and manifest shortcuts, with private tools kept out of recents and sharing.",
 	"license": "MIT",
 	"type": "module",

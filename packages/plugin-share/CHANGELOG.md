@@ -1,6 +1,6 @@
 # @xcwds/plugin-share
 
-## 1.0.0
+## 0.1.0
 
 ### Minor Changes
 
@@ -34,4 +34,4 @@
 - Updated dependencies [e8d705f]
   - @xcwds/core@0.1.0
   - @xcwds/sveltekit@0.1.0
-  - @xcwds/plugin-shell@1.0.0
+  - @xcwds/plugin-shell@0.1.0

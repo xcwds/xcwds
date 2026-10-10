@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-install",
-	"version": "1.0.0",
+	"version": "0.1.0",
 	"description": "Install support for @xcwds apps: an Install button where the browser offers one, Add to Home Screen steps on iPhone and iPad, hidden once installed.",
 	"license": "MIT",
 	"type": "module",

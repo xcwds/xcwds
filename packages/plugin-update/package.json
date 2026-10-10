@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-update",
-	"version": "1.0.0",
+	"version": "0.1.0",
 	"description": "Updates that wait for the user in @xcwds apps: a new version waits until the user taps Update, postponed while something a reload would interrupt is running.",
 	"license": "MIT",
 	"type": "module",

@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-share",
-	"version": "1.0.0",
+	"version": "0.1.0",
 	"description": "Sharing for @xcwds apps: a Share button in the installed app that never shares what you typed, and a private share target whose shared content never reaches a server.",
 	"license": "MIT",
 	"type": "module",
