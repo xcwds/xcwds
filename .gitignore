@@ -19,3 +19,4 @@ packages/create/src/versions.ts
 examples/starter
 site/build
 site/build-*
+packages/*/LICENSE

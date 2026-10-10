@@ -18,7 +18,7 @@
 		"changeset": "changeset",
 		"test:starter": "node packages/create/scripts/test-starter.js",
 		"version-packages": "changeset version && pnpm install --lockfile-only",
-		"release": "pnpm build && changeset publish"
+		"release": "pnpm build && node scripts/copy-license.js && changeset publish"
 	},
 	"devDependencies": {
 		"@changesets/cli": "^2.29.7",
