@@ -1,7 +1,6 @@
 {
 	"name": "@xcwds/testing",
 	"version": "0.0.0",
-	"private": true,
 	"description": "Test an @xcwds app and its plugins: a Vitest kit (test app, fake clock, simulated tabs, worker hooks) and Playwright helpers (hydration, tap targets, a GitHub Pages-like server, fake deploys, a config preset).",
 	"license": "MIT",
 	"type": "module",

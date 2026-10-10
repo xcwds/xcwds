@@ -1,7 +1,6 @@
 {
 	"name": "@xcwds/plugin-settings",
 	"version": "0.0.0",
-	"private": true,
 	"description": "The settings page for @xcwds apps: every plugin's settings with built-in controls, sections plugins add, backups (download, share, import, clear) and About.",
 	"license": "MIT",
 	"type": "module",

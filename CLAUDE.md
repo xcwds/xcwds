@@ -5,8 +5,8 @@
 phase. Design: `docs/rfc/0001-architecture.md`; follow its decisions, and change the RFC in the
 same PR when a decision changes.
 
-pnpm monorepo: `packages/*` are published under the `@xcwds` scope (all `"private": true` until
-#26), `examples/*` are test apps. Never publish to npm unless the user asks.
+pnpm monorepo: `packages/*` are published under the `@xcwds` scope, `examples/*` are test apps.
+Never publish to npm unless the user asks.
 
 - Before pushing: `pnpm build && pnpm check && pnpm lint && pnpm publint && pnpm test:unit --run && pnpm test:e2e`,
   plus `pnpm test:starter` when a generated app could change (`packages/create`, or any package it uses).

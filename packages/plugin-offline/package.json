@@ -1,7 +1,6 @@
 {
 	"name": "@xcwds/plugin-offline",
 	"version": "0.0.0",
-	"private": true,
 	"description": "Offline support for @xcwds apps: precaching and runtime caching in the service worker, an offline fallback page, and an offline notice.",
 	"license": "MIT",
 	"type": "module",

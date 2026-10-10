@@ -1,7 +1,7 @@
 # Changesets
 
 Run `pnpm changeset` in a PR that changes a published package, and describe the change for its
-changelog. Nothing is published yet (#26); versions and changelogs will be cut from these files.
+changelog. Versions and changelogs are cut from these files.
 
 ## Releasing
 
@@ -12,9 +12,9 @@ changelog. Nothing is published yet (#26); versions and changelogs will be cut f
 - Once that PR is merged, it builds and publishes every package whose version isn't on npm yet
   (`pnpm release`, which runs `changeset publish`), with provenance, and tags the release.
 
-Packages marked `"private": true` are never published, so removing that flag (#26) is what makes a
-package go out. The Version packages PR is opened with the workflow's own token, which doesn't start
-CI on it; CI runs on `main` after the merge, before the publish.
+Packages marked `"private": true` (the examples and the docs site) are never published. The
+Version packages PR is opened with the workflow's own token, which doesn't start CI on it; CI runs
+on `main` after the merge, before the publish.
 
 ### Turning it on
 

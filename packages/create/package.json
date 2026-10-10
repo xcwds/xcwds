@@ -1,7 +1,6 @@
 {
 	"name": "@xcwds/create",
 	"version": "0.0.0",
-	"private": true,
 	"description": "npm create @xcwds: a new installable, offline-first PWA on @xcwds in one command, and `xcwds add <plugin>` to add plugins later.",
 	"license": "MIT",
 	"type": "module",
