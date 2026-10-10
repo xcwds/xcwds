@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-shell",
-	"version": "0.0.0",
+	"version": "1.0.0",
 	"description": "The app shell for @xcwds apps: header with the page title and back arrow, a tab bar on phones, header links or a sidebar on wider screens, toasts and a Home page plugins add to.",
 	"license": "MIT",
 	"type": "module",

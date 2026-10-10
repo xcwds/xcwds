@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-timers",
-	"version": "0.0.0",
+	"version": "1.0.0",
 	"description": "Timers for @xcwds apps that count against wall-clock end times, so they survive a backgrounded tab and a reload, ring on every page and hold off app updates while running.",
 	"license": "MIT",
 	"type": "module",
