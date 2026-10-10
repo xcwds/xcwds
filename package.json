@@ -17,7 +17,7 @@
 		"publint": "pnpm --filter \"./packages/*\" --filter ./examples/plugin-tally publint",
 		"changeset": "changeset",
 		"test:starter": "node packages/create/scripts/test-starter.js",
-		"version-packages": "changeset version && pnpm install --lockfile-only",
+		"version-packages": "changeset version && node scripts/sync-core-version.js && pnpm install --lockfile-only",
 		"release": "pnpm build && node scripts/copy-license.js && changeset publish"
 	},
 	"devDependencies": {
