@@ -1,9 +1,9 @@
 # Issue labels
 
 xcwds/xcwds and xcwds/xcwds.github.io use the same labels, so one routine can rank work across both.
-Keep this file identical in both repos. A label listed here that a repo doesn't have yet is created
-by the owner (agents can't create labels); never apply a label that doesn't exist, since applying it
-would create it without a color or description.
+Keep this file identical in both repos. Agents can't define labels, but adding a label that a repo
+doesn't have creates it with a grey color and no description; the owner then sets the color and
+description from the tables below. Never invent labels outside this file.
 
 Every open issue gets one type label, and one priority label unless it is `tracking`. Add `needs
 decision` when it applies. Renovate's "Dependency Dashboard" issue gets no labels.
