@@ -46,5 +46,23 @@ issue records the owner's answer.
 ## Set by people
 
 `human requested`, `refinement requested`, `branding`, `good first issue`, `help wanted`, `question`,
-`duplicate`, `invalid` and `wontfix` are applied by people. Agents never add or remove them, and
-read `human requested` as a sign the owner cares about the issue.
+`duplicate`, `invalid` and `wontfix` are applied by people. Agents never add them and never remove
+them, except `refinement requested` as below. Read `human requested` as a sign the owner cares about
+the issue.
+
+## Refinement
+
+`refinement requested` asks for an issue to be turned into something ready to build. The labeling
+routine refines at most 2 per run, oldest first. Refining means:
+
+- Rewrite the body into a scoped spec in the style of the repo's planned issues: the goal, what the
+  user gets, how it fits the existing code (name the files, packages or plugins), privacy and
+  storage notes, acceptance criteria and tests, and what's out of scope. Follow the repo's CLAUDE.md
+  and, for the framework, the RFC. Keep the owner's own words in a final "Original request" section.
+- Split an issue too big for one PR into sub-issues (each refined the same way) and make it
+  `tracking`.
+- Review the result for completeness and correctness before saving, and fix what that finds.
+- Questions only the owner can answer go in an "Open questions" section with a recommended answer for
+  each, and the issue gets `needs decision`.
+- Then remove `refinement requested`, set the type and priority, and leave one comment summarising
+  what changed. The owner adds the label again to ask for another pass.
