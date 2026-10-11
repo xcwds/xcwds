@@ -26,10 +26,14 @@ concurrency:
 
 jobs:
   release:
+    # A CI run on main triggers a release only while its commit is still main's head. changesets/action
+    # resets its branch to github.sha (main's head when this run was created), which a shallow checkout
+    # of an older commit doesn't contain; the newer commit's own CI run triggers the release instead.
     if: >-
       vars.NPM_RELEASE == 'true' && github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_sha == github.sha))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Required reviewers on this environment gate every run: version PR updates and publishes.
@@ -46,7 +50,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          # The commit CI tested.
+          # The commit CI tested (the job only runs when it is github.sha).
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Install pnpm
