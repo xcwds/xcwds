@@ -113,8 +113,8 @@ directives:
 - **The service worker**: a worker's policy comes only from the headers its script is served
   with, so the page's `<meta>` doesn't reach it. Instead, the generated `.xcwds/worker.js`
   first imports `.xcwds/worker-guard.js`, which runs before any plugin's `./worker` entry and
-  limits the worker's `fetch`, `WebSocket`, `EventSource` and `Cache#add`/`addAll` to the
-  app's origin and the same declared origins as `connect-src`. Anything else fails with an
+  limits the worker's `fetch`, `WebSocket`, `EventSource`, `WebTransport`, `Cache#add`/`addAll`
+  and background fetches to the app's origin and the same declared origins as `connect-src`. Anything else fails with an
   error naming the origin. It's defence in depth, not a sandbox: plugins are trusted code.
   Dedicated or shared workers a plugin starts get no policy at all on such a host.
 

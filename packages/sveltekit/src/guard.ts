@@ -5,9 +5,9 @@
  * comes only from the HTTP headers its script was served with, and static hosts like GitHub
  * Pages send none. So the generated `.xcwds/worker.js` imports a module that calls
  * `guardNetwork()` before any plugin's worker code is evaluated. It wraps `fetch`, `WebSocket`,
- * `EventSource` and `Cache#add`/`addAll` so they refuse any origin other than the app's own,
- * the ones plugins declare (`network.origins`) and `privacy.allowOrigins`, the same list the
- * page's `connect-src` gets. This is defence in depth, not a sandbox: plugins are trusted code.
+ * `EventSource`, `WebTransport`, `Cache#add`/`addAll` and background fetches so they refuse any
+ * origin other than the app's own, the ones plugins declare (`network.origins`) and
+ * `privacy.allowOrigins`, the same list the page's `connect-src` gets. This is defence in depth, not a sandbox: plugins are trusted code.
  */
 
 /** The parts of a worker's global scope the guard replaces (tests pass their own). */
@@ -16,10 +16,20 @@ export type GuardScope = {
 	fetch?: typeof fetch;
 	WebSocket?: new (url: string | URL, protocols?: string | string[]) => unknown;
 	EventSource?: new (url: string | URL, init?: unknown) => unknown;
+	WebTransport?: new (url: string | URL, options?: unknown) => unknown;
 	Cache?: {
 		prototype: {
 			add?(request: RequestInfo | URL): Promise<void>;
-			addAll?(requests: (RequestInfo | URL)[]): Promise<void>;
+			addAll?(requests: Iterable<RequestInfo | URL>): Promise<void>;
+		};
+	};
+	BackgroundFetchManager?: {
+		prototype: {
+			fetch?(
+				id: string,
+				requests: RequestInfo | URL | Iterable<RequestInfo | URL>,
+				options?: unknown
+			): Promise<unknown>;
 		};
 	};
 };
@@ -82,7 +92,7 @@ export function guardNetwork(scope: GuardScope, allowed: readonly string[]): voi
 		if (!allows(input, self, allowed)) throw refused(input, self);
 	};
 	if (scope.fetch) scope.fetch = guardFetch(scope.fetch.bind(scope), self, allowed);
-	for (const name of ['WebSocket', 'EventSource'] as const) {
+	for (const name of ['WebSocket', 'EventSource', 'WebTransport'] as const) {
 		const Original = scope[name];
 		if (!Original) continue;
 		const Guarded = class extends (Original as new (...args: unknown[]) => object) {
@@ -109,12 +119,34 @@ export function guardNetwork(scope: GuardScope, allowed: readonly string[]): voi
 	if (cache?.addAll) {
 		const addAll = cache.addAll;
 		cache.addAll = function (requests) {
+			// Copied first: a generator would be used up by the check.
+			const list = [...requests];
 			try {
-				for (const request of requests) check(request);
+				for (const request of list) check(request);
 			} catch (error) {
 				return Promise.reject(error);
 			}
-			return addAll.call(this, requests);
+			return addAll.call(this, list);
+		};
+	}
+	// `registration.backgroundFetch.fetch()` downloads any requests it's given (Chromium).
+	const background = scope.BackgroundFetchManager?.prototype;
+	if (background?.fetch) {
+		const fetchAll = background.fetch;
+		background.fetch = function (id, requests, options) {
+			const list =
+				typeof requests === 'string' || requests instanceof URL || !isIterable(requests)
+					? [requests]
+					: [...requests];
+			try {
+				for (const request of list) check(request);
+			} catch (error) {
+				return Promise.reject(error);
+			}
+			return fetchAll.call(this, id, list, options);
 		};
 	}
 }
+
+const isIterable = (value: unknown): value is Iterable<unknown> =>
+	typeof value === 'object' && value !== null && Symbol.iterator in value;

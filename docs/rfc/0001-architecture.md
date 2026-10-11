@@ -212,8 +212,9 @@ origins in `connect-src` (and `https:` ones for images, fonts, media and styles)
 which is the real enforcement, since a static scan can't see URLs built at runtime. The page's
 policy doesn't reach the service worker (a worker only gets one from its script's response
 headers, and GitHub Pages sends none), so the generated worker imports a guard first, before any
-plugin's worker entry, that limits `fetch`, `WebSocket`, `EventSource` and `Cache#add`/`addAll`
-to the same origins (#55). The settings page lists the declarations. See [docs/privacy.md](../privacy.md).
+plugin's worker entry, that limits `fetch`, `WebSocket`, `EventSource`, `WebTransport`,
+`Cache#add`/`addAll` and background fetches to the same origins (#55). The settings page lists
+the declarations. See [docs/privacy.md](../privacy.md).
 
 The scan runs in the adapter because it is the first point where the worker (built in its own
 Vite build, decision 3) and the prerendered pages both exist.

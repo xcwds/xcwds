@@ -60,8 +60,14 @@ describe('guardNetwork', () => {
 			async add(request: RequestInfo | URL) {
 				added.push(String(request));
 			}
-			async addAll(requests: (RequestInfo | URL)[]) {
-				added.push(...requests.map(String));
+			async addAll(requests: Iterable<RequestInfo | URL>) {
+				added.push(...Array.from(requests, String));
+			}
+		}
+		const downloads: unknown[][] = [];
+		class FakeBackgroundFetch {
+			async fetch(id: string, requests: unknown) {
+				downloads.push([id, requests]);
 			}
 		}
 		const s: GuardScope = {
@@ -69,9 +75,11 @@ describe('guardNetwork', () => {
 			fetch: vi.fn(async () => new Response('net')) as unknown as typeof fetch,
 			WebSocket: Socket,
 			EventSource: Socket,
-			Cache: FakeCache
+			WebTransport: Socket,
+			Cache: FakeCache,
+			BackgroundFetchManager: FakeBackgroundFetch
 		};
-		return { s, opened, added, FakeCache };
+		return { s, opened, added, downloads, FakeCache, FakeBackgroundFetch };
 	}
 
 	it('guards fetch, WebSocket, EventSource and Cache#add/addAll', async () => {
@@ -83,6 +91,7 @@ describe('guardNetwork', () => {
 		new s.WebSocket!('wss://api.example/live');
 		expect(() => new s.WebSocket!('wss://evil.example')).toThrow(/evil\.example/);
 		expect(() => new s.EventSource!('https://evil.example/events')).toThrow(/evil\.example/);
+		expect(() => new s.WebTransport!('https://evil.example:4433/wt')).toThrow(/evil\.example/);
 		expect(opened).toEqual(['wss://api.example/live']);
 		expect(s.WebSocket!.name).toBe('WebSocket');
 
@@ -91,6 +100,30 @@ describe('guardNetwork', () => {
 		await expect(cache.add('https://evil.example/c')).rejects.toThrow(/evil\.example/);
 		await expect(cache.addAll(['/d', 'https://evil.example/e'])).rejects.toThrow();
 		expect(added).toEqual(['/a', 'https://api.example/b']);
+		// Any iterable, as the real one takes, reaches it whole.
+		await cache.addAll(
+			(function* () {
+				yield '/f';
+				yield '/g';
+			})()
+		);
+		expect(added.slice(-2)).toEqual(['/f', '/g']);
+	});
+
+	it('guards background fetches, of one request or many', async () => {
+		const { s, downloads, FakeBackgroundFetch } = scope();
+		guardNetwork(s, ALLOWED);
+		const manager = new FakeBackgroundFetch();
+		await manager.fetch('one', 'https://api.example/big.zip');
+		await manager.fetch('many', new Set(['/a', 'https://api.example/b']));
+		await expect(manager.fetch('bad', 'https://evil.example/x')).rejects.toThrow(/evil\.example/);
+		await expect(
+			manager.fetch('mixed', ['/a', new Request('https://evil.example/y')])
+		).rejects.toThrow(/evil\.example/);
+		expect(downloads).toEqual([
+			['one', ['https://api.example/big.zip']],
+			['many', ['/a', 'https://api.example/b']]
+		]);
 	});
 
 	it('leaves APIs the scope doesn’t have alone', () => {
