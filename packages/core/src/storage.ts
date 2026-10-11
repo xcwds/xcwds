@@ -113,6 +113,11 @@ export type Backup = {
 	data: Record<string, unknown>;
 	/** Values no registered plugin claims (a plugin that was removed), kept so they can return. */
 	unclaimed: Record<string, unknown>;
+	/**
+	 * Schema version of each namespace in `unclaimed`, so a plugin that comes back only runs the
+	 * migrations its data hasn't had yet. Older backups don't have it.
+	 */
+	unclaimedVersions?: Record<string, number>;
 };
 
 export type ParsedBackup =
@@ -496,6 +501,8 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		}
 	}
 
+	const unclaimedNamespace = (key: string) => key.slice(prefix.length).split(':')[0] ?? '';
+
 	function unclaimed(): UnclaimedKey[] {
 		// Keys a migration that isn't saved yet moves away from still hold its only saved source.
 		const migrating = new Set<string>();
@@ -504,7 +511,17 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		return safeKeys()
 			.filter((key) => key.startsWith(prefix) && !isVersionKey(key) && key !== `${prefix}probe`)
 			.filter((key) => owner(key) === undefined && !migrating.has(key))
-			.map((key) => ({ key, namespace: key.slice(prefix.length).split(':')[0] ?? '' }));
+			.map((key) => ({ key, namespace: unclaimedNamespace(key) }));
+	}
+
+	/** The schema version this device's data for `ns` is at, or 0. */
+	function savedVersion(ns: string): number {
+		try {
+			const version = Number(adapter.get(versionKey(ns)) ?? 0);
+			return Number.isInteger(version) && version > 0 ? version : 0;
+		} catch {
+			return 0;
+		}
 	}
 
 	function exportData(now = new Date()): Backup {
@@ -516,9 +533,13 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		const versions: Record<string, number> = {};
 		for (const ns of namespaces.keys()) versions[ns] = latestVersion(ns);
 		const extra: Record<string, unknown> = {};
-		for (const { key } of unclaimed()) {
+		const extraVersions: Record<string, number> = {};
+		for (const { key, namespace: ns } of unclaimed()) {
 			const text = adapter.get(key);
-			if (text !== null) extra[key] = decode(text);
+			if (text === null) continue;
+			extra[key] = decode(text);
+			const version = savedVersion(ns);
+			if (version > 0) extraVersions[ns] = version;
 		}
 		return {
 			app: appName,
@@ -526,7 +547,8 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 			exportedAt: now.toISOString(),
 			versions,
 			data,
-			unclaimed: extra
+			unclaimed: extra,
+			unclaimedVersions: extraVersions
 		};
 	}
 
@@ -542,11 +564,21 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		// Backups made before namespaces had one `schemaVersion`: the app's own.
 		const versions: Record<string, number> = {};
 		if (raw.format === undefined) versions[''] = raw.schemaVersion as number;
-		else if (isRecord(raw.versions)) Object.assign(versions, raw.versions);
-		else return { ok: false, error: 'This backup has an unknown format.' };
+		else if (isRecord(raw.versions)) {
+			// A namespace's unclaimed data only has a version when nothing claimed it at export.
+			if (isRecord(raw.unclaimedVersions)) Object.assign(versions, raw.unclaimedVersions);
+			Object.assign(versions, raw.versions);
+		} else return { ok: false, error: 'This backup has an unknown format.' };
+		const unclaimedVersions: Record<string, number> = {};
 		for (const [ns, version] of Object.entries(versions)) {
 			if (typeof version !== 'number' || !Number.isInteger(version) || version < 0)
 				return { ok: false, error: 'This backup has an unknown format version.' };
+			// A namespace no plugin here registers (one that was removed) keeps its data as
+			// unclaimed, with its version, instead of making the whole backup look too new (#51).
+			if (!namespaces.has(ns)) {
+				if (version > 0) unclaimedVersions[ns] = version;
+				continue;
+			}
 			if (version > latestVersion(ns))
 				return {
 					ok: false,
@@ -554,6 +586,10 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 				};
 		}
 		const upgraded = structuredClone(raw.data) as Record<string, unknown>;
+		// Data a removed plugin left, for a plugin that's back: import it as that plugin's own.
+		if (isRecord(raw.unclaimed))
+			for (const [key, value] of Object.entries(raw.unclaimed))
+				if (!(key in upgraded) && owner(key) !== undefined) upgraded[key] = structuredClone(value);
 		const byNs = new Map<string, Record<string, unknown>>();
 		const handled = new Set<string>();
 		for (const [key, value] of Object.entries(upgraded)) {
@@ -603,7 +639,12 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 			exportedAt: typeof raw.exportedAt === 'string' ? raw.exportedAt : '',
 			versions: Object.fromEntries([...namespaces.keys()].map((ns) => [ns, latestVersion(ns)])),
 			data,
-			unclaimed: unclaimedData
+			unclaimed: unclaimedData,
+			unclaimedVersions: Object.fromEntries(
+				Object.entries(unclaimedVersions).filter(([ns]) =>
+					Object.keys(unclaimedData).some((key) => unclaimedNamespace(key) === ns)
+				)
+			)
 		};
 		return { ok: true, backup, found, skipped };
 	}
@@ -613,6 +654,7 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		// Replace clears everything first, so a write that doesn't fit would leave neither the old
 		// data nor the whole backup (#52): remember what's there and put it back if one fails.
 		const keys = new Set([...entries.keys(), ...Object.keys(backup.unclaimed ?? {})]);
+		for (const ns of Object.keys(backup.unclaimedVersions ?? {})) keys.add(versionKey(ns));
 		for (const [ns, n] of namespaces) {
 			keys.add(versionKey(ns));
 			for (const key of Object.keys(n.pending?.before ?? {})) keys.add(key);
@@ -664,6 +706,16 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 			try {
 				if (mode === 'replace' || adapter.get(key) === null)
 					adapter.set(key, JSON.stringify(value));
+			} catch {
+				ok = false;
+			}
+		}
+		// The schema version of that data, so the plugin migrates it correctly if it comes back.
+		for (const [ns, version] of Object.entries(backup.unclaimedVersions ?? {})) {
+			if (namespaces.has(ns)) continue;
+			try {
+				if (mode === 'replace' || adapter.get(versionKey(ns)) === null)
+					adapter.set(versionKey(ns), String(version));
 			} catch {
 				ok = false;
 			}
