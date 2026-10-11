@@ -35,7 +35,7 @@
 		"@xcwds/sveltekit": "workspace:^"
 	},
 	"devDependencies": {
-		"@playwright/test": "1.57.0",
+		"@playwright/test": "1.64.0",
 		"@xcwds-example/plugin-hello": "workspace:*",
 		"typescript": "^5.9.3",
 		"vitest": "^4.0.15"
