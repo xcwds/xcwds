@@ -19,6 +19,8 @@ Never publish to npm unless the user asks.
 - Always open a PR against `main` linking the issues it closes (write "Closes #n" for each one).
   Review it adversarially, post the review on GitHub, fix and re-review (at most 3 rounds), then
   squash-merge once CI is green, unless the user says not to.
+- Issue labels follow `.github/labels.md` (the same set in xcwds/xcwds.github.io; keep the two copies
+  identical). Label new issues you open with a type and a priority from it.
 - Add a changeset for changes to a package. Releases go through `.github/workflows/release.yml`
   (see `.changeset/README.md`); never run `changeset publish` or `npm publish` yourself.
 - Docs: guides in `docs/`, package READMEs, rendered by the docs site in `site/` (deployed by
