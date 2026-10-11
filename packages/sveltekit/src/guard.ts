@@ -120,6 +120,8 @@ export function guardNetwork(scope: GuardScope, allowed: readonly string[]): voi
 	if (cache?.addAll) {
 		const addAll = cache.addAll;
 		cache.addAll = function (requests) {
+			// Not a sequence (a string by mistake): the real one rejects it, as it should.
+			if (typeof requests !== 'object' || requests === null) return addAll.call(this, requests);
 			let list: (RequestInfo | URL)[];
 			try {
 				// Copied first: a generator would be used up by the check.

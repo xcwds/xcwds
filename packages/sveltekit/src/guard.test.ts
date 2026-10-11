@@ -61,6 +61,8 @@ describe('guardNetwork', () => {
 				added.push(String(request));
 			}
 			async addAll(requests: Iterable<RequestInfo | URL>) {
+				// The real one takes a sequence, never a string.
+				if (typeof requests !== 'object') throw new TypeError('Not a sequence.');
 				added.push(...Array.from(requests, String));
 			}
 		}
@@ -108,8 +110,12 @@ describe('guardNetwork', () => {
 			})()
 		);
 		expect(added.slice(-2)).toEqual(['/f', '/g']);
-		// Like the real one, a bad argument rejects rather than throws.
-		await expect(cache.addAll(1 as never)).rejects.toThrow(TypeError);
+		// Like the real one, a bad argument rejects rather than throws, and a string isn't split
+		// into requests: it reaches the real one as it is, which refuses it.
+		const before = added.length;
+		await expect(cache.addAll({} as never)).rejects.toThrow(TypeError);
+		await expect(cache.addAll('/h' as never)).rejects.toThrow(/Not a sequence/);
+		expect(added.length).toBe(before);
 	});
 
 	it('guards background fetches, of one request or many', async () => {
