@@ -433,8 +433,15 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 
 	function write<T>(e: Entry<T>, value: T): boolean {
 		ensure(e.namespace);
-		if (namespaces.get(e.namespace)?.pending)
-			return writePending(e, JSON.parse(JSON.stringify(value)));
+		if (namespaces.get(e.namespace)?.pending) {
+			let copy: unknown;
+			try {
+				copy = JSON.parse(JSON.stringify(value));
+			} catch {
+				return false;
+			}
+			return writePending(e, copy);
+		}
 		try {
 			adapter.set(e.key, JSON.stringify(value));
 			return true;
@@ -490,9 +497,13 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 	}
 
 	function unclaimed(): UnclaimedKey[] {
+		// Keys a migration that isn't saved yet moves away from still hold its only saved source.
+		const migrating = new Set<string>();
+		for (const n of namespaces.values())
+			for (const key of Object.keys(n.pending?.before ?? {})) migrating.add(key);
 		return safeKeys()
 			.filter((key) => key.startsWith(prefix) && !isVersionKey(key) && key !== `${prefix}probe`)
-			.filter((key) => owner(key) === undefined)
+			.filter((key) => owner(key) === undefined && !migrating.has(key))
 			.map((key) => ({ key, namespace: key.slice(prefix.length).split(':')[0] ?? '' }));
 	}
 

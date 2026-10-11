@@ -312,6 +312,35 @@ describe('a migration storage can’t save (#52)', () => {
 		expect(mem.data.has('app:version:t')).toBe(false);
 	});
 
+	it('doesn’t list a key the migration moves away from as unclaimed', () => {
+		// No room for the version key, so the migration can't be saved.
+		const { storage, mem } = quota({ 'app:t:old': '5' }, 'app:t:old5'.length + 4);
+		const t = storage.scope('t');
+		t.migration({
+			to: 1,
+			run(d) {
+				d['app:t:new'] = d['app:t:old'];
+				delete d['app:t:old'];
+			}
+		});
+		const e = t.entry('new', { label: 'n', parse: isNumber });
+		expect(storage.read(e)).toBe(5);
+		expect(mem.data.get('app:t:old')).toBe('5');
+		expect(storage.unclaimed()).toEqual([]);
+		storage.removeUnclaimed(['app:t:old']);
+		expect(mem.data.get('app:t:old')).toBe('5');
+		expect(storage.exportData().unclaimed).toEqual({});
+	});
+
+	it('returns false for a value it can’t save', () => {
+		const { storage, e } = listSetup();
+		storage.read(e);
+		const cycle: { items: string[]; self?: unknown } = { items: [] };
+		cycle.self = cycle;
+		expect(storage.write(e, cycle)).toBe(false);
+		expect(storage.read(e)).toEqual({ items: ['a', 'b'] });
+	});
+
 	it('defers to a migration another tab saved meanwhile', () => {
 		const { storage, e, mem } = listSetup();
 		storage.read(e);
