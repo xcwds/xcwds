@@ -110,6 +110,13 @@ directives:
 - **Reporting** (`report-uri`, `report-to`): violations aren't reported anywhere, which suits an
   app that never phones home. They show in the browser console.
 - **`sandbox`**: not available in `<meta>`.
+- **The service worker**: a worker's policy comes only from the headers its script is served
+  with, so the page's `<meta>` doesn't reach it. Instead, the generated `.xcwds/worker.js`
+  first imports `.xcwds/worker-guard.js`, which runs before any plugin's `./worker` entry and
+  limits the worker's `fetch`, `WebSocket`, `EventSource` and `Cache#add`/`addAll` to the
+  app's origin and the same declared origins as `connect-src`. Anything else fails with an
+  error naming the origin. It's defence in depth, not a sandbox: plugins are trusted code.
+  Dedicated or shared workers a plugin starts get no policy at all on such a host.
 
 The policy also only covers what comes after the `<meta>` tag, which is why `%xcwds.head%`
 goes after `%sveltekit.head%` in `app.html` (RFC 0001, decision 4).

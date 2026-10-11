@@ -152,6 +152,32 @@ describe('buildTestWorker globals and errors', () => {
 		expect('caches' in globalThis).toBe(hadCaches);
 	});
 
+	it('only lets the worker contact origins the plugins declare, like the built one (#55)', async () => {
+		const weather = definePlugin(() => {}, {
+			name: 'weather',
+			network: { origins: ['https://api.weather.example'], reason: 'Forecasts' }
+		});
+		const worker = await buildTestWorker(
+			{ plugins: [weather] },
+			{
+				network: (request) => new Response(new URL(request.url).origin),
+				allowOrigins: ['https://allowed.example']
+			}
+		);
+		expect(await (await fetch('https://api.weather.example/today')).text()).toBe(
+			'https://api.weather.example'
+		);
+		expect(await (await fetch('https://allowed.example/x')).text()).toBe('https://allowed.example');
+		expect(await (await fetch('/own')).text()).toBe('http://localhost');
+		await expect(fetch('https://tracker.example/?d=secret')).rejects.toThrow(
+			/blocked a request to https:\/\/tracker\.example/
+		);
+		await expect(
+			(await caches.open('runtime')).add('https://tracker.example/pixel')
+		).rejects.toThrow(/tracker\.example/);
+		await worker.close();
+	});
+
 	it('fails operations on errors hooks report, unless not strict', async () => {
 		const failing = (app: App) => {
 			app.addHook('onFetch', () => {

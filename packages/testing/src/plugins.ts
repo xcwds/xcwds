@@ -37,6 +37,8 @@ export type Prepared = {
 	appName: string | undefined;
 	plugins: [Plugin<never>, Record<string, unknown>][];
 	routes: RouteInfo[];
+	/** The origins the plugins declare (`network.origins`) and `privacy.allowOrigins` lists. */
+	origins: string[];
 };
 
 const defaultImporter: Importer = (specifier) => import(specifier);
@@ -84,23 +86,36 @@ export async function prepare(
 	const builder = createApp({ storage: memoryStorage(), logLevel });
 	const routes = decorateRoutes(builder);
 	const plugins: Prepared['plugins'] = [];
+	const origins = new Set(config?.privacy.allowOrigins ?? []);
+	const declare = (plugin: Plugin<never>) => {
+		const network = pluginMeta(plugin).network;
+		if (network) for (const origin of network.origins) origins.add(origin);
+	};
 	for (const item of list) {
-		if (typeof item === 'function') plugins.push([item, {}]);
-		else if (Array.isArray(item)) {
+		if (typeof item === 'function') {
+			plugins.push([item, {}]);
+			declare(item);
+		} else if (Array.isArray(item)) {
 			if (typeof item[0] !== 'function')
 				throw new TypeError(
 					'A [plugin, options] pair needs a plugin function first (was the plugin imported?).'
 				);
 			plugins.push([item[0], { ...item[1] }]);
+			declare(item[0]);
 		} else if (isDescriptor(item)) {
 			const options = { ...(item.options as Record<string, unknown>) };
 			const main = await load(importer, item.name, item.name);
 			if (!main) throw new Error(`"${item.name}" has no main entry.`);
-			if (typeof main.build === 'function')
+			if (typeof main.build === 'function') {
 				builder.register(named(main.build as Plugin<never>, item.name), options as never);
+				// The build entry declares the package's network use (#22).
+				declare(main.build as Plugin<never>);
+			}
 			const mod = await load(importer, `${item.name}/${entry}`, item.name);
-			if (mod && typeof mod.default === 'function')
+			if (mod && typeof mod.default === 'function') {
 				plugins.push([mod.default as Plugin<never>, options]);
+				declare(mod.default as Plugin<never>);
+			}
 		} else
 			throw new TypeError(
 				'A test plugin is a plugin function, a [plugin, options] pair or a descriptor.'
@@ -113,6 +128,7 @@ export async function prepare(
 		storagePrefix: config?.storage.prefix,
 		appName: config?.storage.appName,
 		plugins,
-		routes: routes.list()
+		routes: routes.list(),
+		origins: [...origins]
 	};
 }

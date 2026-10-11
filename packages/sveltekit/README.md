@@ -64,7 +64,10 @@ export const prerender = true;
   snippets and settings' `prePaint` fields) in place of `%xcwds.head%`, and adds the script's
   hash to the page's CSP. **`init`** loads the plugins before the first render, so pages render
   and hydrate with their decorators, routes and settings fields.
-- **`.xcwds/worker.js`** starts the worker from `@xcwds/sveltekit/worker`: plugins' `onFetch`
+- **`.xcwds/worker.js`** first imports `.xcwds/worker-guard.js`, which limits the worker's
+  `fetch`, `WebSocket`, `EventSource` and `Cache#add`/`addAll` to the origins the page's CSP
+  allows (`@xcwds/sveltekit/guard`), since that `<meta>` policy doesn't reach the worker. It
+  then starts the worker from `@xcwds/sveltekit/worker`: plugins' `onFetch`
   hooks answer first; the build, static files, prerendered pages, manifest and icons are
   precached on install and served from this version's cache first; anything else goes to the
   network, with `404.html` for offline navigations. The strategy reads `app.worker.policy`

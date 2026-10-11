@@ -47,6 +47,40 @@ test.describe('with the service worker', () => {
 		await page.waitForLoadState('networkidle');
 		expect(away).toEqual([]);
 	});
+
+	test('the service worker can’t contact an undeclared origin either (#55)', async ({
+		page,
+		context
+	}) => {
+		let reached = 0;
+		await context.route('https://example.com/**', (route) => {
+			reached++;
+			return route.fulfill({ body: 'reached' });
+		});
+		const registered = context.waitForEvent('serviceworker');
+		await gotoHydrated(page, url('/'));
+		const worker = context.serviceWorkers()[0] ?? (await registered);
+		const result = await worker.evaluate(async () => {
+			const attempt = (run: () => Promise<unknown>) =>
+				run().then(
+					() => 'sent',
+					(error: unknown) => String(error)
+				);
+			// Built at runtime, so no static scan could have seen it.
+			const host = ['example', 'com'].join('.');
+			return {
+				own: await attempt(() => fetch('/')),
+				fetched: await attempt(() => fetch(`https://${host}/collect?x=1`)),
+				cached: await attempt(async () =>
+					(await caches.open('guard-test')).add(`https://${host}/pixel.gif`)
+				)
+			};
+		});
+		expect(result.own).toBe('sent');
+		expect(result.fetched).toMatch(/blocked a request to https:\/\/example\.com/);
+		expect(result.cached).toMatch(/blocked a request to https:\/\/example\.com/);
+		expect(reached).toBe(0);
+	});
 });
 
 /** Asks the page for a URL built at runtime; resolves to what the CSP did. */

@@ -36,6 +36,10 @@
 			"types": "./dist/worker.d.ts",
 			"default": "./dist/worker.js"
 		},
+		"./guard": {
+			"types": "./dist/guard.d.ts",
+			"default": "./dist/guard.js"
+		},
 		"./routes": {
 			"types": "./dist/routes.d.ts",
 			"default": "./dist/routes.js"

@@ -6,7 +6,7 @@ import type { Rollup } from 'vite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { withXcwds } from '../config.js';
 import { xcwds } from '../vite.js';
-import { clientModule } from './codegen.js';
+import { clientModule, guardModule } from './codegen.js';
 import { generate } from './generate.js';
 import { recall } from './state.js';
 
@@ -104,6 +104,26 @@ describe('generate', () => {
 		expect(worker).not.toContain('plain/worker');
 		expect(worker).toContain('"assets":["manifest.webmanifest"]');
 		expect(await readFile(join(root, '.xcwds/.gitignore'), 'utf8')).toBe('*\n');
+		// The network guard comes first, so it's in place before any plugin's worker code (#55).
+		expect(worker.indexOf("import './worker-guard.js';")).toBeGreaterThan(-1);
+		expect(worker.indexOf("import './worker-guard.js';")).toBeLessThan(worker.indexOf('import p0'));
+		const guard = await readFile(join(root, '.xcwds/worker-guard.js'), 'utf8');
+		expect(guard).toContain(`import { guardNetwork } from '@xcwds/sveltekit/guard';`);
+		expect(guard).toContain('guardNetwork(self, []);');
+		expect(
+			guardModule({
+				...state,
+				config: { ...state.config, privacy: { allowOrigins: ['https://a.example'] } },
+				plugins: [
+					...state.plugins,
+					{
+						...state.plugins[1]!,
+						name: 'weather',
+						network: { origins: ['https://b.example'], reason: 'Forecasts' }
+					}
+				]
+			})
+		).toContain('guardNetwork(self, ["https://b.example","https://a.example"]);');
 
 		const client = clientModule(state);
 		expect(client).toContain(`import p0 from "xcwds-plugin-timers/client";`);

@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ICONS, headTags } from '@xcwds/core';
 import type { ClientData, WorkerData } from '../data.js';
+import { allowedOrigins } from './privacy.js';
 import type { BuildState } from './state.js';
 
 const json = (value: unknown) => JSON.stringify(value);
@@ -61,11 +62,27 @@ export function workerModule(state: BuildState): string {
 	const extra = state.worker.map((m) => `import ${json(m)};\n`).join('');
 	return (
 		HEADER +
+		// First, so no plugin's worker code runs before the network guard is in place (#55).
+		"import './worker-guard.js';\n" +
 		"import { base, build, files, prerendered, version } from '$service-worker';\n" +
 		"import { startWorker } from '@xcwds/sveltekit/worker';\n" +
 		lines +
 		extra +
 		`startWorker({ base, build, files, prerendered, version, plugins: ${pairs}, ...${json(data)} });\n`
+	);
+}
+
+/**
+ * `.xcwds/worker-guard.js`: limits the service worker's network APIs to the origins the page's
+ * CSP allows (#55). Its own module, because imports are evaluated before the importing module's
+ * body: `worker.js` imports it first, so it runs before any plugin's worker entry.
+ */
+export function guardModule(state: BuildState): string {
+	const origins = [...allowedOrigins(state.plugins, state.config.privacy.allowOrigins).keys()];
+	return (
+		HEADER +
+		"import { guardNetwork } from '@xcwds/sveltekit/guard';\n" +
+		`guardNetwork(self, ${json(origins)});\n`
 	);
 }
 

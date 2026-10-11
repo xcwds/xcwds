@@ -20,7 +20,7 @@ import {
 	type Plugin
 } from '@xcwds/core';
 import { decorateRoutes } from '../routes.js';
-import { assetCollisions, buildModule, workerModule } from './codegen.js';
+import { assetCollisions, buildModule, guardModule, workerModule } from './codegen.js';
 import type { BuildState, PluginInfo } from './state.js';
 
 export const CONFIG_FILES = [
@@ -196,6 +196,7 @@ export async function generate({
 				: `@xcwds/sveltekit generates ${clashes.join(', ')}, which your static files also have. Remove ${clashes.length === 1 ? 'it' : 'them'} from ${dir}/ (set brand.icon and manifest in the xcwds config instead).`
 		);
 	}
+	await writeFile(join(dir, 'worker-guard.js'), guardModule(state));
 	await writeFile(join(dir, 'worker.js'), workerModule(state));
 	return state;
 }

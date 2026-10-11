@@ -75,7 +75,9 @@ other origins, paths outside the base); `install()` precaches the `build`, `file
 and closes when the test finishes. While it is open, `globalThis.caches` is its in-memory
 `caches` (a `MemoryCacheStorage`, with the Cache API's checks) and `fetch()` is answered by the
 `network` option (by default every request fails, as offline), so hooks run as they would in
-the worker; one test worker can be open at a time.
+the worker; one test worker can be open at a time. As in the built worker, a request to an
+origin other than the app's own, one the plugins declare (`network.origins`) or the
+`allowOrigins` option fails without reaching `network`.
 
 ## End-to-end tests
 

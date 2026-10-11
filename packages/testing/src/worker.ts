@@ -13,6 +13,7 @@ import {
 	type MessageEvent,
 	type WorkerScope
 } from '@xcwds/sveltekit/worker';
+import { allows, refused } from '@xcwds/sveltekit/guard';
 import { closeAfterTest, ErrorTrap } from './errors.js';
 import { prepare, type Importer, type TestInput } from './plugins.js';
 
@@ -33,9 +34,13 @@ export type TestWorkerOptions = {
 	origin?: string;
 	/**
 	 * Answers `fetch()` and `cache.add()` / `addAll()` while the worker is open. By default
-	 * every request fails, as offline.
+	 * every request fails, as offline. As in the built worker (#55), requests to an origin that
+	 * isn't the app's own, one the plugins declare (`network.origins`) or `allowOrigins` fail
+	 * without reaching it.
 	 */
 	network?: Network;
+	/** More origins the worker may contact, like the config's `privacy.allowOrigins`. */
+	allowOrigins?: string[];
 	import?: Importer;
 	/** Errors reported to `onError` make the next operation reject; see `buildTestApp`. */
 	strict?: boolean;
@@ -252,8 +257,11 @@ export async function buildTestWorker(
 	const base = options.base ?? '';
 	const origin = new URL(options.origin ?? 'http://localhost').origin;
 	const logLevel = options.logLevel ?? 'warn';
-	const network = options.network ?? offline;
 	const prepared = await prepare(input, 'worker', { importer: options.import, logLevel });
+	const allowed = [...prepared.origins, ...(options.allowOrigins ?? [])];
+	const answer = options.network ?? offline;
+	const network: Network = (request) =>
+		allows(request, origin, allowed) ? answer(request) : Promise.reject(refused(request, origin));
 	if (active) throw new Error('Another test worker is open; close it first.');
 	const caches = new MemoryCacheStorage(origin, network);
 	const { scope, state, dispatch } = fakeScope(origin, base);
