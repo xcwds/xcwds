@@ -90,10 +90,13 @@
 		const count = pending.found.length;
 		pending = null;
 		version++;
+		// A replace that doesn't fit puts the previous data back; a merge keeps what it saved.
 		toast(
 			ok
 				? `Imported ${count} ${count === 1 ? 'item' : 'items'}.`
-				: 'Some data could not be saved (storage may be full or blocked).'
+				: mode === 'replace'
+					? "Couldn't import: storage is full or blocked. Your data is as it was."
+					: 'Some data could not be saved (storage may be full or blocked).'
 		);
 	}
 

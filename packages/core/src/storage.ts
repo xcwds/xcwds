@@ -190,7 +190,10 @@ export type StorageRegistry = {
 
 	exportData(now?: Date): Backup;
 	parseBackup(text: string): ParsedBackup;
-	/** `replace` clears every registered entry first; `merge` keeps what the backup lacks. */
+	/**
+	 * `replace` clears every registered entry first; `merge` keeps what the backup lacks. Returns
+	 * false when something couldn't be saved: `replace` then puts the previous data back.
+	 */
 	importData(backup: Backup, mode: 'replace' | 'merge'): boolean;
 	/** Saved keys no registered plugin claims. */
 	unclaimed(): UnclaimedKey[];
@@ -231,7 +234,17 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 	const onError = options.onError ?? ((error) => console.error(error));
 
 	const entries = new Map<string, Entry<unknown>>();
-	type Ns = { migrations: Migration[]; migrated: number | null; failed: boolean };
+	/**
+	 * A namespace's migrated data that couldn't be saved (storage full): `before` is what storage
+	 * holds, `data` the migrated values (plus any changes since), saved together with the version.
+	 */
+	type Pending = { target: number; before: Record<string, string>; data: Record<string, unknown> };
+	type Ns = {
+		migrations: Migration[];
+		migrated: number | null;
+		failed: boolean;
+		pending: Pending | null;
+	};
 	const namespaces = new Map<string, Ns>();
 	const failing = new Set<string>();
 	const changeListeners = new Set<ChangeListener>();
@@ -247,7 +260,8 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		key === `${prefix}version` || key.startsWith(`${prefix}version:`);
 	const namespace = (ns: string): Ns => {
 		let n = namespaces.get(ns);
-		if (!n) namespaces.set(ns, (n = { migrations: [], migrated: null, failed: false }));
+		if (!n)
+			namespaces.set(ns, (n = { migrations: [], migrated: null, failed: false, pending: null }));
 		return n;
 	};
 	const latestVersion = (ns: string) =>
@@ -286,6 +300,19 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 	function ensure(ns: string): void {
 		const n = namespace(ns);
 		const target = latestVersion(ns);
+		if (n.pending) {
+			// Another tab may have saved the migration since; its data then wins over this copy.
+			try {
+				const saved = Number(adapter.get(versionKey(ns)) ?? 0) || 0;
+				if (saved >= n.pending.target) {
+					n.pending = null;
+					n.migrated = saved;
+				}
+			} catch {
+				// Blocked storage: keep serving the copy in memory.
+			}
+			return;
+		}
 		if (n.failed || (n.migrated !== null && n.migrated >= target)) return;
 		const data: Record<string, unknown> = {};
 		const before: Record<string, string> = {};
@@ -321,25 +348,81 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 				);
 				return;
 			}
-			try {
-				for (const key of Object.keys(before)) if (!(key in data)) adapter.remove(key);
-				for (const [key, value] of Object.entries(data)) {
-					const text = JSON.stringify(value);
-					if (text !== before[key]) adapter.set(key, text);
-				}
-				adapter.set(versionKey(ns), String(target));
-			} catch {
-				// Storage full: the version isn't bumped, so the migration runs again next load.
-				n.failed = true;
-				return;
-			}
+			// Storage full: keep the migrated data in memory, so reads and backups still see it, and
+			// save it with the next write to this namespace (#52). Storage keeps the old data and
+			// version, so the migration also runs again next load.
+			n.pending = { target, before, data };
+			flush(ns, n);
+			return;
 		}
 		// Newer data than this code knows is left untouched.
 		n.migrated = Math.max(current, target);
 	}
 
+	/**
+	 * Saves a namespace's pending migrated data together with its version, or puts storage back the
+	 * way it was (as far as it lets us) so old data never sits under a new version or the reverse.
+	 */
+	function flush(ns: string, n: Ns): boolean {
+		const p = n.pending!;
+		const touched: string[] = [];
+		try {
+			for (const key of Object.keys(p.before)) {
+				if (key in p.data) continue;
+				adapter.remove(key);
+				touched.push(key);
+			}
+			for (const [key, value] of Object.entries(p.data)) {
+				const text = JSON.stringify(value);
+				if (text === p.before[key]) continue;
+				adapter.set(key, text);
+				touched.push(key);
+			}
+			adapter.set(versionKey(ns), String(p.target));
+		} catch {
+			// Free the space the partial write took before restoring, then restore.
+			for (const key of touched) {
+				try {
+					adapter.remove(key);
+				} catch {
+					// Blocked storage: nothing was written either.
+				}
+			}
+			for (const key of touched) {
+				const text = p.before[key];
+				if (text === undefined) continue;
+				try {
+					adapter.set(key, text);
+				} catch {
+					// It fitted before; nothing more can be done here.
+				}
+			}
+			return false;
+		}
+		n.pending = null;
+		n.migrated = p.target;
+		return true;
+	}
+
+	/** Changes an entry in a namespace whose migration isn't saved yet, then tries to save it. */
+	function writePending(e: Entry<unknown>, value: unknown): boolean {
+		const n = namespace(e.namespace);
+		if (value === undefined) delete n.pending!.data[e.key];
+		else n.pending!.data[e.key] = value;
+		return flush(e.namespace, n);
+	}
+
 	function read<T>(e: Entry<T>): T | undefined {
 		ensure(e.namespace);
+		const pending = namespaces.get(e.namespace)?.pending;
+		if (pending) {
+			const value = pending.data[e.key];
+			try {
+				return value === undefined ? undefined : e.parse(structuredClone(value));
+			} catch {
+				return undefined;
+			}
+		}
 		try {
 			const text = adapter.get(e.key);
 			return text == null ? undefined : e.parse(decode(text));
@@ -350,6 +433,8 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 
 	function write<T>(e: Entry<T>, value: T): boolean {
 		ensure(e.namespace);
+		if (namespaces.get(e.namespace)?.pending)
+			return writePending(e, JSON.parse(JSON.stringify(value)));
 		try {
 			adapter.set(e.key, JSON.stringify(value));
 			return true;
@@ -359,6 +444,8 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 	}
 
 	function remove(e: Entry<unknown>): boolean {
+		ensure(e.namespace);
+		if (namespaces.get(e.namespace)?.pending) return writePending(e, undefined);
 		try {
 			adapter.remove(e.key);
 			return true;
@@ -511,6 +598,51 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 	}
 
 	function importData(backup: Backup, mode: 'replace' | 'merge'): boolean {
+		if (mode === 'merge') return applyBackup(backup, mode);
+		// Replace clears everything first, so a write that doesn't fit would leave neither the old
+		// data nor the whole backup (#52): remember what's there and put it back if one fails.
+		const keys = new Set([...entries.keys(), ...Object.keys(backup.unclaimed ?? {})]);
+		for (const [ns, n] of namespaces) {
+			keys.add(versionKey(ns));
+			for (const key of Object.keys(n.pending?.before ?? {})) keys.add(key);
+		}
+		const saved = new Map<string, string | null>();
+		try {
+			for (const key of keys) saved.set(key, adapter.get(key));
+		} catch {
+			return false;
+		}
+		const pending = new Map([...namespaces].map(([ns, n]) => [ns, structuredClone(n.pending)]));
+		const migrated = new Map([...namespaces].map(([ns, n]) => [ns, n.migrated]));
+		if (applyBackup(backup, mode)) return true;
+		// Free the space the import took, then restore what changed.
+		const changed: string[] = [];
+		for (const [key, text] of saved) {
+			try {
+				if (adapter.get(key) === text) continue;
+				adapter.remove(key);
+				changed.push(key);
+			} catch {
+				// Blocked storage: nothing was written either.
+			}
+		}
+		for (const key of changed) {
+			const text = saved.get(key);
+			if (text === null || text === undefined) continue;
+			try {
+				adapter.set(key, text);
+			} catch {
+				// It fitted before; nothing more can be done here.
+			}
+		}
+		for (const [ns, n] of namespaces) {
+			n.pending = pending.get(ns) ?? null;
+			n.migrated = migrated.get(ns) ?? null;
+		}
+		return false;
+	}
+
+	function applyBackup(backup: Backup, mode: 'replace' | 'merge'): boolean {
 		if (mode === 'replace') clear();
 		let ok = true;
 		for (const e of entries.values()) {

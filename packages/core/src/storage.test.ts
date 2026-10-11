@@ -27,6 +27,37 @@ const blocked: StorageAdapter = {
 	}
 };
 
+/** A memory adapter that throws on `set` while `full.on` is true (like a full localStorage). */
+function fullable(initial: Record<string, string> = {}) {
+	const mem = memoryStorage(initial);
+	const full = { on: true };
+	const adapter = {
+		...mem,
+		set(key: string, value: string) {
+			if (full.on) throw new DOMException('full', 'QuotaExceededError');
+			mem.set(key, value);
+		}
+	};
+	const storage = createStorage({ adapter, onError: vi.fn() });
+	return { mem, full, storage };
+}
+
+/** A memory adapter that holds at most `limit` characters of keys and values, like a quota. */
+function quota(initial: Record<string, string>, limit: number) {
+	const mem = memoryStorage(initial);
+	const size = () => [...mem.data].reduce((n, [k, v]) => n + k.length + v.length, 0);
+	const adapter: StorageAdapter = {
+		...mem,
+		set(key, value) {
+			const old = mem.data.get(key);
+			const grow = key.length + value.length - (old === undefined ? 0 : key.length + old.length);
+			if (size() + grow > limit) throw new DOMException('full', 'QuotaExceededError');
+			mem.set(key, value);
+		}
+	};
+	return { mem, adapter, storage: createStorage({ adapter, onError: vi.fn() }) };
+}
+
 describe('entries', () => {
 	it('namespaces keys, allows pinned keys, and refuses duplicates and bad keys', () => {
 		const { storage } = setup();
@@ -209,6 +240,113 @@ describe('migrations', () => {
 		expect(() => t.migration({ to: 1, run: () => {} })).toThrowError(
 			expect.objectContaining({ code: codes.STORAGE_MIGRATION })
 		);
+	});
+});
+
+describe('a migration storage can’t save (#52)', () => {
+	function listSetup(initial: Record<string, string> = { 'app:t:list': '["a","b"]' }) {
+		const s = fullable(initial);
+		const t = s.storage.scope('t');
+		t.migration({
+			to: 1,
+			run(d) {
+				d['app:t:list'] = { items: d['app:t:list'] };
+			}
+		});
+		const e = t.entry('list', {
+			label: 'L',
+			parse: (v) => (v && !Array.isArray(v) ? (v as { items: string[] }) : undefined)
+		});
+		return { ...s, e };
+	}
+
+	it('still serves the migrated data, and backs it up', () => {
+		const { storage, e, mem } = listSetup();
+		expect(storage.read(e)).toEqual({ items: ['a', 'b'] });
+		expect(storage.exportData().data).toEqual({ 'app:t:list': { items: ['a', 'b'] } });
+		// Storage still holds the old data under the old version.
+		expect(mem.data.get('app:t:list')).toBe('["a","b"]');
+		expect(mem.data.has('app:version:t')).toBe(false);
+	});
+
+	it('saves the migrated data with its version on the next write that fits', () => {
+		const { storage, e, mem, full } = listSetup();
+		storage.read(e);
+		expect(storage.write(e, { items: ['c'] })).toBe(false);
+		// The change isn't lost while storage is full, and nothing reached storage without the version.
+		expect(storage.read(e)).toEqual({ items: ['c'] });
+		expect(mem.data.get('app:t:list')).toBe('["a","b"]');
+		full.on = false;
+		expect(storage.write(e, { items: ['d'] })).toBe(true);
+		expect(mem.data.get('app:t:list')).toBe('{"items":["d"]}');
+		expect(mem.data.get('app:version:t')).toBe('1');
+		expect(storage.read(e)).toEqual({ items: ['d'] });
+	});
+
+	it('removes an entry the same way', () => {
+		const { storage, e, mem, full } = listSetup();
+		storage.read(e);
+		full.on = false;
+		expect(storage.remove(e)).toBe(true);
+		expect(mem.data.has('app:t:list')).toBe(false);
+		expect(mem.data.get('app:version:t')).toBe('1');
+	});
+
+	it('puts storage back when only part of the migrated data fits', () => {
+		const initial = { 'app:t:a': '1', 'app:t:b': '2' };
+		const used = Object.entries(initial).reduce((n, [k, v]) => n + k.length + v.length, 0);
+		// Room for `a` to grow, but not `b` as well.
+		const { storage, mem } = quota(initial, used + 4);
+		const t = storage.scope('t');
+		t.migration({
+			to: 1,
+			run(d) {
+				d['app:t:a'] = 10000;
+				d['app:t:b'] = 20000;
+			}
+		});
+		const a = t.entry('a', { label: 'a', parse: isNumber });
+		expect(storage.read(a)).toBe(10000);
+		expect(mem.data.get('app:t:a')).toBe('1');
+		expect(mem.data.get('app:t:b')).toBe('2');
+		expect(mem.data.has('app:version:t')).toBe(false);
+	});
+
+	it('defers to a migration another tab saved meanwhile', () => {
+		const { storage, e, mem } = listSetup();
+		storage.read(e);
+		mem.set('app:t:list', '{"items":["other tab"]}');
+		mem.set('app:version:t', '1');
+		expect(storage.read(e)).toEqual({ items: ['other tab'] });
+	});
+});
+
+describe('replace import when storage fills up (#52)', () => {
+	it('puts the previous data back', () => {
+		const initial = { 'app:n:a': '1', 'app:n:b': '2', 'app:x:old': '"u"' };
+		const used = Object.entries(initial).reduce((n, [k, v]) => n + k.length + v.length, 0);
+		// Room for the old data plus a little: the backup's bigger values don't all fit.
+		const { storage, mem } = quota(initial, used + 8);
+		const n = storage.scope('n');
+		const a = n.entry('a', { label: 'a', parse: isNumber });
+		const b = n.entry('b', { label: 'b', parse: isNumber });
+		const backup = storage.exportData();
+		backup.data = { 'app:n:a': 100000, 'app:n:b': 200000 };
+		backup.unclaimed = { 'app:y:new': 'v' };
+		expect(storage.importData(backup, 'replace')).toBe(false);
+		expect(storage.read(a)).toBe(1);
+		expect(storage.read(b)).toBe(2);
+		expect(mem.data.get('app:x:old')).toBe('"u"');
+		expect(mem.data.has('app:y:new')).toBe(false);
+	});
+
+	it('replaces everything when it fits', () => {
+		const { storage } = quota({ 'app:n:a': '1' }, 1000);
+		const a = storage.scope('n').entry('a', { label: 'a', parse: isNumber });
+		const backup = storage.exportData();
+		backup.data = { 'app:n:a': 5 };
+		expect(storage.importData(backup, 'replace')).toBe(true);
+		expect(storage.read(a)).toBe(5);
 	});
 });
 

@@ -63,8 +63,11 @@ Errors are only ever logged locally.
 `app.storage.entry(name, { label, parse })` registers a saved value under the plugin's
 namespace (`app:<namespace>:<name>`, or an exact `key` to keep an existing one). Reads never
 throw; writes return whether they saved. Each namespace has its own schema version and
-`migration({ to, run })`s, which also upgrade older backups. `exportData`, `parseBackup` and
-`importData` make backups; `unclaimed()` lists data left by plugins that were removed.
+`migration({ to, run })`s, which also upgrade older backups. When storage is too full to save a
+migration, the migrated data stays in memory (reads and backups see it) and is saved, with the
+version, by the next write to that namespace that fits. `exportData`, `parseBackup` and
+`importData` make backups; a `replace` import that doesn't fit puts the previous data back.
+`unclaimed()` lists data left by plugins that were removed.
 `startSync()` follows other tabs. `localStorage` holds about 5 MB per origin; pass another
 `StorageAdapter` to `createApp({ storage })` to change where data lives.
 
