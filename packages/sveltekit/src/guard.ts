@@ -7,7 +7,8 @@
  * `guardNetwork()` before any plugin's worker code is evaluated. It wraps `fetch`, `WebSocket`,
  * `EventSource`, `WebTransport`, `Cache#add`/`addAll` and background fetches so they refuse any
  * origin other than the app's own, the ones plugins declare (`network.origins`) and
- * `privacy.allowOrigins`, the same list the page's `connect-src` gets. This is defence in depth, not a sandbox: plugins are trusted code.
+ * `privacy.allowOrigins`, the same list the page's `connect-src` gets. This is defence in depth,
+ * not a sandbox: plugins are trusted code.
  */
 
 /** The parts of a worker's global scope the guard replaces (tests pass their own). */
@@ -119,9 +120,10 @@ export function guardNetwork(scope: GuardScope, allowed: readonly string[]): voi
 	if (cache?.addAll) {
 		const addAll = cache.addAll;
 		cache.addAll = function (requests) {
-			// Copied first: a generator would be used up by the check.
-			const list = [...requests];
+			let list: (RequestInfo | URL)[];
 			try {
+				// Copied first: a generator would be used up by the check.
+				list = [...requests];
 				for (const request of list) check(request);
 			} catch (error) {
 				return Promise.reject(error);

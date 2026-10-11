@@ -108,6 +108,8 @@ describe('guardNetwork', () => {
 			})()
 		);
 		expect(added.slice(-2)).toEqual(['/f', '/g']);
+		// Like the real one, a bad argument rejects rather than throws.
+		await expect(cache.addAll(1 as never)).rejects.toThrow(TypeError);
 	});
 
 	it('guards background fetches, of one request or many', async () => {
