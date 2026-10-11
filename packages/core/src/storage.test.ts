@@ -602,6 +602,29 @@ describe('backups', () => {
 			expect(other.runs).toEqual([2]);
 		});
 
+		it('never leaves imported data under another version', () => {
+			const parsed = withOld().storage.parseBackup(oldBackup()); // app:old:thing at v1
+			if (!parsed.ok) throw new Error(parsed.error);
+
+			// Leftovers deleted at v2: the version goes too, so merge imports v1 with its version.
+			const cleared = withOld(memoryStorage({ 'app:old:x': '1', 'app:version:old': '2' }));
+			cleared.storage.removeUnclaimed(['app:old:x']);
+			expect(cleared.storage.importData(parsed.backup, 'merge')).toBe(true);
+			expect(cleared.adapter.data.get('app:old:thing')).toBe('"hello"');
+			expect(cleared.adapter.data.get('app:version:old')).toBe('1');
+
+			// Data still here at v2: merge keeps it, replace takes the backup's whole.
+			const initial = { 'app:old:x': '1', 'app:version:old': '2' };
+			const merged = withOld(memoryStorage(initial));
+			expect(merged.storage.importData(parsed.backup, 'merge')).toBe(true);
+			expect(Object.fromEntries(merged.adapter.data)).toEqual(initial);
+			const replaced = withOld(memoryStorage(initial));
+			expect(replaced.storage.importData(parsed.backup, 'replace')).toBe(true);
+			expect(replaced.adapter.data.has('app:old:x')).toBe(false);
+			expect(replaced.adapter.data.get('app:old:thing')).toBe('"hello"');
+			expect(replaced.adapter.data.get('app:version:old')).toBe('1');
+		});
+
 		it('still refuses data newer than a registered plugin knows', () => {
 			const b = withOld(memoryStorage(), [], [1]);
 			const backup = JSON.parse(oldBackup());
@@ -624,10 +647,10 @@ describe('backups', () => {
 		});
 		expect(b.storage.unclaimed()).toEqual([{ key: 'app:gone:x', namespace: 'gone' }]);
 		b.storage.removeUnclaimed(['app:gone:x', 'app:timers:presets', 'not-ours']);
+		// The removed plugin's version goes with the last of its data.
 		expect([...b.adapter.data.keys()].sort()).toEqual([
 			'app:timers:presets',
 			'app:timers:stale',
-			'app:version:gone',
 			'not-ours'
 		]);
 	});
