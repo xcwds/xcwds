@@ -3,6 +3,7 @@
  * whenever `svelte.config.js` loads, which happens before `svelte-kit sync`, `svelte-check`,
  * `vite dev` and `vite build`, so the generated files always exist (RFC 0001, decision 3).
  */
+import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -33,15 +34,14 @@ export const CONFIG_FILES = [
 /** The directory generated files go in, relative to the app's root. */
 export const OUT_DIR = '.xcwds';
 
-let writes = 0;
-
 /**
  * Writes a generated file in one step: to a temporary file, then renamed over it. `generate`
  * can run several times at once (Vitest loads the config once per project), and a plain
- * `writeFile` empties the file before writing, so another run could import it empty (#110).
+ * `writeFile` empties the file before writing, so another run could import it empty (#110). The
+ * temporary name is random, so runs in other processes or worker threads never share one.
  */
 async function writeGenerated(file: string, content: string) {
-	const temp = `${file}.${process.pid}.${++writes}.tmp`;
+	const temp = `${file}.${randomUUID()}.tmp`;
 	try {
 		await writeFile(temp, content);
 		await rename(temp, file);
