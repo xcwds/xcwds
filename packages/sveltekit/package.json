@@ -56,7 +56,7 @@
 		"publint": "publint"
 	},
 	"dependencies": {
-		"@sveltejs/adapter-static": "^3.0.10"
+		"@sveltejs/adapter-static": "^4.0.0"
 	},
 	"devDependencies": {
 		"@sveltejs/kit": "^2.49.1",
