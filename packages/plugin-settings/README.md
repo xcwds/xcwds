@@ -96,8 +96,8 @@ Both are usually called on boot, with the component imported dynamically (the co
 - **Backups:** the JSON from `app.storage.exportData()`, downloaded (or shared, where the
   browser can share files). Importing shows what it holds first, then merges or replaces.
 - **Clearing:** one button per storage group, named by `groups` or else after its entries
-  (e.g. "Clear Home shortcuts"), the ones `groups` lists first, and Clear all data, each confirmed first. Clears and imports reach every
-  component on this tab through `app.storage.onChange`, so what's showing updates without a
-  reload.
+  (e.g. "Clear Home shortcuts"), the ones `groups` lists first, and Clear all data, each
+  confirmed first. Clears and imports reach every component on this tab through
+  `app.storage.onChange`, so what's showing updates without a reload.
 - **A warning** shows when the browser won't let the app save.
 - **Toasts** (`app.toast`) confirm what happened; an invalid backup shows an inline error.
