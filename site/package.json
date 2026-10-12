@@ -28,7 +28,7 @@
 		"@playwright/test": "1.64.0",
 		"@resvg/resvg-js": "^2.6.2",
 		"@sveltejs/kit": "^2.49.1",
-		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@tailwindcss/vite": "^4.3.3",
 		"@types/node": "^24",
 		"@xcwds/testing": "workspace:*",
