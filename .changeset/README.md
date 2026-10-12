@@ -32,3 +32,24 @@ The workflow does nothing until the repository variable `NPM_RELEASE` is `true`.
    including the ones that only update the Version packages PR.
 
 Run it by hand from the Actions tab (Release → Run workflow) on `main` at any time.
+
+## When core or sveltekit gets a minor
+
+The plugins, `@xcwds/sveltekit` and `@xcwds/testing` peer on `@xcwds/core` (and the plugins on
+`@xcwds/sveltekit`) with a `^` range. On 0.x a minor leaves that range, and changesets then bumps
+every peer dependent to a **major**: a core 0.2.0 would release them all as 1.0.0. Keep them on
+0.x by fixing the Version packages PR by hand before merging it ([#90](https://github.com/xcwds/xcwds/issues/90)):
+
+1. Preview the plan on `main` with `pnpm changeset status --verbose`. Any package "bumped at major"
+   that no changeset asked to be major needs the fix.
+2. Fix the PR as the last step before merging, since the workflow rewrites it on every push to
+   `main`. On its branch (`changeset-release/main`), for each such package:
+   - in its `package.json`, set `version` to the next minor (`1.0.0` → `0.2.0` when it was
+     `0.1.x`);
+   - in its `CHANGELOG.md`, change the new heading to that version and `### Major Changes` to
+     `### Minor Changes`.
+3. Check that no `1.0.0` is left (`git grep -n '"version": "1.0.0"' -- 'packages/*/package.json'`),
+   push, and merge. CI runs on `main` before anything is published.
+
+The plugins' `core` ranges (`CORE` in each `options.ts`) already follow core's minor:
+`pnpm version-packages` runs `scripts/sync-core-version.js`.
