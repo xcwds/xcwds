@@ -102,6 +102,41 @@ for (const { name, dir, base } of targets) {
 			await expect(page.getByTestId('pinned').getByRole('link')).toHaveText([/Coffee Timer$/]);
 		});
 
+		test('data kept out of backups is noted, never exported or replaced, and still clears (#104)', async ({
+			page
+		}) => {
+			page.on('dialog', (dialog) => dialog.accept());
+			await gotoHydrated(page, url('/settings'));
+			await page.evaluate(() => {
+				localStorage.setItem('app:hello:count', '3');
+				localStorage.setItem('app:hello:cache', '"kept"');
+			});
+			await page.reload();
+			await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+			await expect(page.getByTestId('backup-note')).toHaveText(['Not in backups: Hello cache']);
+
+			const downloadPromise = page.waitForEvent('download');
+			await page.getByRole('button', { name: 'Download backup' }).click();
+			const file = (await (await downloadPromise).path())!;
+			const backup = JSON.parse(await readFile(file, 'utf8'));
+			expect(backup.data['app:hello:count']).toBe(3);
+			expect(JSON.stringify(backup)).not.toContain('app:hello:cache');
+
+			await page.getByLabel('Backup file').setInputFiles(file);
+			await page
+				.getByTestId('import-preview')
+				.getByRole('button', { name: 'Replace everything' })
+				.click();
+			await expect(page.getByTestId('toast').filter({ hasText: /^Imported/ })).toBeVisible();
+			expect(await page.evaluate(() => localStorage.getItem('app:hello:cache'))).toBe('"kept"');
+
+			await page.getByRole('button', { name: 'Clear all data' }).click();
+			await expect(
+				page.getByTestId('toast').filter({ hasText: 'All data cleared.' })
+			).toBeVisible();
+			expect(await page.evaluate(() => localStorage.getItem('app:hello:cache'))).toBeNull();
+		});
+
 		test('importing a file that is not a backup shows an error', async ({ page }) => {
 			await gotoHydrated(page, url('/settings'));
 			await page.getByLabel('Backup file').setInputFiles({

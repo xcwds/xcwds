@@ -75,6 +75,8 @@ export type Entry<T> = {
 	/** Lets users clear one area (e.g. workout history) without wiping another. */
 	readonly group: string;
 	readonly namespace: string;
+	/** Whether backups carry it (false for secrets and re-downloadable caches). */
+	readonly backup: boolean;
 };
 
 export type EntryOptions<T> = {
@@ -87,6 +89,12 @@ export type EntryOptions<T> = {
 	 * the keys its users already have (e.g. `app:settings`). It must start with the prefix.
 	 */
 	key?: string;
+	/**
+	 * `false` keeps it out of backups: exports leave it out, imports neither write nor clear it
+	 * (restoring a backup mustn't sign you out of a service), and "Clear data" still removes it.
+	 * For secrets such as access tokens and for large caches that can be downloaded again.
+	 */
+	backup?: boolean;
 };
 
 /**
@@ -196,7 +204,7 @@ export type StorageRegistry = {
 	exportData(now?: Date): Backup;
 	parseBackup(text: string): ParsedBackup;
 	/**
-	 * `replace` clears every registered entry first; `merge` keeps what the backup lacks. Returns
+	 * `replace` clears every entry backups carry first; `merge` keeps what the backup lacks. Returns
 	 * false when something couldn't be saved: `replace` then puts the previous data back.
 	 */
 	importData(backup: Backup, mode: 'replace' | 'merge'): boolean;
@@ -527,6 +535,7 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 	function exportData(now = new Date()): Backup {
 		const data: Record<string, unknown> = {};
 		for (const e of entries.values()) {
+			if (!e.backup) continue;
 			const value = read(e);
 			if (value !== undefined) data[e.key] = value;
 		}
@@ -617,7 +626,8 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 			}
 			for (const [key, value] of Object.entries(subset)) {
 				const e = entries.get(key);
-				const parsed = e?.parse(value);
+				// An entry kept out of backups is never imported, whatever a file carries.
+				const parsed = e?.backup ? e.parse(value) : undefined;
 				if (e && parsed !== undefined) {
 					data[key] = parsed;
 					found.push(e);
@@ -698,9 +708,10 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 	}
 
 	function applyBackup(backup: Backup, mode: 'replace' | 'merge'): boolean {
-		if (mode === 'replace') clear();
+		const kept = [...entries.values()].filter((e) => e.backup);
+		if (mode === 'replace') clear(kept);
 		let ok = true;
-		for (const e of entries.values()) {
+		for (const e of kept) {
 			if (e.key in backup.data) ok = write(e, backup.data[e.key]) && ok;
 		}
 		// Unclaimed data goes in per namespace, with its schema version, so a plugin that comes
@@ -771,7 +782,8 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 						label: opts.label,
 						parse: opts.parse,
 						group: opts.group ?? (ns || name.split(':')[0]!),
-						namespace: ns
+						namespace: ns,
+						backup: opts.backup ?? true
 					};
 					entries.set(key, e as Entry<unknown>);
 					return e;

@@ -5,6 +5,7 @@ import client from './client.js';
 import settingsFactory from './index.js';
 import {
 	backupFileName,
+	backupNote,
 	orderGroups,
 	resolveOptions,
 	sectionOrder,
@@ -77,6 +78,15 @@ describe('options', () => {
 			)
 		).toEqual(['Workout history', 'Home shortcuts', 'timers entries', 'constructor entries']);
 		expect(orderGroups(groups, {})).toEqual(groups);
+	});
+
+	it('notes which data backups leave out', () => {
+		const entry = (label: string, backup: boolean) => ({ label, backup });
+		expect(backupNote([entry('Count', true)])).toBeUndefined();
+		expect(backupNote([entry('Token', false)])).toBe('Not in backups');
+		expect(backupNote([entry('Count', true), entry('Token', false), entry('Pages', false)])).toBe(
+			'Not in backups: Token, Pages'
+		);
 	});
 });
 

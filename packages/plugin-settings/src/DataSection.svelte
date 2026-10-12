@@ -9,7 +9,7 @@
 	import { onMount } from 'svelte';
 	import type {} from '@xcwds/plugin-shell/client';
 	import type {} from './client.js';
-	import { backupFileName, orderGroups } from './options.js';
+	import { backupFileName, backupNote, orderGroups } from './options.js';
 
 	const app = useApp();
 	const storage = app.storage;
@@ -204,8 +204,12 @@
 <h3 class="mt-2 font-semibold">Clear data</h3>
 <ul class="flex flex-col gap-2">
 	{#each groups as group (group.id)}
+		{@const note = backupNote(group.entries)}
 		<li class="flex items-center justify-between gap-3">
-			<span>{group.label}</span>
+			<span class="flex flex-col">
+				{group.label}
+				{#if note}<span class={muted} data-testid="backup-note">{note}</span>{/if}
+			</span>
 			<button
 				type="button"
 				class="{button} text-sm"

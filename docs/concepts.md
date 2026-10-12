@@ -158,6 +158,13 @@ one, and clear them by group, and reading data that a bug or an old version left
 breaks a page. Each namespace has a schema version: when a plugin changes what it saves, it adds
 a **migration**, which upgrades both the data on the device and older backups.
 
+An entry registered with `backup: false` stays out of backups: exports leave it out, and imports
+neither write it nor clear it, so restoring a backup doesn't sign anyone out of a service. Use it
+for secrets such as access tokens and for caches that can be downloaded again. Clearing its group,
+or all data, still removes it, and the settings page marks it "Not in backups". Once its plugin is
+removed, nothing marks the data any more, so it would go into backups as unclaimed data: clear a
+plugin's data before removing it.
+
 **Settings** are one app-wide object (saved as `app:settings`), to which each plugin adds fields
 with a default, a `parse` function and optionally a control that the settings page shows:
 

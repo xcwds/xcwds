@@ -67,6 +67,8 @@ throw; writes return whether they saved. Each namespace has its own schema versi
 migration, the migrated data stays in memory (reads and backups see it) and is saved, with the
 version, by the next write to that namespace that fits. `exportData`, `parseBackup` and
 `importData` make backups; a `replace` import that doesn't fit puts the previous data back.
+An entry registered with `backup: false` (secrets, re-downloadable caches) is left out of exports,
+and imports neither write nor clear it; clearing its group still removes it.
 `unclaimed()` lists data left by plugins that were removed. Backups keep that data with its schema
 version, so a backup still imports after a plugin is removed, and the plugin's migrations pick
 up where they left off if it comes back.

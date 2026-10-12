@@ -18,6 +18,12 @@ export default definePlugin(
 				parse: (v) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : undefined)
 			})
 		});
+		// A cache that can be fetched again, so backups leave it out (`backup: false`).
+		app.storage.entry('cache', {
+			label: 'Hello cache',
+			parse: (v) => (typeof v === 'string' ? v : undefined),
+			backup: false
+		});
 		app.addHook('onBoot', () => {
 			document.documentElement.dataset.hello = greeting;
 		});

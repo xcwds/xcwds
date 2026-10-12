@@ -543,6 +543,48 @@ describe('backups', () => {
 		expect(b.storage.read(b.settings)).toEqual({ y: 2 });
 	});
 
+	it('keeps entries with `backup: false` out of backups, but clears them (#104)', () => {
+		const tokenFor = (s: ReturnType<typeof app>) =>
+			s.storage.scope('timers').entry('token', {
+				label: 'Token',
+				parse: (v) => (typeof v === 'string' ? v : undefined),
+				backup: false
+			});
+		const a = app({ 'app:timers:token': '"secret"', 'app:settings': '{"x":1}' });
+		const token = tokenFor(a);
+		expect(token.backup).toBe(false);
+		expect(a.presets.backup).toBe(true);
+		const backup = a.storage.exportData();
+		expect(backup.data).toEqual({ 'app:settings': { x: 1 } });
+		expect(JSON.stringify(backup)).not.toContain('secret');
+
+		// An older or hand-edited backup that carries it: reported as skipped, never imported.
+		const b = app({ 'app:timers:token': '"mine"' });
+		const mine = tokenFor(b);
+		const parsed = b.storage.parseBackup(
+			JSON.stringify({ ...backup, data: { ...backup.data, 'app:timers:token': 'theirs' } })
+		);
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		expect(parsed.skipped).toEqual(['app:timers:token']);
+		expect(parsed.found.map((e) => e.key)).toEqual(['app:settings']);
+		expect(parsed.backup.data).not.toHaveProperty('app:timers:token');
+		// Even a backup object built by hand can't write it, and neither mode clears it.
+		const forged = { ...parsed.backup, data: { ...parsed.backup.data, 'app:timers:token': 'x' } };
+		expect(b.storage.importData(forged, 'merge')).toBe(true);
+		expect(b.storage.read(mine)).toBe('mine');
+		expect(b.storage.importData(forged, 'replace')).toBe(true);
+		expect(b.storage.read(mine)).toBe('mine');
+		expect(b.storage.read(b.settings)).toEqual({ x: 1 });
+
+		// Clearing its group, or everything, still removes it.
+		b.storage.clear(b.storage.groups().find((g) => g.id === 'timers')!.entries);
+		expect(b.storage.read(mine)).toBeUndefined();
+		b.storage.write(mine, 'again');
+		b.storage.clear();
+		expect(b.adapter.data.has('app:timers:token')).toBe(false);
+	});
+
 	describe('when a plugin with migrations was removed (#51)', () => {
 		/** An app with the `old` plugin at the given migrations (none: removed). */
 		function withOld(adapter = memoryStorage(), runs: number[] = [], tos: number[] = []) {
