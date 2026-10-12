@@ -65,6 +65,9 @@ importers:
       '@xcwds/plugin-install':
         specifier: workspace:*
         version: link:../../packages/plugin-install
+      '@xcwds/plugin-lock':
+        specifier: workspace:*
+        version: link:../../packages/plugin-lock
       '@xcwds/plugin-offline':
         specifier: workspace:*
         version: link:../../packages/plugin-offline
@@ -236,6 +239,42 @@ importers:
         version: 4.1.11(@types/node@24.19.2)(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0))
 
   packages/plugin-install:
+    devDependencies:
+      '@sveltejs/kit':
+        specifier: ^2.49.1
+        version: 2.70.3(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0)))(svelte@5.57.2(@typescript-eslint/types@8.71.1))(typescript@5.9.3)(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0))
+      '@sveltejs/package':
+        specifier: ^3.0.0
+        version: 3.0.0(svelte@5.57.2(@typescript-eslint/types@8.71.1))(typescript@5.9.3)
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^6.2.1
+        version: 6.2.4(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0))
+      '@xcwds/core':
+        specifier: workspace:^
+        version: link:../core
+      '@xcwds/sveltekit':
+        specifier: workspace:^
+        version: link:../sveltekit
+      '@xcwds/testing':
+        specifier: workspace:*
+        version: link:../testing
+      svelte:
+        specifier: ^5.45.6
+        version: 5.57.2(@typescript-eslint/types@8.71.1)
+      svelte-check:
+        specifier: ^4.3.4
+        version: 4.7.6(picomatch@4.0.7)(svelte@5.57.2(@typescript-eslint/types@8.71.1))(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^7.2.6
+        version: 7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0)
+      vitest:
+        specifier: ^4.0.15
+        version: 4.1.11(@types/node@24.19.2)(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0))
+
+  packages/plugin-lock:
     devDependencies:
       '@sveltejs/kit':
         specifier: ^2.49.1

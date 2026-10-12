@@ -80,6 +80,8 @@ app.settings.field('alarm', {
 
 `hint` adds a line under the field's label. Sections are ordered as in `sections`, then
 Appearance, General and Timers, then the rest in the order their fields were added.
+Fields in the `privacy` section show in the built-in Privacy card, above the servers the app
+contacts (`@xcwds/plugin-lock` puts its cover switch there).
 
 ## For plugins
 

@@ -1,0 +1,12 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"allowJs": true,
+		"checkJs": true,
+		"types": ["node", "@sveltejs/kit", "vite/client"],
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext"
+	},
+	"include": ["src"]
+}

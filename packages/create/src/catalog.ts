@@ -51,7 +51,8 @@ export const PLUGIN_IDS = [
 	'tools',
 	'timers',
 	'share',
-	'changelog'
+	'changelog',
+	'lock'
 ] as const;
 export type PluginId = (typeof PLUGIN_IDS)[number];
 
@@ -103,6 +104,14 @@ export const CATALOG: Record<PluginId, PluginInfo> = {
 		summary: 'An Install button, or the steps on iPhone',
 		requires: [],
 		call: 'install()'
+	},
+	lock: {
+		id: 'lock',
+		package: '@xcwds/plugin-lock',
+		recommended: false,
+		summary: 'A cover over private pages in the app switcher, no spellcheck in their fields',
+		requires: [],
+		call: 'lock()'
 	},
 	settings: {
 		id: 'settings',

@@ -35,8 +35,9 @@
 	const fields = app.settings.fields();
 	const shown = $derived(fields.filter((f) => f.control || controls.has(f.name)));
 	const groups = $derived.by(() => {
+		// Fields in the `privacy` section go in the built-in Privacy card instead.
 		const ids = sectionOrder(
-			shown.map((f) => f.section),
+			shown.map((f) => f.section).filter((id) => id !== 'privacy'),
 			titles
 		);
 		return ids.map((id) => ({ id, fields: shown.filter((f) => f.section === id) }));
@@ -68,6 +69,8 @@
 				timeStyle: 'short'
 			})
 		: version;
+
+	const privacyFields = $derived(shown.filter((f) => f.section === 'privacy'));
 
 	const card = 'flex flex-col gap-3 rounded-2xl bg-(--xcwds-shell-card) p-4';
 	const control = (f: FieldInfo) => controls.get(f.name);
@@ -106,6 +109,10 @@
 			{:else if block.kind === 'privacy'}
 				<section class={card} aria-labelledby="{uid}-privacy" data-testid="settings-privacy">
 					<h2 id="{uid}-privacy" class="text-lg font-semibold">Privacy</h2>
+					{#each privacyFields as field (field.name)}
+						{@const Custom = control(field)}
+						{#if Custom}<Custom name={field.name} />{:else}<FieldControl {field} />{/if}
+					{/each}
 					<PrivacySection />
 				</section>
 			{:else if block.kind === 'about'}

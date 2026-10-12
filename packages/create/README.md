@@ -12,18 +12,19 @@ pnpm create @xcwds my-app
 It asks for the app's name, a tagline and a square SVG icon (or uses a neutral one), and which
 plugins to use. The recommended set is picked already:
 
-| Plugin      | What it adds                                                        |
-| ----------- | ------------------------------------------------------------------- |
-| `shell`     | Header, tab bar or sidebar, toasts, Home and the error page         |
-| `theme`     | Light and dark mode, applied before first paint                     |
-| `offline`   | Works offline, with a notice when the connection drops              |
-| `update`    | New versions wait for an Update tap, never mid-task                 |
-| `install`   | An Install button, or the steps on iPhone                           |
-| `settings`  | A settings page with backups, Privacy and About                     |
-| `tools`     | Small tools with an index page, pinned and recent ones on Home      |
-| `timers`    | Labeled timers that ring on every page and survive a sleeping phone |
-| `share`     | A Share button in the installed app (links only, never your data)   |
-| `changelog` | What's new in Settings, and a toast after an update                 |
+| Plugin      | What it adds                                                                  |
+| ----------- | ----------------------------------------------------------------------------- |
+| `shell`     | Header, tab bar or sidebar, toasts, Home and the error page                   |
+| `theme`     | Light and dark mode, applied before first paint                               |
+| `offline`   | Works offline, with a notice when the connection drops                        |
+| `update`    | New versions wait for an Update tap, never mid-task                           |
+| `install`   | An Install button, or the steps on iPhone                                     |
+| `settings`  | A settings page with backups, Privacy and About                               |
+| `tools`     | Small tools with an index page, pinned and recent ones on Home                |
+| `timers`    | Labeled timers that ring on every page and survive a sleeping phone           |
+| `share`     | A Share button in the installed app (links only, never your data)             |
+| `changelog` | What's new in Settings, and a toast after an update                           |
+| `lock`      | A cover over private pages in the app switcher, no spellcheck in their fields |
 
 Then it writes a SvelteKit project and installs it:
 

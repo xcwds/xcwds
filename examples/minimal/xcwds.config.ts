@@ -2,6 +2,7 @@ import hello from '@xcwds-example/plugin-hello';
 import { defineConfig } from '@xcwds/core';
 import changelog from '@xcwds/plugin-changelog';
 import install from '@xcwds/plugin-install';
+import lock from '@xcwds/plugin-lock';
 import offline from '@xcwds/plugin-offline';
 import settings from '@xcwds/plugin-settings';
 import share from '@xcwds/plugin-share';
@@ -73,6 +74,8 @@ export default defineConfig({
 		update(),
 		changelog({ entries: notes }),
 		theme(),
-		install()
+		install(),
+		// Covers private pages (the Journal) in the app switcher; no spellcheck in their fields.
+		lock()
 	]
 });

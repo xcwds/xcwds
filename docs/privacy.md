@@ -131,6 +131,20 @@ leaves the browser. Put anything a person typed or saved in the fragment:
 - In development, `@xcwds/sveltekit` warns in the console when a page's query string carries a
   value the app has saved (`savedDataInQuery` from `@xcwds/core`).
 
+## Private pages
+
+A route with `private: true` (a tool such as a journal) is personal: `@xcwds/plugin-share` never
+shares it, and `@xcwds/plugin-tools` keeps it out of Recently used and home-screen shortcuts.
+[`@xcwds/plugin-lock`](../packages/plugin-lock/README.md) adds two protections there:
+
+- **A cover in the app switcher.** When the app is hidden on a private page, a plain cover (the
+  app's icon, no text) goes over it, so the snapshot the app switcher shows doesn't. This is best
+  effort: browsers don't promise when they take that snapshot. People can turn it off in Settings
+  → Privacy.
+- **No spellcheck or autocomplete.** Enhanced spellcheck in some browsers sends what you type to
+  a server, and autocomplete keeps it in the browser's form history, so text fields in a private
+  page's `<main>` get `spellcheck="false"`, `autocomplete="off"` and `autocapitalize="off"`.
+
 ## Plugins are trusted code
 
 A plugin runs with full access to the page, its storage and the network the CSP allows. Storage
