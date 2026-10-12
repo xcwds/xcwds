@@ -108,6 +108,22 @@ describe('plugin loading', () => {
 		expect(error.plugin).toBe('old');
 	});
 
+	it("rejects a core range it can't read instead of calling it a mismatch", async () => {
+		const app = testApp({ coreVersion: '1.4.0' });
+		app.register(definePlugin(() => {}, { name: 'odd', core: 'latest' }));
+		const error = await rejects(app.load(), codes.PLUGIN_META);
+		expect(error.plugin).toBe('odd');
+		expect(error.message).toContain('unsupported @xcwds/core range: "latest"');
+	});
+
+	it('keeps rejecting after a failed load, with the first error', async () => {
+		const app = testApp();
+		app.register(definePlugin(() => {}, { name: 'old', core: '^9.0.0' }));
+		const first = await rejects(app.load(), codes.PLUGIN_VERSION_MISMATCH);
+		await expect(app.load()).rejects.toBe(first);
+		await expect(app.ready()).rejects.toBe(first);
+	});
+
 	it('checks dependencies are registered first', async () => {
 		const shell = definePlugin(() => {}, { name: 'shell', encapsulate: false });
 		const timers = definePlugin(() => {}, { name: 'timers', dependencies: ['shell'] });
@@ -271,6 +287,22 @@ describe('decorators and encapsulation', () => {
 			expect.objectContaining({ code: codes.DECORATOR_RESERVED })
 		);
 		expect(app.hasDecorator('register')).toBe(false);
+	});
+
+	it('doesn’t count Object.prototype’s names as decorators', async () => {
+		const app = testApp();
+		app.decorate('x', 1);
+		const names = ['toString', 'isPrototypeOf', 'toLocaleString', 'constructor', '__proto__'];
+		let child: Record<string, boolean> = {};
+		app.register((a) => {
+			child = Object.fromEntries([...names, 'x'].map((n) => [n, a.hasDecorator(n)]));
+		});
+		await app.load();
+		for (const name of names) expect(app.hasDecorator(name), name).toBe(false);
+		expect(child).toEqual({ ...Object.fromEntries(names.map((n) => [n, false])), x: true });
+		const needs = definePlugin(() => {}, { name: 'needs', decorators: ['toLocaleString'] });
+		const other = testApp().register(needs);
+		await rejects(other.load(), codes.PLUGIN_DECORATOR_MISSING);
 	});
 
 	it('types merged decorators', () => {

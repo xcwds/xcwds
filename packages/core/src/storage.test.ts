@@ -415,6 +415,7 @@ describe('sync between tabs', () => {
 		fire(e.key);
 		fire('unrelated');
 		fire('app:version:n');
+		fire('app:probe');
 		fire(null);
 		storage.stopSync();
 		fire(e.key);

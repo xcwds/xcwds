@@ -189,13 +189,16 @@ export type GuardDecision =
 	| { action: 'cancel' }
 	/** `redirects` counts the hops made, this one included. */
 	| { action: 'redirect'; url: URL; redirects: number }
-	/** Too many redirects in a row: the navigation stops and `error` goes to `onError`. */
+	/**
+	 * Too many redirects in a row, or an answer that isn't an app path: the navigation stops and
+	 * `error` goes to `onError`.
+	 */
 	| { action: 'stop'; error: Error };
 
 /**
  * Turns the guards' answer for a navigation to `target` into what happens next: `false`
  * cancels (except on the first page, which was loaded rather than navigated to and is already
- * showing), a path (without the base) redirects, anything else allows it. `redirects` counts
+ * showing), a path (without the base, starting with one `/`) redirects, anything else allows it. `redirects` counts
  * the hops that led here.
  */
 export function decide(
@@ -216,7 +219,15 @@ export function decide(
 				`onNavigate redirected more than ${MAX_REDIRECTS} times; stopped at ${answer}.`
 			)
 		};
-	return { action: 'redirect', url: new URL(base + answer, target), redirects: redirects + 1 };
+	// An app path: `//host/…` or `https://…` would leave the app (an open redirect if a guard
+	// builds its answer from the URL), and `\` counts as `/` in URLs.
+	const url = /^\/(?![/\\])/.test(answer) ? new URL(base + answer, target) : undefined;
+	if (!url || url.origin !== target.origin)
+		return {
+			action: 'stop',
+			error: new Error(`onNavigate answered ${JSON.stringify(answer)}, which isn't an app path.`)
+		};
+	return { action: 'redirect', url, redirects: redirects + 1 };
 }
 
 /**

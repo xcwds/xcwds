@@ -845,7 +845,11 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 			const handler = (event: Event) => {
 				const { key, storageArea } = event as StorageEvent;
 				if (storageArea && storageArea !== globalThis.localStorage) return;
-				if (key !== null && (!key.startsWith(prefix) || isVersionKey(key))) return;
+				if (
+					key !== null &&
+					(!key.startsWith(prefix) || isVersionKey(key) || key === `${prefix}probe`)
+				)
+					return;
 				const e = key === null ? undefined : entries.get(key);
 				const value = e ? read(e) : undefined;
 				for (const l of changeListeners) l(key, value);

@@ -9,7 +9,7 @@ import {
 } from './hooks.js';
 import { createLogger, type LogLevel, type Logger } from './log.js';
 import { checkNetwork, type NetworkUse } from './privacy.js';
-import { satisfies } from './semver.js';
+import { satisfies, validRange } from './semver.js';
 import { createSettings, type SettingsRegistry, type SettingsScope } from './settings.js';
 import {
 	createStorage,
@@ -168,7 +168,11 @@ export interface App {
 	readonly hooks: HookRunner;
 
 	register<Options>(plugin: Plugin<Options>, options?: Options & RegisterOptions): App;
-	/** Loads every registered plugin, depth-first, in order. Safe to call more than once. */
+	/**
+	 * Loads every registered plugin, depth-first, in order. Safe to call more than once: later calls
+	 * share the first one's result. If loading fails, every later call rejects with that error, so
+	 * create a new app to try again.
+	 */
 	load(): Promise<App>;
 	/** Loads plugins, then runs `onReady` hooks once. */
 	ready(): Promise<App>;
@@ -422,7 +426,16 @@ const proto: App = {
 	},
 
 	hasDecorator(name) {
-		return !RESERVED.has(name) && name in this;
+		if (RESERVED.has(name)) return false;
+		// Decorators are own properties of the views up the chain; `proto` and Object.prototype
+		// (`toString`, `isPrototypeOf`…) hold none.
+		if (Object.hasOwn(this, name)) return true;
+		let at: object | null = Object.getPrototypeOf(this);
+		while (at && at !== proto) {
+			if (Object.hasOwn(at, name)) return true;
+			at = Object.getPrototypeOf(at);
+		}
+		return false;
 	},
 
 	reportError(error, source = { kind: 'uncaught' }) {
@@ -582,6 +595,12 @@ async function loadPlugin(parent: State, { plugin, options }: QueueItem): Promis
 	const named = meta.name !== undefined;
 	const parentView = views.get(parent)!;
 
+	if (meta.core && !validRange(meta.core))
+		throw new XcwdsError(
+			codes.PLUGIN_META,
+			`Plugin "${name}" declares an unsupported @xcwds/core range: "${meta.core}".`,
+			{ plugin: name }
+		);
 	if (meta.core && !satisfies(k.version, meta.core))
 		throw new XcwdsError(
 			codes.PLUGIN_VERSION_MISMATCH,

@@ -102,6 +102,26 @@ describe('the shared navigation core', () => {
 		);
 	});
 
+	it("stops at guard answers that aren't app paths", () => {
+		const base = '/sub';
+		for (const answer of [
+			'//evil.example/x',
+			'/\\evil.example/x',
+			'https://evil.example/',
+			'a',
+			''
+		])
+			for (const b of [base, '']) {
+				const decision = decide(answer, { target, base: b, redirects: 0 });
+				expect(decision, `${b} ${answer}`).toMatchObject({ action: 'stop' });
+				expect(decision.action === 'stop' && decision.error.message).toMatch(/isn't an app path/);
+			}
+		expect(decide('/a', { target, base: '', redirects: 0 })).toMatchObject({
+			action: 'redirect',
+			url: new URL('http://x/a')
+		});
+	});
+
 	it('runs guards synchronously when they answer synchronously', async () => {
 		const app = setupApp({
 			name: 'T',
