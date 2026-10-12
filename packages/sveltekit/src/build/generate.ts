@@ -4,7 +4,7 @@
  * `vite dev` and `vite build`, so the generated files always exist (RFC 0001, decision 3).
  */
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -32,6 +32,24 @@ export const CONFIG_FILES = [
 
 /** The directory generated files go in, relative to the app's root. */
 export const OUT_DIR = '.xcwds';
+
+let writes = 0;
+
+/**
+ * Writes a generated file in one step: to a temporary file, then renamed over it. `generate`
+ * can run several times at once (Vitest loads the config once per project), and a plain
+ * `writeFile` empties the file before writing, so another run could import it empty (#110).
+ */
+async function writeGenerated(file: string, content: string) {
+	const temp = `${file}.${process.pid}.${++writes}.tmp`;
+	try {
+		await writeFile(temp, content);
+		await rename(temp, file);
+	} catch (error) {
+		await rm(temp, { force: true });
+		throw error;
+	}
+}
 
 export function findConfig(root: string): string {
 	for (const name of CONFIG_FILES) {
@@ -117,7 +135,7 @@ export async function generate({
 
 	const dir = join(root, OUT_DIR);
 	await mkdir(dir, { recursive: true });
-	await writeFile(join(dir, '.gitignore'), '*\n');
+	await writeGenerated(join(dir, '.gitignore'), '*\n');
 
 	const plugins: PluginInfo[] = config.plugins.map(({ name, options }) => {
 		const { exports, dir } = findPackage(root, name);
@@ -133,7 +151,7 @@ export async function generate({
 
 	// Plugins' `.` entries, imported from the app's root as the config imported them.
 	const buildFile = join(dir, 'build.js');
-	await writeFile(buildFile, buildModule(plugins.map((p) => p.name)));
+	await writeGenerated(buildFile, buildModule(plugins.map((p) => p.name)));
 	const entries = (await import(`${pathToFileURL(buildFile).href}?t=${Date.now()}`)) as {
 		default: Record<string, unknown>[];
 	};
@@ -196,7 +214,7 @@ export async function generate({
 				: `@xcwds/sveltekit generates ${clashes.join(', ')}, which your static files also have. Remove ${clashes.length === 1 ? 'it' : 'them'} from ${dir}/ (set brand.icon and manifest in the xcwds config instead).`
 		);
 	}
-	await writeFile(join(dir, 'worker-guard.js'), guardModule(state));
-	await writeFile(join(dir, 'worker.js'), workerModule(state));
+	await writeGenerated(join(dir, 'worker-guard.js'), guardModule(state));
+	await writeGenerated(join(dir, 'worker.js'), workerModule(state));
 	return state;
 }

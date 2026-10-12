@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Rollup } from 'vite';
@@ -129,6 +129,19 @@ describe('generate', () => {
 		expect(client).toContain(`import p0 from "xcwds-plugin-timers/client";`);
 		expect(client).toContain(`export const plugins = [[p0, {"x":1,"prefix":"/utils/timer"}]];`);
 		expect(client).toContain('href=\\"/sub/manifest.webmanifest\\"');
+	});
+
+	it('survives several builds at once, as when Vitest loads the config for each project (#110)', async () => {
+		const states = await Promise.all(Array.from({ length: 40 }, () => generate({ root })));
+		for (const state of states) expect(state.routes).toHaveLength(1);
+		expect(await readFile(join(root, '.xcwds/build.js'), 'utf8')).toContain('xcwds-plugin-timers');
+		// No temporary files left behind.
+		expect((await readdir(join(root, '.xcwds'))).sort()).toEqual([
+			'.gitignore',
+			'build.js',
+			'worker-guard.js',
+			'worker.js'
+		]);
 	});
 
 	it('refuses static files that collide with generated ones, naming them', async () => {
