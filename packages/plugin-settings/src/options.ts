@@ -153,8 +153,9 @@ export function orderGroups<G extends { id: string; label: string }>(
  * What Your data says under a group whose entries backups leave out (`backup: false`): restoring a
  * backup won't bring them back. Undefined when backups carry the whole group.
  */
-export function backupNote(entries: readonly { label: string; backup: boolean }[]) {
-	const left = entries.filter((e) => !e.backup);
+export function backupNote(entries: readonly { label: string; backup?: boolean }[]) {
+	// Only an explicit opt-out: entries from a core before #104 have no `backup` field.
+	const left = entries.filter((e) => e.backup === false);
 	if (!left.length) return undefined;
 	if (left.length === entries.length) return 'Not in backups';
 	return `Not in backups: ${left.map((e) => e.label).join(', ')}`;

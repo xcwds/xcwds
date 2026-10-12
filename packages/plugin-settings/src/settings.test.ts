@@ -83,6 +83,7 @@ describe('options', () => {
 	it('notes which data backups leave out', () => {
 		const entry = (label: string, backup: boolean) => ({ label, backup });
 		expect(backupNote([entry('Count', true)])).toBeUndefined();
+		expect(backupNote([{ label: 'From an older core' }])).toBeUndefined();
 		expect(backupNote([entry('Token', false)])).toBe('Not in backups');
 		expect(backupNote([entry('Count', true), entry('Token', false), entry('Pages', false)])).toBe(
 			'Not in backups: Token, Pages'
