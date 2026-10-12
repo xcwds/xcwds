@@ -265,13 +265,7 @@ const RESERVED = new Set<string>([
 	'defineHook',
 	'decorate',
 	'hasDecorator',
-	'reportError',
-	// Object.prototype members a decorator would shadow.
-	'constructor',
-	'toString',
-	'valueOf',
-	'hasOwnProperty',
-	'__proto__'
+	'reportError'
 ]);
 
 function joinPrefix(parent: string, child: string | undefined): string {
@@ -408,7 +402,7 @@ const proto: App = {
 
 	decorate(name: string, value: unknown): App {
 		const s = state(this);
-		if (RESERVED.has(name))
+		if (RESERVED.has(name) || name in Object.prototype)
 			throw new XcwdsError(codes.DECORATOR_RESERVED, `"${name}" is part of the app's own API.`, {
 				plugin: s.plugin || undefined
 			});
@@ -426,7 +420,7 @@ const proto: App = {
 	},
 
 	hasDecorator(name) {
-		if (RESERVED.has(name)) return false;
+		if (RESERVED.has(name) || name in Object.prototype) return false;
 		// Decorators are own properties of the views up the chain; `proto` and Object.prototype
 		// (`toString`, `isPrototypeOf`…) hold none.
 		if (Object.hasOwn(this, name)) return true;

@@ -286,6 +286,9 @@ describe('decorators and encapsulation', () => {
 		expect(() => app.decorate('__proto__', 2)).toThrowError(
 			expect.objectContaining({ code: codes.DECORATOR_RESERVED })
 		);
+		expect(() => app.decorate('isPrototypeOf', 2)).toThrowError(
+			expect.objectContaining({ code: codes.DECORATOR_RESERVED })
+		);
 		expect(app.hasDecorator('register')).toBe(false);
 	});
 
