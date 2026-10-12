@@ -1,14 +1,15 @@
 <script lang="ts">
 	/**
 	 * Your data: download, share or import a backup of everything the app saved, and clear it per
-	 * storage group or all at once (ported from xcwds.github.io's Settings).
+	 * storage group (named and ordered by the `groups` option) or all at once (ported from
+	 * xcwds.github.io's Settings).
 	 */
 	import type { Group, ParsedBackup } from '@xcwds/core';
 	import { brand, useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
 	import type {} from '@xcwds/plugin-shell/client';
 	import type {} from './client.js';
-	import { backupFileName } from './options.js';
+	import { backupFileName, orderGroups } from './options.js';
 
 	const app = useApp();
 	const storage = app.storage;
@@ -31,7 +32,7 @@
 	const anyData = $derived(groups.some(hasData));
 
 	onMount(() => {
-		groups = storage.groups();
+		groups = orderGroups(storage.groups(), app.settingsPage?.options.groups ?? {});
 		writable = storage.writable();
 		try {
 			canShareFiles = navigator.canShare?.({ files: [backupFile()] }) ?? false;

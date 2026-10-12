@@ -43,15 +43,16 @@ export default defineConfig({
 
 ## Options
 
-| Option       | Default     | What it does                                                                 |
-| ------------ | ----------- | ---------------------------------------------------------------------------- |
-| `path`       | `/settings` | The page (added to the route registry with `title` and `emoji`).             |
-| `title`      | `Settings`  | Its title.                                                                   |
-| `emoji`      | `⚙️`        | Its emoji; `''` shows none.                                                  |
-| `width`      | `narrow`    | `narrow`, or `split` for a page laid out in two columns on wide screens.     |
-| `sections`   | `{}`        | Titles by section id, in the order they show (`{ tools: 'Tool defaults' }`). |
-| `source`     | none        | An `https://` link to the app's source, under About.                         |
-| `backupName` | `backup`    | The backup file's name before its date.                                      |
+| Option       | Default     | What it does                                                                   |
+| ------------ | ----------- | ------------------------------------------------------------------------------ |
+| `path`       | `/settings` | The page (added to the route registry with `title` and `emoji`).               |
+| `title`      | `Settings`  | Its title.                                                                     |
+| `emoji`      | `⚙️`        | Its emoji; `''` shows none.                                                    |
+| `width`      | `narrow`    | `narrow`, or `split`: two columns of cards once 50rem fits (use `page-split`). |
+| `sections`   | `{}`        | Titles by section id, in the order they show (`{ tools: 'Tool defaults' }`).   |
+| `groups`     | `{}`        | Your data's storage groups by id, named and in the order they show.            |
+| `source`     | none        | An `https://` link to the app's source, under About.                           |
+| `backupName` | `backup`    | The backup file's name before its date.                                        |
 
 ## Settings fields
 
@@ -94,8 +95,8 @@ Both are usually called on boot, with the component imported dynamically (the co
 
 - **Backups:** the JSON from `app.storage.exportData()`, downloaded (or shared, where the
   browser can share files). Importing shows what it holds first, then merges or replaces.
-- **Clearing:** one button per storage group, labelled by its entries (e.g. "Clear Home
-  shortcuts"), and Clear all data, each confirmed first. Clears and imports reach every
+- **Clearing:** one button per storage group, named by `groups` or else after its entries
+  (e.g. "Clear Home shortcuts"), the ones `groups` lists first, and Clear all data, each confirmed first. Clears and imports reach every
   component on this tab through `app.storage.onChange`, so what's showing updates without a
   reload.
 - **A warning** shows when the browser won't let the app save.

@@ -3,7 +3,13 @@ import { buildTestApp, type Importer } from '@xcwds/testing';
 import { describe, expect, it } from 'vitest';
 import client from './client.js';
 import settingsFactory from './index.js';
-import { backupFileName, resolveOptions, sectionOrder, sectionTitle } from './options.js';
+import {
+	backupFileName,
+	orderGroups,
+	resolveOptions,
+	sectionOrder,
+	sectionTitle
+} from './options.js';
 
 const importer: Importer = async (id) => {
 	const entries: Record<string, () => Promise<Record<string, unknown>>> = {
@@ -23,6 +29,7 @@ describe('options', () => {
 			emoji: '⚙️',
 			width: 'narrow',
 			sections: {},
+			groups: {},
 			source: null,
 			backupName: 'backup'
 		});
@@ -31,6 +38,8 @@ describe('options', () => {
 		expect(() => resolveOptions({ emoji: ' ' })).toThrow(/`emoji`/);
 		expect(() => resolveOptions({ width: 'wide' })).toThrow(/`width`/);
 		expect(() => resolveOptions({ sections: { tools: 3 } })).toThrow(/`sections`/);
+		expect(() => resolveOptions({ groups: { home: '' } })).toThrow(/`groups`/);
+		expect(() => resolveOptions({ groups: ['home'] })).toThrow(/`groups`/);
 		expect(() => resolveOptions({ source: 'http://example.com' })).toThrow(/`source`/);
 		expect(() => resolveOptions({ backupName: 'my backup' })).toThrow(/`backupName`/);
 		expect(() => resolveOptions({ about: 'x' })).toThrow(/unknown option `about`/);
@@ -55,6 +64,19 @@ describe('options', () => {
 		expect(sectionTitle('tools', { tools: 'Tool defaults' })).toBe('Tool defaults');
 		expect(sectionTitle('appearance', {})).toBe('Appearance');
 		expect(sectionTitle('tool-defaults', {})).toBe('Tool defaults');
+	});
+
+	it("names and orders Your data's groups", () => {
+		const groups = ['timers', 'home', 'history', 'constructor'].map((id) => ({
+			id,
+			label: `${id} entries`
+		}));
+		expect(
+			orderGroups(groups, { history: 'Workout history', home: 'Home shortcuts' }).map(
+				(g) => g.label
+			)
+		).toEqual(['Workout history', 'Home shortcuts', 'timers entries', 'constructor entries']);
+		expect(orderGroups(groups, {})).toEqual(groups);
 	});
 });
 

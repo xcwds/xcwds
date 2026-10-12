@@ -21,6 +21,11 @@ export type SettingsOptions = {
 	width?: 'narrow' | 'split';
 	/** Titles for settings sections by id (fields' `section`), in the order they show. */
 	sections?: Record<string, string>;
+	/**
+	 * Names for Your data's storage groups by id, in the order they show (`{ history: 'Workout
+	 * history' }`). Groups left out are named after their entries and follow as registered.
+	 */
+	groups?: Record<string, string>;
 	/** A link to the app's source code, shown under About. */
 	source?: string;
 	/** The backup file's name before the date, e.g. `xcwds-backup`. Defaults to `backup`. */
@@ -33,6 +38,7 @@ export type ResolvedSettingsOptions = {
 	emoji: string;
 	width: 'narrow' | 'split';
 	sections: Record<string, string>;
+	groups: Record<string, string>;
 	source: string | null;
 	backupName: string;
 };
@@ -57,7 +63,17 @@ export function resolveOptions(input: unknown = {}): ResolvedSettingsOptions {
 	if (typeof input !== 'object' || input === null || Array.isArray(input))
 		fail('options must be an object.');
 	const o = input as Record<string, unknown>;
-	const known = ['path', 'title', 'emoji', 'width', 'sections', 'source', 'backupName', 'prefix'];
+	const known = [
+		'path',
+		'title',
+		'emoji',
+		'width',
+		'sections',
+		'groups',
+		'source',
+		'backupName',
+		'prefix'
+	];
 	const unknown = Object.keys(o).filter((k) => !known.includes(k));
 	if (unknown.length) fail(`unknown option ${unknown.map((k) => `\`${k}\``).join(', ')}.`);
 	const path = o.path ?? '/settings';
@@ -70,14 +86,12 @@ export function resolveOptions(input: unknown = {}): ResolvedSettingsOptions {
 		fail("`emoji` must be a string (`''` for none).");
 	const width = o.width ?? 'narrow';
 	if (width !== 'narrow' && width !== 'split') fail('`width` must be "narrow" or "split".');
+	const titles = (v: unknown): v is Record<string, string> =>
+		typeof v === 'object' && v !== null && !Array.isArray(v) && Object.values(v).every(text);
 	const sections = o.sections ?? {};
-	if (
-		typeof sections !== 'object' ||
-		sections === null ||
-		Array.isArray(sections) ||
-		!Object.values(sections).every(text)
-	)
-		fail('`sections` must map section ids to titles.');
+	if (!titles(sections)) fail('`sections` must map section ids to titles.');
+	const groups = o.groups ?? {};
+	if (!titles(groups)) fail('`groups` must map storage group ids to names.');
 	const source = o.source ?? null;
 	if (source !== null && (typeof source !== 'string' || !/^https:\/\/\S+$/.test(source)))
 		fail('`source` must be an https:// link.');
@@ -89,7 +103,8 @@ export function resolveOptions(input: unknown = {}): ResolvedSettingsOptions {
 		title,
 		emoji,
 		width,
-		sections: { ...(sections as Record<string, string>) },
+		sections: { ...sections },
+		groups: { ...groups },
 		source,
 		backupName
 	};
@@ -115,3 +130,21 @@ export function sectionOrder(ids: readonly string[], titles: Record<string, stri
 /** A section's title: the app's, a built-in one, or the id capitalised. */
 export const sectionTitle = (id: string, titles: Record<string, string>) =>
 	titles[id] ?? SECTION_TITLES[id] ?? id.charAt(0).toUpperCase() + id.slice(1).replace(/-/g, ' ');
+
+/**
+ * Your data's groups in the order they show, the ones `names` lists first (renamed), then the
+ * rest as registered.
+ */
+export function orderGroups<G extends { id: string; label: string }>(
+	groups: readonly G[],
+	names: Record<string, string>
+): G[] {
+	const order = Object.keys(names);
+	const rank = (id: string) => (order.includes(id) ? order.indexOf(id) : order.length);
+	return groups
+		.map((group, i) => ({ group, i }))
+		.sort((a, b) => rank(a.group.id) - rank(b.group.id) || a.i - b.i)
+		.map(({ group }) =>
+			Object.hasOwn(names, group.id) ? { ...group, label: names[group.id]! } : group
+		);
+}

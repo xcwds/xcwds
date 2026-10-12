@@ -62,7 +62,12 @@ export default defineConfig({
 		hello({ greeting: 'hi' }),
 		// What others share arrives at /inbox; it stays private, so it has no Share button.
 		share({ target: '/inbox', exclude: ['/inbox', '/settings'] }),
-		settings({ source: 'https://github.com/xcwds/xcwds', backupName: 'minimal-backup' }),
+		settings({
+			source: 'https://github.com/xcwds/xcwds',
+			backupName: 'minimal-backup',
+			width: 'split',
+			groups: { tools: 'Pinned tools' }
+		}),
 		timers({ page: '/utils/timer' }),
 		offline(),
 		update(),

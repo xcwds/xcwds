@@ -84,7 +84,7 @@ for (const { name, dir, base } of targets) {
 			await expect(
 				page.getByTestId('toast').filter({ hasText: 'All data cleared.' })
 			).toBeVisible();
-			await expect(page.getByRole('button', { name: 'Clear Home shortcuts' })).toBeDisabled();
+			await expect(page.getByRole('button', { name: 'Clear Pinned tools' })).toBeDisabled();
 			// Nothing writes itself straight back.
 			await expect(page.getByRole('button', { name: 'Clear all data' })).toBeDisabled();
 			expect(await page.evaluate(() => localStorage.length)).toBe(0);
@@ -96,7 +96,7 @@ for (const { name, dir, base } of targets) {
 			await expect(
 				page.getByTestId('toast').filter({ hasText: /^Imported \d+ items?\.$/ })
 			).toBeVisible();
-			await expect(page.getByRole('button', { name: 'Clear Home shortcuts' })).toBeEnabled();
+			await expect(page.getByRole('button', { name: 'Clear Pinned tools' })).toBeEnabled();
 
 			await page.getByRole('link', { name: 'Home' }).first().click();
 			await expect(page.getByTestId('pinned').getByRole('link')).toHaveText([/Coffee Timer$/]);
@@ -119,8 +119,8 @@ for (const { name, dir, base } of targets) {
 			await page.getByRole('button', { name: 'Pin Coffee Timer to Home' }).click();
 			await gotoHydrated(page, url('/settings'));
 			page.once('dialog', (dialog) => dialog.accept());
-			await page.getByRole('button', { name: 'Clear Home shortcuts' }).click();
-			await expect(page.getByTestId('toast').last()).toHaveText('Cleared Home shortcuts.');
+			await page.getByRole('button', { name: 'Clear Pinned tools' }).click();
+			await expect(page.getByTestId('toast').last()).toHaveText('Cleared Pinned tools.');
 
 			// The same tab (no reload) shows it unpinned, and pinning something else doesn't bring it back.
 			await page.getByRole('link', { name: 'Utils' }).first().click();
@@ -131,6 +131,22 @@ for (const { name, dir, base } of targets) {
 			await page.getByRole('button', { name: 'Pin Dice to Home' }).click();
 			await page.getByRole('link', { name: 'Home' }).first().click();
 			await expect(page.getByTestId('pinned').getByRole('link')).toHaveText([/Dice$/]);
+		});
+
+		test('`width: split` shows two columns of cards when they fit, and `groups` names and orders Your data', async ({
+			page
+		}) => {
+			const sections = page.getByTestId('settings-page').locator(':scope > section');
+			const lefts = async () =>
+				new Set(await sections.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().x)));
+			await gotoHydrated(page, url('/settings'));
+			expect((await lefts()).size).toBe(1);
+			await page.setViewportSize({ width: 1440, height: 900 });
+			await expect.poll(async () => (await lefts()).size).toBe(2);
+			// Named groups come first.
+			await expect(
+				page.getByRole('button', { name: /^Clear (?!all)/ }).first()
+			).toHaveAccessibleName('Clear Pinned tools');
 		});
 
 		test('with storage blocked, Settings says so and the app still works', async ({ page }) => {
