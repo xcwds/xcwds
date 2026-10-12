@@ -50,11 +50,9 @@
 		"check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
 		"publint": "publint"
 	},
-	"dependencies": {
-		"@xcwds/core": "workspace:^"
-	},
 	"peerDependencies": {
 		"@sveltejs/kit": "^2.20.0",
+		"@xcwds/core": "workspace:^",
 		"@xcwds/plugin-shell": "workspace:^",
 		"@xcwds/sveltekit": "workspace:^",
 		"svelte": "^5.0.0"
@@ -63,6 +61,7 @@
 		"@sveltejs/kit": "^2.49.1",
 		"@sveltejs/package": "^2.5.8",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@xcwds/core": "workspace:^",
 		"@xcwds/plugin-shell": "workspace:^",
 		"@xcwds/sveltekit": "workspace:^",
 		"@xcwds/testing": "workspace:*",

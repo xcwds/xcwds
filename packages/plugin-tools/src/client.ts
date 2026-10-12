@@ -15,7 +15,7 @@ import {
 	withVisit,
 	type HomeShortcuts
 } from './home.js';
-import { NAME, ToolList, checkTool, resolveOptions, type ToolsOptions } from './options.js';
+import { CORE, NAME, ToolList, checkTool, resolveOptions, type ToolsOptions } from './options.js';
 import type { AppTools, ToolShortcuts } from './types.js';
 import type {} from '@xcwds/plugin-shell/client';
 import type {} from '@xcwds/sveltekit/routes';
@@ -132,5 +132,5 @@ export default definePlugin(
 			stops = [];
 		});
 	},
-	{ name: NAME, encapsulate: false, network: false }
+	{ name: NAME, core: CORE, encapsulate: false, network: false }
 );

@@ -11,6 +11,7 @@
 import { definePlugin } from '@xcwds/core';
 import type { Component } from 'svelte';
 import {
+	CORE,
 	NAME,
 	latestId,
 	resolveOptions,
@@ -165,5 +166,5 @@ export default definePlugin(
 			for (const stop of stops.splice(0)) stop();
 		});
 	},
-	{ name: NAME, encapsulate: false, network: false }
+	{ name: NAME, core: CORE, encapsulate: false, network: false }
 );

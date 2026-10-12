@@ -2,6 +2,11 @@
 import { XcwdsError, codes } from '@xcwds/core';
 
 export const NAME = '@xcwds/plugin-changelog';
+/**
+ * The @xcwds/core versions this plugin works with, checked at boot: the same range as its peer
+ * dependency (`scripts/sync-core-version.js` moves it along with core's minor versions).
+ */
+export const CORE = '^0.1.0';
 
 /** One release note: a whole-number `id` (higher is newer), its date and user-facing lines. */
 export type ChangelogEntry = { id: number; date: string; items: string[] };

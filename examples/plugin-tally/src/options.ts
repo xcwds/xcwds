@@ -2,6 +2,11 @@
 import { XcwdsError, codes } from '@xcwds/core';
 
 export const NAME = 'xcwds-plugin-tally';
+/**
+ * The @xcwds/core versions this plugin works with, checked at boot: the same range as its peer
+ * dependency (`scripts/sync-core-version.js` moves it along with core's minor versions).
+ */
+export const CORE = '^0.1.0';
 
 export type TallyOptions = {
 	/** The tally page, an app path. Default `/tally`. */

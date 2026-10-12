@@ -23,14 +23,13 @@
 			"default": "./Page.svelte"
 		}
 	},
-	"dependencies": {
-		"@xcwds/core": "workspace:^"
-	},
 	"peerDependencies": {
+		"@xcwds/core": "workspace:^",
 		"@xcwds/sveltekit": "workspace:^",
 		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
+		"@xcwds/core": "workspace:^",
 		"@xcwds/sveltekit": "workspace:^",
 		"svelte": "^5.45.6"
 	}

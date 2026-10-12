@@ -7,7 +7,7 @@
  * ```
  */
 import { definePlugin, descriptor } from '@xcwds/core';
-import { NAME, resolveOptions, type TimersOptions } from './options.js';
+import { CORE, NAME, resolveOptions, type TimersOptions } from './options.js';
 
 export type { AlarmSetting, ResolvedTimersOptions, TimersOptions } from './options.js';
 export {
@@ -31,5 +31,6 @@ export default descriptor<TimersOptions>(NAME);
 /** Checks the options when the config loads, so a mistake fails the build, not the page. */
 export const build = definePlugin((_app, options: TimersOptions) => void resolveOptions(options), {
 	name: NAME,
+	core: CORE,
 	network: false
 });

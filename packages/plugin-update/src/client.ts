@@ -12,7 +12,14 @@
  * Imported at prerender too, so it only touches browser globals once the app boots.
  */
 import { definePlugin } from '@xcwds/core';
-import { JUST_UPDATED, NAME, SKIP_WAITING, resolveOptions, type UpdateOptions } from './options.js';
+import {
+	CORE,
+	JUST_UPDATED,
+	NAME,
+	SKIP_WAITING,
+	resolveOptions,
+	type UpdateOptions
+} from './options.js';
 
 export type UpdateState = {
 	/** A new version is installed and waiting. */
@@ -256,5 +263,5 @@ export default definePlugin(
 			for (const stop of stops.splice(0)) stop();
 		});
 	},
-	{ name: NAME, encapsulate: false, network: false }
+	{ name: NAME, core: CORE, encapsulate: false, network: false }
 );

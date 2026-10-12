@@ -7,6 +7,7 @@
 import { definePlugin } from '@xcwds/core';
 import type { Component } from 'svelte';
 import {
+	CORE,
 	NAME,
 	resolveOptions,
 	type ResolvedSettingsOptions,
@@ -90,5 +91,5 @@ export default definePlugin(
 			}
 		} satisfies AppSettingsPage);
 	},
-	{ name: NAME, encapsulate: false, network: false }
+	{ name: NAME, core: CORE, encapsulate: false, network: false }
 );

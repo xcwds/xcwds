@@ -7,7 +7,7 @@
  * ```
  */
 import { definePlugin, descriptor } from '@xcwds/core';
-import { CATCH_PROMPT, NAME, resolveOptions, type InstallOptions } from './options.js';
+import { CATCH_PROMPT, CORE, NAME, resolveOptions, type InstallOptions } from './options.js';
 
 export type { InstallOptions } from './options.js';
 export { isIos, isStandalone } from './options.js';
@@ -20,5 +20,5 @@ export const build = definePlugin(
 		resolveOptions(options);
 		app.addHook('onHead', () => CATCH_PROMPT);
 	},
-	{ name: NAME, network: false }
+	{ name: NAME, core: CORE, network: false }
 );

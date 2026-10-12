@@ -9,6 +9,7 @@ import { definePlugin } from '@xcwds/core';
 import {
 	APPLY,
 	COLORS_GLOBAL,
+	CORE,
 	NAME,
 	applyTheme,
 	isTheme,
@@ -94,5 +95,5 @@ export default definePlugin(
 			stops = [];
 		});
 	},
-	{ name: NAME, encapsulate: false, network: false }
+	{ name: NAME, core: CORE, encapsulate: false, network: false }
 );

@@ -10,6 +10,7 @@ import type { Component } from 'svelte';
 import {
 	APPLY_NAV,
 	DEFAULT_NAV,
+	CORE,
 	NAME,
 	applyNav,
 	parseNav,
@@ -192,5 +193,5 @@ export default definePlugin(
 			timers.clear();
 		});
 	},
-	{ name: NAME, encapsulate: false, network: false }
+	{ name: NAME, core: CORE, encapsulate: false, network: false }
 );

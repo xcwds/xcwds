@@ -3,7 +3,7 @@
  * Node while the config loads.
  */
 import { definePlugin, descriptor } from '@xcwds/core';
-import { NAME, resolveOptions, type TallyOptions } from './options.js';
+import { CORE, NAME, resolveOptions, type TallyOptions } from './options.js';
 
 export type { TallyOptions } from './options.js';
 export type { Tally } from './tally.js';
@@ -16,5 +16,5 @@ export const build = definePlugin(
 		const { path } = resolveOptions(options);
 		app.route({ path, title: 'Tally', emoji: '🔢', parent: '/', width: 'narrow' });
 	},
-	{ name: NAME, network: false }
+	{ name: NAME, core: CORE, network: false }
 );

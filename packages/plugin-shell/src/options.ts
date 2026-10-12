@@ -2,6 +2,11 @@
 import { XcwdsError, codes } from '@xcwds/core';
 
 export const NAME = '@xcwds/plugin-shell';
+/**
+ * The @xcwds/core versions this plugin works with, checked at boot: the same range as its peer
+ * dependency (`scripts/sync-core-version.js` moves it along with core's minor versions).
+ */
+export const CORE = '^0.1.0';
 
 /** A top-level section: a tab on phones, a header link or sidebar entry elsewhere. */
 export type Section = {

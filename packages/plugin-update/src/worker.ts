@@ -5,7 +5,7 @@
  */
 import { definePlugin } from '@xcwds/core';
 import type {} from '@xcwds/sveltekit/worker';
-import { NAME, SKIP_WAITING, resolveOptions, type UpdateOptions } from './options.js';
+import { CORE, NAME, SKIP_WAITING, resolveOptions, type UpdateOptions } from './options.js';
 
 export default definePlugin(
 	(app, options: UpdateOptions) => {
@@ -15,5 +15,5 @@ export default definePlugin(
 				await app.worker?.skipWaiting();
 		});
 	},
-	{ name: NAME, network: false }
+	{ name: NAME, core: CORE, network: false }
 );

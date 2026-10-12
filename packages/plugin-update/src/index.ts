@@ -7,7 +7,7 @@
  * ```
  */
 import { definePlugin, descriptor } from '@xcwds/core';
-import { NAME, resolveOptions, type UpdateOptions } from './options.js';
+import { CORE, NAME, resolveOptions, type UpdateOptions } from './options.js';
 
 export type { ResolvedUpdateOptions, UpdateOptions } from './options.js';
 
@@ -16,5 +16,6 @@ export default descriptor<UpdateOptions>(NAME);
 /** Checks the options when the config loads, so a mistake fails the build, not the page. */
 export const build = definePlugin((_app, options: UpdateOptions) => void resolveOptions(options), {
 	name: NAME,
+	core: CORE,
 	network: false
 });

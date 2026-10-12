@@ -10,7 +10,7 @@
  */
 import { definePlugin, descriptor } from '@xcwds/core';
 import type {} from '@xcwds/sveltekit/routes';
-import { NAME, resolveOptions, type SettingsOptions } from './options.js';
+import { CORE, NAME, resolveOptions, type SettingsOptions } from './options.js';
 
 export type { ResolvedSettingsOptions, SettingsOptions } from './options.js';
 export type { AppSettingsPage } from './client.js';
@@ -28,5 +28,5 @@ export const build = definePlugin(
 			width: options.width
 		});
 	},
-	{ name: NAME, network: false }
+	{ name: NAME, core: CORE, network: false }
 );

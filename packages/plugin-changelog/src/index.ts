@@ -8,7 +8,7 @@
  * ```
  */
 import { definePlugin, descriptor } from '@xcwds/core';
-import { NAME, resolveOptions, type ChangelogOptions } from './options.js';
+import { CORE, NAME, resolveOptions, type ChangelogOptions } from './options.js';
 
 export type { ChangelogEntry, ChangelogOptions, ResolvedChangelogOptions } from './options.js';
 export type { AppChangelog } from './client.js';
@@ -20,6 +20,7 @@ export const build = definePlugin(
 	(_app, options: ChangelogOptions) => void resolveOptions(options),
 	{
 		name: NAME,
+		core: CORE,
 		network: false
 	}
 );

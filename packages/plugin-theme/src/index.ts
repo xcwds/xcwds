@@ -7,7 +7,7 @@
  * ```
  */
 import { definePlugin, descriptor, resolveConfig, type ThemeColor } from '@xcwds/core';
-import { COLORS_GLOBAL, NAME, resolveOptions, type ThemeOptions } from './options.js';
+import { COLORS_GLOBAL, CORE, NAME, resolveOptions, type ThemeOptions } from './options.js';
 
 export type { ResolvedThemeOptions, Theme, ThemeOptions } from './options.js';
 
@@ -32,5 +32,5 @@ export const build = definePlugin(
 			return `window.${COLORS_GLOBAL}=${json};`;
 		});
 	},
-	{ name: NAME, network: false }
+	{ name: NAME, core: CORE, network: false }
 );

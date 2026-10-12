@@ -31,17 +31,18 @@
 		"publint": "publint"
 	},
 	"dependencies": {
-		"@xcwds/core": "workspace:^",
 		"@xcwds/sveltekit": "workspace:^"
 	},
 	"devDependencies": {
 		"@playwright/test": "1.64.0",
 		"@xcwds-example/plugin-hello": "workspace:*",
+		"@xcwds/core": "workspace:^",
 		"typescript": "^5.9.3",
 		"vitest": "^4.0.15"
 	},
 	"peerDependencies": {
 		"@playwright/test": "^1.50.0",
+		"@xcwds/core": "workspace:^",
 		"vitest": "^3.0.0 || ^4.0.0"
 	},
 	"peerDependenciesMeta": {

@@ -21,6 +21,7 @@
  */
 import { definePlugin, descriptor } from '@xcwds/core';
 import {
+	CORE,
 	NAME,
 	ToolList,
 	checkTool,
@@ -92,5 +93,5 @@ export const build = definePlugin(
 			};
 		});
 	},
-	{ name: NAME, encapsulate: false, network: false }
+	{ name: NAME, core: CORE, encapsulate: false, network: false }
 );

@@ -8,6 +8,7 @@
 import { definePlugin } from '@xcwds/core';
 import type {} from '@xcwds/plugin-shell/client';
 import {
+	CORE,
 	NAME,
 	fromFragment,
 	fromQuery,
@@ -98,5 +99,5 @@ export default definePlugin(
 			remove?.();
 		});
 	},
-	{ name: NAME, encapsulate: false, network: false }
+	{ name: NAME, core: CORE, encapsulate: false, network: false }
 );

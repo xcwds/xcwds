@@ -7,7 +7,7 @@
  */
 import { definePlugin, XcwdsError, codes } from '@xcwds/core';
 import type {} from '@xcwds/sveltekit/worker';
-import { NAME, resolveOptions, type OfflineOptions } from './options.js';
+import { CORE, NAME, resolveOptions, type OfflineOptions } from './options.js';
 
 export default definePlugin(
 	(app, input: OfflineOptions) => {
@@ -25,5 +25,5 @@ export default definePlugin(
 		policy.fallback = options.fallback;
 		policy.runtimeCaching = options.runtimeCaching;
 	},
-	{ name: NAME, network: false }
+	{ name: NAME, core: CORE, network: false }
 );

@@ -3,7 +3,7 @@
  * touch `window` or `document` here (only in hooks such as `onBoot`).
  */
 import { definePlugin, type Entry } from '@xcwds/core';
-import { NAME, isStep, resolveOptions, type TallyOptions } from './options.js';
+import { CORE, NAME, isStep, resolveOptions, type TallyOptions } from './options.js';
 import { parseTally, type Tally } from './tally.js';
 
 /** `app.tally`. */
@@ -52,5 +52,5 @@ export default definePlugin(
 		app.decorate('tally', { entry } satisfies AppTally);
 	},
 	// Without `encapsulate: false`, `app.tally` would stay inside this plugin.
-	{ name: NAME, encapsulate: false }
+	{ name: NAME, core: CORE, encapsulate: false }
 );

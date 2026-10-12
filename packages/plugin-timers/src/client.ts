@@ -9,6 +9,7 @@
 import { definePlugin } from '@xcwds/core';
 import {
 	DEFAULT_ALARM,
+	CORE,
 	NAME,
 	parseAlarm,
 	resolveOptions,
@@ -314,5 +315,5 @@ export default definePlugin(
 			audio = undefined;
 		});
 	},
-	{ name: NAME, encapsulate: false, network: false }
+	{ name: NAME, core: CORE, encapsulate: false, network: false }
 );

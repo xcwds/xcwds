@@ -57,10 +57,8 @@ one, `./worker` for the service worker, plus any components. This one has no wor
 		"check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
 		"publint": "publint"
 	},
-	"dependencies": {
-		"@xcwds/core": "workspace:^"
-	},
 	"peerDependencies": {
+		"@xcwds/core": "workspace:^",
 		"@xcwds/sveltekit": "workspace:^",
 		"svelte": "^5.0.0"
 	},
@@ -68,6 +66,7 @@ one, `./worker` for the service worker, plus any components. This one has no wor
 		"@sveltejs/kit": "^2.49.1",
 		"@sveltejs/package": "^2.5.8",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@xcwds/core": "workspace:^",
 		"@xcwds/sveltekit": "workspace:^",
 		"@xcwds/testing": "workspace:*",
 		"svelte": "^5.45.6",
@@ -79,9 +78,12 @@ one, `./worker` for the service worker, plus any components. This one has no wor
 }
 ```
 
-`@xcwds/core` is a dependency. `@xcwds/sveltekit` and `svelte` are peer dependencies, because
-the app provides them: there must be one copy of each. `svelte-package` compiles `src/` into
-`dist/`, keeping `.svelte` files as Svelte for the app to compile.
+`@xcwds/core`, `@xcwds/sveltekit` and `svelte` are peer dependencies (and dev dependencies, to
+build and test with), because the app provides them: there must be one copy of each. A plugin
+that brought its own `@xcwds/core` could end up with a second kernel once the app moves to a
+newer minor, where its `declare module '@xcwds/core'` additions and error checks wouldn't reach
+the app's. `svelte-package` compiles `src/` into `dist/`, keeping `.svelte` files as Svelte for
+the app to compile.
 
 ## 2. Options
 
@@ -96,6 +98,11 @@ build with your plugin's name rather than breaking a page:
 import { XcwdsError, codes } from '@xcwds/core';
 
 export const NAME = 'xcwds-plugin-tally';
+/**
+ * The @xcwds/core versions this plugin works with, checked at boot: the same range as its peer
+ * dependency (`scripts/sync-core-version.js` moves it along with core's minor versions).
+ */
+export const CORE = '^0.1.0';
 
 export type TallyOptions = {
 	/** The tally page, an app path. Default `/tally`. */
@@ -140,7 +147,7 @@ the config holds. Its `build` export is a plugin that runs in Node while the con
  * Node while the config loads.
  */
 import { definePlugin, descriptor } from '@xcwds/core';
-import { NAME, resolveOptions, type TallyOptions } from './options.js';
+import { CORE, NAME, resolveOptions, type TallyOptions } from './options.js';
 
 export type { TallyOptions } from './options.js';
 export type { Tally } from './tally.js';
@@ -153,7 +160,7 @@ export const build = definePlugin(
 		const { path } = resolveOptions(options);
 		app.route({ path, title: 'Tally', emoji: '🔢', parent: '/', width: 'narrow' });
 	},
-	{ name: NAME, network: false }
+	{ name: NAME, core: CORE, network: false }
 );
 ```
 
@@ -204,7 +211,7 @@ hooks, which only run in the browser.
  * touch `window` or `document` here (only in hooks such as `onBoot`).
  */
 import { definePlugin, type Entry } from '@xcwds/core';
-import { NAME, isStep, resolveOptions, type TallyOptions } from './options.js';
+import { CORE, NAME, isStep, resolveOptions, type TallyOptions } from './options.js';
 import { parseTally, type Tally } from './tally.js';
 
 /** `app.tally`. */
@@ -253,7 +260,7 @@ export default definePlugin(
 		app.decorate('tally', { entry } satisfies AppTally);
 	},
 	// Without `encapsulate: false`, `app.tally` would stay inside this plugin.
-	{ name: NAME, encapsulate: false }
+	{ name: NAME, core: CORE, encapsulate: false }
 );
 ```
 
@@ -485,8 +492,10 @@ the tally.
 - Build with `svelte-package` and check the package with [publint](https://publint.dev).
 - Keep `xcwds-plugin` in `keywords`, and say in the README what the plugin saves and whether it
   contacts any server.
-- Set `core` in `definePlugin`'s metadata to the range of `@xcwds/core` you tested with, so an
-  app on an incompatible version gets a clear error instead of a broken page.
+- Set `core` in every entry's `definePlugin` metadata to the range of `@xcwds/core` you tested
+  with, the same as your peer dependency (`CORE` in `options.ts` above), so an app on an
+  incompatible version gets a clear `XCWDS_ERR_PLUGIN_VERSION_MISMATCH` instead of a broken
+  page. On 0.x a `^` range only allows patches, so release a new version for each core minor.
 
 ## More to reach for
 

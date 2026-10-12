@@ -3,7 +3,7 @@
  * prerender too, so it only touches browser globals once the app boots.
  */
 import { definePlugin } from '@xcwds/core';
-import { NAME, type OfflineOptions } from './options.js';
+import { CORE, NAME, type OfflineOptions } from './options.js';
 
 /** Whether the browser is online, as `app.network`. */
 export type NetworkStatus = {
@@ -59,5 +59,5 @@ export default definePlugin(
 			stop = undefined;
 		});
 	},
-	{ name: NAME, encapsulate: false, network: false }
+	{ name: NAME, core: CORE, encapsulate: false, network: false }
 );

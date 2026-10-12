@@ -10,6 +10,7 @@
 import { definePlugin } from '@xcwds/core';
 import type { Component } from 'svelte';
 import {
+	CORE,
 	NAME,
 	PROMPT_GLOBAL,
 	isIos,
@@ -157,5 +158,5 @@ export default definePlugin(
 			stops = [];
 		});
 	},
-	{ name: NAME, encapsulate: false, network: false }
+	{ name: NAME, core: CORE, encapsulate: false, network: false }
 );

@@ -10,7 +10,7 @@
  * ```
  */
 import { definePlugin, descriptor } from '@xcwds/core';
-import { FIELDS, NAME, resolveOptions, type ShareOptions } from './options.js';
+import { FIELDS, CORE, NAME, resolveOptions, type ShareOptions } from './options.js';
 
 export type { ResolvedShareOptions, ShareOptions, Shared } from './options.js';
 export { fromFragment, fromQuery, toFragment } from './options.js';
@@ -36,5 +36,5 @@ export const build = definePlugin(
 			};
 		});
 	},
-	{ name: NAME, network: false }
+	{ name: NAME, core: CORE, network: false }
 );

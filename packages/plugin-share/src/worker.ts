@@ -6,7 +6,7 @@
  */
 import { definePlugin } from '@xcwds/core';
 import type {} from '@xcwds/sveltekit/worker';
-import { NAME, fromQuery, resolveOptions, toFragment, type ShareOptions } from './options.js';
+import { CORE, NAME, fromQuery, resolveOptions, toFragment, type ShareOptions } from './options.js';
 
 export default definePlugin(
 	(app, input: ShareOptions) => {
@@ -21,5 +21,5 @@ export default definePlugin(
 			return Response.redirect(`${url.origin}${base}${target}${toFragment(shared)}`, 303);
 		});
 	},
-	{ name: NAME, network: false }
+	{ name: NAME, core: CORE, network: false }
 );
