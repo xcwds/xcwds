@@ -277,7 +277,9 @@ Add an item to \`tools({ items })\` in \`xcwds.config.ts\` and a page at its pat
 Push to GitHub, then in the repository's Settings → Pages set Source to "GitHub Actions".
 \`.github/workflows/deploy.yml\` tests every push and pull request, and deploys \`main\`. A
 project site lives under \`/<repo>\`, so the workflow builds with \`BASE_PATH\` set; a
-\`<user>.github.io\` repository is served from the root.
+\`<user>.github.io\` repository is served from the root. With a custom domain the site is served
+from the root too: set the repository variable \`CUSTOM_DOMAIN\` (Settings → Secrets and variables →
+Actions → Variables) to the domain, and the workflow leaves \`BASE_PATH\` empty.
 `;
 };
 
@@ -597,8 +599,9 @@ ${setup}
 ${setup}
       - run: ${run} build
         env:
-          # A project site is served under /<repo>; <user>.github.io from the root.
-          BASE_PATH: \${{ github.event.repository.name != format('{0}.github.io', github.repository_owner) && format('/{0}', github.event.repository.name) || '' }}
+          # A project site is served under /<repo>; <user>.github.io and a site with a custom domain
+          # (set the repository variable CUSTOM_DOMAIN, e.g. to app.example.com) from the root.
+          BASE_PATH: \${{ vars.CUSTOM_DOMAIN == '' && github.event.repository.name != format('{0}.github.io', github.repository_owner) && format('/{0}', github.event.repository.name) || '' }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build

@@ -12,6 +12,10 @@ changelog. Versions and changelogs are cut from these files.
 - Once that PR is merged, it builds and publishes every package whose version isn't on npm yet
   (`pnpm release`, which runs `changeset publish`), with provenance, and tags the release.
 
+Every release also republishes `@xcwds/create`, which bakes the other packages' versions into
+the apps it generates: `pnpm version-packages` adds a patch changeset for it when none of the
+pending ones names it ([#54](https://github.com/xcwds/xcwds/issues/54)).
+
 Packages marked `"private": true` (the examples and the docs site) are never published. The
 Version packages PR is opened with the workflow's own token, which doesn't start CI on it; CI runs
 on `main` after the merge, before the publish.

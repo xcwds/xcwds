@@ -75,4 +75,6 @@ you what to add by hand. It then runs your package manager's install (`--no-inst
 `--workspace`, which depends on these packages with `workspace:*` instead of npm, adds two
 plugins with `xcwds add`, and runs the app's own check, lint, unit and e2e tests. CI runs it on
 every pull request. Versions in generated apps come from this monorepo when the package builds
-(`scripts/versions.js`).
+(`scripts/versions.js`), so every release republishes this package too: `pnpm version-packages`
+first runs `scripts/release-create.js`, which adds a patch changeset for `@xcwds/create` whenever
+another package is being released.

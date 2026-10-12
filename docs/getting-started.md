@@ -99,7 +99,9 @@ to make your own.
 
 A repository named `<user>.github.io` is served from the root. Any other repository is a
 project site under `/<repo>`, so the workflow sets `BASE_PATH` for the build and every link,
-the manifest and the service worker follow it. Other static hosts work too: deploy the `build/`
+the manifest and the service worker follow it. A project site with a custom domain is served from
+the root: set the repository variable `CUSTOM_DOMAIN` to the domain and the workflow leaves
+`BASE_PATH` empty. Other static hosts work too: deploy the `build/`
 folder and serve `404.html` for unknown paths.
 
 ## Check that it works
