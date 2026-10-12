@@ -1,5 +1,5 @@
 // Writes src/versions.ts: the version ranges a new app depends on, taken from this monorepo so
-// they never drift: each @xcwds package's own version, and the third-party versions
+// they never drift: each published @xcwds package's own version, and the third-party versions
 // examples/minimal and the root use (the generated app is checked against the same).
 import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -11,8 +11,8 @@ const xcwds = {};
 for (const dir of readdirSync(join(root, 'packages'))) {
 	const file = join('packages', dir, 'package.json');
 	if (!existsSync(join(root, file))) continue;
-	const { name, version } = read(file);
-	xcwds[name] = version;
+	const { name, version, private: hidden } = read(file);
+	if (!hidden) xcwds[name] = version;
 }
 const example = read('examples/minimal/package.json');
 const monorepo = read('package.json');
