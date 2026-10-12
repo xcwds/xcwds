@@ -60,6 +60,8 @@ export default definePlugin(
 
 		let onPrivate = false;
 		let cover: HTMLElement | null = null;
+		/** Whether the cover is up (it waits on private pages, out of sight, until it's needed). */
+		let shown = false;
 		let observer: MutationObserver | null = null;
 		/** Attributes this plugin set, per field, so leaving the page can take them off again. */
 		let touched = new Map<Element, string[]>();
@@ -78,11 +80,11 @@ export default definePlugin(
 			cover = document.createElement('div');
 			cover.dataset.xcwdsCover = '';
 			cover.setAttribute('aria-hidden', 'true');
-			cover.hidden = true;
 			// Inline styles: no stylesheet to load, and no transition (reduced motion, and the
-			// snapshot can't wait for a fade).
+			// snapshot can't wait for a fade). Shown and hidden with `display`, not the `hidden`
+			// attribute, which an inline `display` would override.
 			cover.style.cssText =
-				'position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:Canvas;';
+				'position:fixed;inset:0;z-index:2147483647;display:none;place-items:center;background:Canvas;';
 			const src = iconUrl();
 			if (src) {
 				const img = document.createElement('img');
@@ -94,9 +96,15 @@ export default definePlugin(
 			document.body.append(cover);
 		}
 
+		function setShown(value: boolean) {
+			shown = value;
+			if (cover) cover.style.display = value ? 'grid' : 'none';
+		}
+
 		function removeCover() {
 			cover?.remove();
 			cover = null;
+			shown = false;
 		}
 
 		/** The page's own background, so the cover matches the light or dark scheme. */
@@ -113,9 +121,9 @@ export default definePlugin(
 				if (!onPrivate || !coverWanted()) return;
 				makeCover();
 				cover!.style.background = background();
-				cover!.hidden = false;
+				setShown(true);
 			} else if (cover) {
-				cover.hidden = true;
+				setShown(false);
 				if (!onPrivate) removeCover();
 			}
 		}
@@ -157,7 +165,7 @@ export default definePlugin(
 				for (const name of names)
 					if (field.getAttribute(name) === HYGIENE[name]) field.removeAttribute(name);
 			touched = new Map();
-			if (cover?.hidden !== false) removeCover();
+			if (!shown) removeCover();
 		}
 
 		app.addHook('afterNavigate', (to) => {

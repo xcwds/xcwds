@@ -24,7 +24,12 @@ const setHidden = (page: Page, hidden: boolean) =>
 		});
 		document.dispatchEvent(new Event('visibilitychange'));
 		const cover = document.querySelector<HTMLElement>('[data-xcwds-cover]');
-		if (!cover || cover.hidden) return null;
+		const middle = document.elementFromPoint(innerWidth / 2, innerHeight / 3);
+		// Out of sight means nothing of it is on top, whatever the app's CSS does with [hidden].
+		if (!cover || getComputedStyle(cover).display === 'none') {
+			if (cover && (middle === cover || cover.contains(middle))) return 'on top while hidden';
+			return null;
+		}
 		const rect = cover.getBoundingClientRect();
 		return {
 			text: cover.textContent,
@@ -38,6 +43,8 @@ const setHidden = (page: Page, hidden: boolean) =>
 
 test('a private page is covered while the app is hidden, and only then', async ({ page }) => {
 	await gotoHydrated(page, url('/utils/journal'));
+	// Waiting out of sight, never over the page.
+	expect(await setHidden(page, false)).toBeNull();
 	const cover = await setHidden(page, true);
 	expect(cover).toEqual({
 		text: '',

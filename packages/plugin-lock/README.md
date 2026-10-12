@@ -18,7 +18,8 @@ export default defineConfig({ brand, plugins: [lock()] });
   app's icon on the page's background, no text) goes over everything, so the snapshot the app
   switcher shows doesn't show the page. It lifts as soon as the app is visible again. It's drawn
   from the browser's `visibilitychange` event itself, not the `onHidden` hook, which runs later.
-  Best effort: browsers don't promise when they take the snapshot.
+  Best effort: browsers don't promise when they take the snapshot, and a private page that has
+  just loaded is covered once the app has booted.
 - **No spellcheck or autocomplete.** Text fields (`<textarea>` and text-like `<input>`s) in a
   private page's `<main>` get `spellcheck="false"`, `autocomplete="off"` and
   `autocapitalize="off"`, including fields added later, so tools don't have to remember. Enhanced
