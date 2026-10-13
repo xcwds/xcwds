@@ -104,6 +104,27 @@ function buildPlugin(name: string, module: Record<string, unknown>): Plugin<neve
 const isPath = (v: unknown): v is string =>
 	typeof v === 'string' && v.startsWith('/') && !/[?#]/.test(v);
 
+type Shortcut = { url?: unknown };
+
+/**
+ * The manifest after `onManifest` hooks, with `config.manifest` merged over it so the config has
+ * the last word. `shortcuts` is the exception: hooks only add to it (`@xcwds/plugin-tools`), so
+ * the config's shortcuts come first and the hooks' others follow, rather than replacing them.
+ */
+export function withConfigManifest(
+	manifest: Record<string, unknown>,
+	own: Record<string, unknown> | undefined
+): Record<string, unknown> {
+	const merged = { ...manifest, ...own };
+	const mine = own?.shortcuts;
+	const added = manifest.shortcuts;
+	if (Array.isArray(mine) && Array.isArray(added)) {
+		const urls = new Set(mine.map((s: Shortcut) => s?.url));
+		merged.shortcuts = [...mine, ...added.filter((s: Shortcut) => !urls.has(s?.url))];
+	}
+	return merged;
+}
+
 export type GenerateOptions = {
 	/** The app's root (where `xcwds.config.*` and `package.json` are). */
 	root: string;
@@ -183,10 +204,10 @@ export async function generate({
 				codes.CONFIG_INVALID,
 				`onPrerender returned ${JSON.stringify(path)}; paths start with "/" and have no query or hash.`
 			);
-	const manifest = {
-		...(await app.hooks.reduce('onManifest', createManifest(config, { base }))),
-		...config.manifest
-	};
+	const manifest = withConfigManifest(
+		await app.hooks.reduce('onManifest', createManifest(config, { base })),
+		config.manifest
+	);
 	await app.close();
 
 	const state: BuildState = {

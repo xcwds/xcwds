@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { withXcwds } from '../config.js';
 import { xcwds } from '../vite.js';
 import { clientModule, guardModule } from './codegen.js';
-import { generate } from './generate.js';
+import { generate, withConfigManifest } from './generate.js';
 import { recall } from './state.js';
 
 let root: string;
@@ -56,6 +56,33 @@ export default {
 	);
 });
 afterEach(() => rm(root, { recursive: true, force: true }));
+
+describe('withConfigManifest', () => {
+	const tool = { name: 'Timer', url: '/timer' };
+	const recipes = { name: 'Recipes', url: '/recipes' };
+
+	it("lets the config's fields win, but adds the hooks' shortcuts after its own (#132)", () => {
+		// What `onManifest` hooks return: createManifest already put the config's shortcuts first.
+		const hooked = { display: 'standalone', shortcuts: [recipes, tool] };
+		expect(withConfigManifest(hooked, { display: 'minimal-ui', shortcuts: [recipes] })).toEqual({
+			display: 'minimal-ui',
+			shortcuts: [recipes, tool]
+		});
+	});
+
+	it("keeps the hooks' shortcuts when the config has none, and the config's when hooks add none", () => {
+		expect(withConfigManifest({ shortcuts: [tool] }, {})).toEqual({ shortcuts: [tool] });
+		expect(withConfigManifest({}, { shortcuts: [recipes] })).toEqual({ shortcuts: [recipes] });
+		expect(withConfigManifest({ shortcuts: [tool] }, undefined)).toEqual({ shortcuts: [tool] });
+	});
+
+	it("drops a hook's shortcut to a page the config already has one for", () => {
+		const mine = { name: 'My timer', url: '/timer' };
+		expect(withConfigManifest({ shortcuts: [mine, tool] }, { shortcuts: [mine] })).toEqual({
+			shortcuts: [mine]
+		});
+	});
+});
 
 describe('generate', () => {
 	it('loads the config in a fresh checkout, before `svelte-kit sync` writes the tsconfig it extends', async () => {
