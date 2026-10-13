@@ -158,6 +158,13 @@ describe('what a locked app keeps behind the unlock screen', () => {
 		// Arriving at the unlock screen unlocked goes on to the page that was asked for.
 		expect(guard('/unlock')).toBe('/notes');
 
+		// Going somewhere else instead of unlocking forgets the page asked for.
+		app.lock!.lock();
+		expect(guard('/notes')).toBe('/unlock');
+		app.settings.set({ lock: { ...DEFAULT_LOCK, scope: 'private' } });
+		await app.hooks.run('afterNavigate', [{ path: '/' }], { path: '/' });
+		expect(app.lockScreen!.next()).toBe('/');
+
 		// Private pages only (none in this app without routes).
 		app.settings.set({ lock: { ...DEFAULT_LOCK, scope: 'private' } });
 		app.lock!.lock();

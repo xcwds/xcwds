@@ -274,11 +274,14 @@ export default definePlugin(
 		}
 
 		app.addHook('afterNavigate', (to) => {
+			// A locked page that still showed (the first page, before the guards ran) stays hidden
+			// until the unlock screen replaces it; anything else shows. Having gone somewhere else
+			// instead of unlocking, the page asked for earlier isn't wanted any more.
+			const hide = lock.state.locked && locks(to.path);
+			if (!hide && !isUnlock(to.path)) target = null;
 			if (typeof document === 'undefined') return;
 			current = to;
-			// A locked page that still showed (the first page, before the guards ran) stays hidden
-			// until the unlock screen replaces it; anything else shows.
-			if (lock.state.locked && locks(to.path)) conceal();
+			if (hide) conceal();
 			else reveal();
 			const next = isPrivate(routes(), to.path);
 			if (next) enter();
