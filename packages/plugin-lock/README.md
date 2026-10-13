@@ -51,7 +51,8 @@ lock's data stays out of backups. Clearing it any other way (Settings → Your d
 tab) clears the sensitive groups too, so it never opens what it locked. The lock keeps people
 out of the pages; it doesn't encrypt what's saved, so someone with a copy of the storage can
 read it, and can try passcodes against the verifier offline (which is why short PINs aren't
-allowed).
+allowed). The wait follows the device's clock, so moving the clock forward shortens it, and
+when storage can't save, wrong tries aren't counted.
 
 `isPrivate(app.routes, path)` says whether a path is a private page. The plugin declares
 `network: false` and contacts no server.

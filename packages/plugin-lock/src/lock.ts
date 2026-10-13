@@ -58,7 +58,11 @@ export type AppLock = {
 	reset(): Group[];
 };
 
-export type LockEntries = { verifier: Entry<Verifier>; attempts: Entry<Attempts> };
+export type LockEntries = {
+	verifier: Entry<Verifier>;
+	attempts: Entry<Attempts>;
+	off: Entry<true>;
+};
 
 /** Registers the lock's saved data: the verifier and the wrong tries, both kept out of backups. */
 export function lockEntries(storage: Pick<StorageScope, 'entry'>): LockEntries {
@@ -74,6 +78,14 @@ export function lockEntries(storage: Pick<StorageScope, 'entry'>): LockEntries {
 		attempts: storage.entry('attempts', {
 			label: 'Wrong passcode tries',
 			parse: parseAttempts,
+			group: 'lock',
+			backup: false
+		}),
+		// Written by a deliberate turn-off, so other tabs know the passcode went with its owner's
+		// say. Clearing the lock's group clears it too.
+		off: storage.entry('off', {
+			label: 'Passcode turned off',
+			parse: (v) => (v === true ? true : undefined),
 			group: 'lock',
 			backup: false
 		})
@@ -127,6 +139,7 @@ export function createLock(
 	function removePasscode() {
 		removing = true;
 		try {
+			storage.write(entries.off, true);
 			storage.remove(entries.verifier);
 			storage.remove(entries.attempts);
 		} finally {
@@ -155,7 +168,8 @@ export function createLock(
 		if (key !== null && key !== entries.verifier.key && key !== entries.attempts.key) return;
 		const had = enabled;
 		enabled = verifier() !== undefined;
-		if (had && !enabled && !removing) clearSensitive();
+		// Turned off or reset (here or in another tab) leaves the marker; anything else doesn't.
+		if (had && !enabled && !removing && storage.read(entries.off) === undefined) clearSensitive();
 		if (!had && enabled) locked = true;
 		changed();
 	});
@@ -176,6 +190,7 @@ export function createLock(
 				if (problem) return problem;
 				if (!storage.write(entries.verifier, await createVerifier(code, kind, iterations)))
 					return "Couldn't save the passcode (storage is full or blocked).";
+				storage.remove(entries.off);
 				enabled = true;
 				locked = false;
 				changed();

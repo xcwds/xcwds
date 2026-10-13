@@ -41,7 +41,8 @@ describe('the lock setting', () => {
 		const group = app.storage.groups().find((g) => g.id === 'lock')!;
 		expect(group.entries.map((e) => [e.key, e.backup])).toEqual([
 			['app:lock:verifier', false],
-			['app:lock:attempts', false]
+			['app:lock:attempts', false],
+			['app:lock:off', false]
 		]);
 		expect(pluginMeta(build).network).toBe(false);
 		expect(pluginMeta(client).network).toBe(false);

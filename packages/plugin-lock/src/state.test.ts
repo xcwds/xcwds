@@ -96,4 +96,32 @@ describe('the lock', () => {
 		expect(d.storage.read(d.journal)).toBeUndefined();
 		expect(d.storage.read(d.prefs)).toBe(3);
 	});
+
+	it('turning the lock off in one tab keeps the data in the others', async () => {
+		const d = device();
+		await d.open().lock.setUp('123456', 'digits');
+		d.storage.write(d.journal, 'kept');
+		// Tab B: its own storage over the same device, following tab A through `storage` events.
+		const b = device(d.adapter);
+		const events = new EventTarget();
+		b.storage.startSync(events);
+		const { lock: inB } = b.open();
+		const tell = (key: string) =>
+			events.dispatchEvent(Object.assign(new Event('storage'), { key }));
+
+		const { lock: inA } = d.open();
+		expect(await inA.turnOff('123456')).toBe('ok');
+		for (const key of [b.entries.off.key, b.entries.verifier.key]) tell(key);
+		expect(inB.state.enabled).toBe(false);
+		expect(b.storage.read(b.journal)).toBe('kept');
+
+		// Cleared without a turn-off (another tab's "Clear" on the lock's data): wiped.
+		expect(await inA.setUp('654321', 'digits')).toBeUndefined();
+		tell(b.entries.verifier.key);
+		expect(inB.state).toMatchObject({ enabled: true, locked: true });
+		d.storage.clear(d.storage.groups().find((g) => g.id === 'lock')!.entries);
+		tell(b.entries.verifier.key);
+		expect(inB.state.enabled).toBe(false);
+		expect(b.storage.read(b.journal)).toBeUndefined();
+	});
 });
