@@ -36,6 +36,13 @@ describe('the lock setting', () => {
 		const field = app.settings.fields().find((f) => f.name === 'lock');
 		expect(field).toMatchObject({ section: 'privacy', default: { cover: true } });
 		expect(app.settings.get().lock).toEqual({ cover: true });
+		// app.lock, with its data in its own group and out of backups.
+		expect(app.lock!.state).toMatchObject({ enabled: false, locked: false });
+		const group = app.storage.groups().find((g) => g.id === 'lock')!;
+		expect(group.entries.map((e) => [e.key, e.backup])).toEqual([
+			['app:lock:verifier', false],
+			['app:lock:attempts', false]
+		]);
 		expect(pluginMeta(build).network).toBe(false);
 		expect(pluginMeta(client).network).toBe(false);
 	});

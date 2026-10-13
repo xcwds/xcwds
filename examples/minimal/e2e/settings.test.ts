@@ -113,7 +113,8 @@ for (const { name, dir, base } of targets) {
 			});
 			await page.reload();
 			await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
-			await expect(page.getByTestId('backup-note')).toHaveText(['Not in backups: Hello cache']);
+			// (@xcwds/plugin-lock's passcode group is all out of backups, so it says just that.)
+			await expect(page.getByTestId('backup-note')).toContainText(['Not in backups: Hello cache']);
 
 			const downloadPromise = page.waitForEvent('download');
 			await page.getByRole('button', { name: 'Download backup' }).click();

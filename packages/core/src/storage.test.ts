@@ -128,6 +128,23 @@ describe('entries', () => {
 		expect(storage.update(e, 1, (v) => (v ?? 0) + 1)).toEqual({ value: 11, saved: false });
 	});
 
+	it('marks a group sensitive when any of its entries is (#76)', () => {
+		const { storage } = setup();
+		const s = storage.scope('s');
+		s.entry('log', { label: 'Log', parse: isNumber, sensitive: true });
+		s.entry('prefs', { label: 'Prefs', parse: isNumber });
+		const plain = storage.scope('p').entry('x', { label: 'X', parse: isNumber });
+		expect(plain.sensitive).toBe(false);
+		expect(storage.groups().map((g) => [g.id, g.sensitive])).toEqual([
+			['s', true],
+			['p', false]
+		]);
+		for (const flag of ['sensitive', 'backup'])
+			expect(() =>
+				storage.scope('q').entry(`bad-${flag}`, { label: 'B', parse: isNumber, [flag]: 'yes' })
+			).toThrowError(new RegExp(`\\\`${flag}\\\` that isn't true or false`));
+	});
+
 	it('clears all entries or a list, groups them, and tells this tab’s listeners', () => {
 		const { storage, adapter } = setup({ 'app:a:x': '1', 'app:b:y': '2', 'app:z:other': '3' });
 		const a = storage.scope('a').entry('x', { label: 'X', parse: isNumber });

@@ -9,9 +9,13 @@
  * - **Leak hygiene.** Text fields in `<main>` get `spellcheck="false"`, `autocomplete="off"` and
  *   `autocapitalize="off"`, including fields added later; a field that sets one itself keeps it.
  *
+ * And `app.lock`, the passcode lock's state (#76, see `lock.ts`): set up, unlock, lock, change,
+ * turn off and reset. Unlocking lives in memory only, so every start is locked.
+ *
  * Imported at prerender too, so it only touches browser globals once the app boots.
  */
 import { definePlugin } from '@xcwds/core';
+import { createLock, lockEntries, type AppLock } from './lock.js';
 import {
 	CORE,
 	DEFAULT_LOCK,
@@ -26,6 +30,10 @@ import {
 } from './options.js';
 
 declare module '@xcwds/core' {
+	interface App {
+		/** From `@xcwds/plugin-lock`. */
+		readonly lock?: AppLock;
+	}
 	interface Settings {
 		/** From `@xcwds/plugin-lock`. */
 		lock?: LockSetting;
@@ -57,6 +65,11 @@ export default definePlugin(
 				]
 			}
 		});
+
+		// Read now: the kernel hands plugins the device's storage before they register (and an
+		// in-memory one at prerender, where no passcode is ever set).
+		const { lock, stop: stopLock } = createLock(app.storage, lockEntries(app.storage));
+		app.decorate('lock', lock satisfies AppLock);
 
 		let onPrivate = false;
 		let cover: HTMLElement | null = null;
@@ -190,6 +203,7 @@ export default definePlugin(
 			removeCover();
 			for (const stop of stops) stop();
 			stops = [];
+			stopLock();
 		});
 	},
 	{ name: NAME, core: CORE, encapsulate: false, network: false }

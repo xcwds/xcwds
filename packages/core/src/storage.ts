@@ -77,6 +77,8 @@ export type Entry<T> = {
 	readonly namespace: string;
 	/** Whether backups carry it (false for secrets and re-downloadable caches). */
 	readonly backup: boolean;
+	/** Personal data a lock's reset clears (`@xcwds/plugin-lock`); see `EntryOptions`. */
+	readonly sensitive: boolean;
 };
 
 export type EntryOptions<T> = {
@@ -95,6 +97,11 @@ export type EntryOptions<T> = {
 	 * For secrets such as access tokens and for large caches that can be downloaded again.
 	 */
 	backup?: boolean;
+	/**
+	 * `true` marks it as personal data: its whole group counts as sensitive, and resetting a
+	 * forgotten passcode (`@xcwds/plugin-lock`) clears exactly the sensitive groups.
+	 */
+	sensitive?: boolean;
 };
 
 /**
@@ -109,7 +116,13 @@ export type Migration = {
 	run(data: Record<string, unknown>): void;
 };
 
-export type Group = { id: string; label: string; entries: Entry<unknown>[] };
+export type Group = {
+	id: string;
+	label: string;
+	entries: Entry<unknown>[];
+	/** Any of its entries is `sensitive`, so a lock's reset clears the whole group. */
+	sensitive: boolean;
+};
 
 export type Backup = {
 	app: string;
@@ -777,13 +790,20 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 						);
 					if (typeof opts.parse !== 'function')
 						throw new XcwdsError(codes.STORAGE_KEY, `The entry "${key}" needs a parse function.`);
+					for (const flag of ['backup', 'sensitive'] as const)
+						if (opts[flag] !== undefined && typeof opts[flag] !== 'boolean')
+							throw new XcwdsError(
+								codes.STORAGE_KEY,
+								`The entry "${key}" has a \`${flag}\` that isn't true or false.`
+							);
 					const e: Entry<T> = {
 						key,
 						label: opts.label,
 						parse: opts.parse,
 						group: opts.group ?? (ns || name.split(':')[0]!),
 						namespace: ns,
-						backup: opts.backup ?? true
+						backup: opts.backup ?? true,
+						sensitive: opts.sensitive ?? false
 					};
 					entries.set(key, e as Entry<unknown>);
 					return e;
@@ -808,8 +828,11 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		groups() {
 			const out = new Map<string, Group>();
 			for (const e of entries.values()) {
-				if (!out.has(e.group)) out.set(e.group, { id: e.group, label: '', entries: [] });
-				out.get(e.group)!.entries.push(e);
+				if (!out.has(e.group))
+					out.set(e.group, { id: e.group, label: '', entries: [], sensitive: false });
+				const group = out.get(e.group)!;
+				group.entries.push(e);
+				if (e.sensitive) group.sensitive = true;
 			}
 			// Named after what's in it, e.g. "Home shortcuts" or "Workout, Workout history".
 			for (const g of out.values()) g.label = g.entries.map((e) => e.label).join(', ');

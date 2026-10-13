@@ -69,6 +69,8 @@ version, by the next write to that namespace that fits. `exportData`, `parseBack
 `importData` make backups; a `replace` import that doesn't fit puts the previous data back.
 An entry registered with `backup: false` (secrets, re-downloadable caches) is left out of exports,
 and imports neither write nor clear it; clearing its group still removes it.
+`sensitive: true` marks personal data: its group is `sensitive` in `groups()`, and a passcode
+lock's reset clears exactly those groups.
 `unclaimed()` lists data left by plugins that were removed. Backups keep that data with its schema
 version, so a backup still imports after a plugin is removed, and the plugin's migrations pick
 up where they left off if it comes back.

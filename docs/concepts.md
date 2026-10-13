@@ -165,6 +165,10 @@ or all data, still removes it, and the settings page marks it "Not in backups". 
 removed, nothing marks the data any more, so it would go into backups as unclaimed data: clear a
 plugin's data before removing it.
 
+An entry registered with `sensitive: true` is personal data (a journal, a log of urges): its whole
+group is marked sensitive in `storage.groups()`, and resetting a forgotten passcode in
+`@xcwds/plugin-lock` clears exactly the sensitive groups.
+
 **Settings** are one app-wide object (saved as `app:settings`), to which each plugin adds fields
 with a default, a `parse` function and optionally a control that the settings page shows:
 
