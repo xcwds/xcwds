@@ -64,7 +64,7 @@ The index page and each tool are thin route files in your app (RFC 0001, decisio
   discreet: the index page and pinned tools still show them, and the app may be open on a
   shared screen.
 - **`shortcut: true`** adds the tool to the manifest's `shortcuts` (the home-screen icon's
-  long-press menu).
+  long-press menu), after any `manifest.shortcuts` in your config.
 - **`storageKey`**: where pins and recents are saved (default `app:tools:shortcuts`). Set it to
   keep a key your app already uses, e.g. `app:home:shortcuts` for an app moving from
   xcwds.github.io's own code, so users keep their pins.

@@ -74,7 +74,8 @@ export default defineConfig({
 - **`privacy.allowOrigins`** lists any server the app may contact that no plugin declares. It is
   empty by default, and the build fails if it finds a call to any other server. See
   [Privacy](privacy.md).
-- **`manifest`** adds fields to the generated web app manifest. **`storage.prefix`** changes
+- **`manifest`** adds fields to the generated web app manifest, over what plugins set; its
+  `shortcuts` come first, then those plugins add. **`storage.prefix`** changes
   the `app:` prefix of saved keys, and **`storage.appName`** the name backups carry (and must
   carry to import), which defaults to `brand.name`: set it to keep importing backups an app made
   under another name.
