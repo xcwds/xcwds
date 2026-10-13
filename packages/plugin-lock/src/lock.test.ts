@@ -171,6 +171,8 @@ describe('what a locked app keeps behind the unlock screen', () => {
 		expect(app.lock!.hides('/notes')).toBe(true);
 		expect(app.lock!.hides('/unlock')).toBe(false);
 		expect(app.lock!.hides(undefined)).toBe(false);
+		await app.hooks.run('afterNavigate', [{ path: '/notes' }], { path: '/notes' });
+		expect(app.lock!.here()).toBe('/notes');
 		expect(await app.lock!.unlock('123456')).toBe('ok');
 		expect(app.lock!.hides('/notes')).toBe(false);
 

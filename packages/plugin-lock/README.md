@@ -84,6 +84,8 @@ The API:
 - `hides(path)` says whether a notice raised on `path` must hide what it says: the app is locked
   and the lock keeps that page out (any page but the unlock screen for the whole app). False
   for an unknown path. Plugins that show notices ask it, so they need no other part of the lock.
+- `here()` is the page showing now, which notices record. The lock follows every page, so
+  plugins registered under a route prefix (whose route hooks only see paths below it) ask it.
 - `reset()` is for a forgotten passcode: there's no recovery, so it clears every storage group
   marked `sensitive` (`sensitiveGroups()` lists them) along with the passcode.
 

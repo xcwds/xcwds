@@ -245,9 +245,13 @@ export default definePlugin(
 		const update = (id: number, change: (state: TimerState) => TimerState) =>
 			apply((list) => list.map((i) => (i.id === id ? { ...i, state: change(i.state) } : i)));
 
-		/** The page showing now, which new timers record. */
-		let here: string | undefined;
-		app.addHook('afterNavigate', (to) => void (here = to.path));
+		/**
+		 * The page showing now, which new timers record. `@xcwds/plugin-lock` follows every page,
+		 * even with this plugin under a route prefix (whose route hooks only see paths below it).
+		 */
+		let seen: string | undefined;
+		app.addHook('afterNavigate', (to) => void (seen = to.path));
+		const here = () => (app as { lock?: { here(): string | undefined } }).lock?.here() ?? seen;
 
 		const timers: AppTimers = {
 			page: options.page,
@@ -266,12 +270,13 @@ export default definePlugin(
 				if (!Number.isFinite(ms) || ms <= 0) return undefined;
 				primeAudio();
 				const duration = Math.min(Math.round(ms), t.MAX_DURATION);
+				const path = here();
 				const created: TimerItem = {
 					// Unique across tabs and reloads, and still a plain number for the saved shape.
 					id: Date.now() + Math.random(),
 					label: label.trim() || `${t.formatDuration(duration)} timer`,
 					state: t.start(t.timer(duration), Date.now()),
-					...(here === undefined ? {} : { path: here })
+					...(path === undefined ? {} : { path })
 				};
 				apply((list) => [...list, created]);
 				return created;

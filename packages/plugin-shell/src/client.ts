@@ -153,18 +153,24 @@ export default definePlugin(
 				dismiss
 			}
 		} satisfies AppShell);
-		/** The page showing now, which toasts record. */
-		let here: string | undefined;
-		app.addHook('afterNavigate', (to) => void (here = to.path));
+		/**
+		 * The page showing now, which toasts record. `@xcwds/plugin-lock` follows every page, even
+		 * with this plugin under a route prefix (whose route hooks only see paths below it).
+		 */
+		let seen: string | undefined;
+		app.addHook('afterNavigate', (to) => void (seen = to.path));
+		const lock = () => (app as { lock?: { here(): string | undefined } }).lock;
+		const here = () => lock()?.here() ?? seen;
 		const toast = (message: string, { action, durationMs }: ToastOptions = {}) => {
 			const id = nextId++;
+			const path = here();
 			const next = [
 				...toasts,
 				{
 					id,
 					message,
 					...(action ? { action } : {}),
-					...(here === undefined ? {} : { path: here })
+					...(path === undefined ? {} : { path })
 				}
 			];
 			for (const old of next.splice(0, Math.max(0, next.length - MAX_TOASTS))) {

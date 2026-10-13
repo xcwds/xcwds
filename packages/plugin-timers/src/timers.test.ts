@@ -224,6 +224,31 @@ describe('the page', () => {
 		expect(reloaded.timers!.list().at(-1)!.path).toBe('/journal');
 	});
 
+	it('asks the lock for the page when it runs under a route prefix', async () => {
+		fakeDevice();
+		// Stands in for @xcwds/plugin-lock, which follows every page.
+		let page: string | undefined;
+		const lock = definePlugin(
+			(app) => {
+				app.decorate('lock', { here: () => page });
+				app.addHook('afterNavigate', (to) => void (page = to.path));
+			},
+			{ name: 'fake-lock', encapsulate: false }
+		);
+		const app = await buildTestApp(
+			{
+				plugins: [
+					[lock, {}],
+					[client, { prefix: '/utils/timer' }]
+				]
+			},
+			{ now: NOW }
+		);
+		// The timers' own route hooks don't see this page.
+		await app.hooks.run('afterNavigate', [{ path: '/journal' }], { path: '/journal' });
+		expect(app.timers!.create('Breathe', t.MINUTE)!.path).toBe('/journal');
+	});
+
 	it('keeps an app update waiting while a timer runs', async () => {
 		fakeDevice();
 		const app = await buildTestApp({ plugins: [[client, {}]] }, { now: NOW });

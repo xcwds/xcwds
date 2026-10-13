@@ -101,7 +101,10 @@ export default definePlugin(
 
 		// Read now: the kernel hands plugins the device's storage before they register (and an
 		// in-memory one at prerender, where no passcode is ever set).
-		const { lock, stop: stopLock } = createLock(app.storage, lockEntries(app.storage), { locks });
+		const { lock, stop: stopLock } = createLock(app.storage, lockEntries(app.storage), {
+			locks,
+			here: () => current?.path
+		});
 		app.decorate('lock', lock satisfies AppLock);
 
 		/** Where a locked navigation was going, for after unlocking. In memory, never in the URL. */
@@ -280,8 +283,8 @@ export default definePlugin(
 			// instead of unlocking, the page asked for earlier isn't wanted any more.
 			const hide = lock.state.locked && locks(to.path);
 			if (!hide && !isUnlock(to.path)) target = null;
-			if (typeof document === 'undefined') return;
 			current = to;
+			if (typeof document === 'undefined') return;
 			if (hide) conceal();
 			else reveal();
 			const next = isPrivate(routes(), to.path);

@@ -51,6 +51,12 @@ export type AppLock = {
 	 * plugins ask it (`app.lock?.hides(path)`), so it works without them knowing the scope.
 	 */
 	hides(path: string | undefined): boolean;
+	/**
+	 * The page showing now (an app path), for a notice to record where it was raised. The lock
+	 * follows every navigation, so plugins registered under a route prefix (whose own route hooks
+	 * only see paths below it) ask it instead.
+	 */
+	here(): string | undefined;
 	/** Changes the passcode; a problem with the new one comes back as a sentence. */
 	change(current: string, next: string, kind: PasscodeKind): Promise<TryResult | string>;
 	/** Turns the lock off; private pages open freely again. */
@@ -108,6 +114,8 @@ export function createLock(
 		iterations?: number;
 		/** Whether the lock keeps `path` behind the unlock screen (none without it). */
 		locks?: (path: string) => boolean;
+		/** The page showing now. */
+		here?: () => string | undefined;
 	} = {}
 ): { lock: AppLock; stop(): void } {
 	const now = options.now ?? Date.now;
@@ -223,6 +231,7 @@ export function createLock(
 			changed();
 		},
 		hides: (path) => state.locked && path !== undefined && locks(path),
+		here: () => options.here?.(),
 		change: (current, next, kind) =>
 			serial(async () => {
 				const problem = passcodeProblem(next, kind);
