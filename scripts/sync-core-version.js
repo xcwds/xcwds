@@ -1,7 +1,8 @@
 // Writes @xcwds/core's package.json version into src/version.ts, so the kernel's VERSION (checked
 // against plugins' `core` ranges at boot) follows each version bump, and moves the first-party
 // plugins' `CORE` range along when core leaves it (a new minor on 0.x, a new major after), so it
-// matches the `^` peer range they publish with. Runs in `pnpm version-packages`.
+// matches the `^` peer range they publish with (and the guide's copy of the example plugin, which a
+// site test compares with it). Runs in `pnpm version-packages`.
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 
 const { version } = JSON.parse(readFileSync('packages/core/package.json', 'utf8'));
@@ -20,6 +21,6 @@ const range = major === '0' ? `^0.${minor}.0` : `^${major}.0.0`;
 const plugins = readdirSync('packages')
 	.filter((name) => name.startsWith('plugin-'))
 	.map((name) => `packages/${name}/src/options.ts`);
-for (const file of [...plugins, 'examples/plugin-tally/src/options.ts']) {
+for (const file of [...plugins, 'examples/plugin-tally/src/options.ts', 'docs/plugin-guide.md']) {
 	sync(file, /CORE = '[^']*'/, `CORE = '${range}'`);
 }
