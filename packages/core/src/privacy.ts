@@ -51,6 +51,12 @@ export function resolveNetwork(
 			{ plugin, cause }
 		);
 	}
+	if (typeof (resolved as { then?: unknown } | null)?.then === 'function')
+		throw new XcwdsError(
+			codes.PLUGIN_META,
+			`Plugin "${plugin}" has invalid \`network\`: its function must return synchronously, not a promise.`,
+			{ plugin }
+		);
 	return checkNetwork(resolved, plugin);
 }
 

@@ -88,6 +88,10 @@ describe('resolveNetwork', () => {
 		[() => ({ origins: ['http://relay.example'], reason: 'r' }), "isn't an https or wss origin"],
 		[() => 'https://relay.example', 'use false or { origins, reason }'],
 		[
+			async () => ({ origins: ['https://relay.example'], reason: 'r' }),
+			'must return synchronously'
+		],
+		[
 			() => {
 				throw new Error('`relay` is required');
 			},
