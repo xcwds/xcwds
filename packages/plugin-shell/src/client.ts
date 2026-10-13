@@ -22,7 +22,13 @@ import {
 
 /** A link shown with a toast: an app path, plus an optional `#hash`. */
 export type ToastAction = { label: string; path: string; hash?: string };
-export type Toast = { id: number; message: string; action?: ToastAction };
+export type Toast = {
+	id: number;
+	message: string;
+	action?: ToastAction;
+	/** The page it was raised on (an app path), so a locked app can hide what it says. */
+	path?: string;
+};
 export type ToastOptions = {
 	action?: ToastAction;
 	/** How long it shows. Defaults to 3 s, or 8 s with an action (so it can be tapped). */
@@ -147,9 +153,20 @@ export default definePlugin(
 				dismiss
 			}
 		} satisfies AppShell);
+		/** The page showing now, which toasts record. */
+		let here: string | undefined;
+		app.addHook('afterNavigate', (to) => void (here = to.path));
 		const toast = (message: string, { action, durationMs }: ToastOptions = {}) => {
 			const id = nextId++;
-			const next = [...toasts, { id, message, ...(action ? { action } : {}) }];
+			const next = [
+				...toasts,
+				{
+					id,
+					message,
+					...(action ? { action } : {}),
+					...(here === undefined ? {} : { path: here })
+				}
+			];
 			for (const old of next.splice(0, Math.max(0, next.length - MAX_TOASTS))) {
 				clearTimeout(timers.get(old.id));
 				timers.delete(old.id);

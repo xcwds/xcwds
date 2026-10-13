@@ -65,7 +65,9 @@ and offers a backup first (not encrypted). Then:
   whether the page is locked. If the app fails to boot, the page stays hidden. A timer on a page
   that gets locked keeps running (timers count wall-clock time).
 - **While locked**, Settings → Privacy offers only Unlock and Forgot passcode, and
-  `@xcwds/plugin-settings` offers no backup, import or clear.
+  `@xcwds/plugin-settings` offers no backup, import or clear. Notices raised on a locked page
+  hide what they say: `@xcwds/plugin-shell`'s toasts read "Private page" and
+  `@xcwds/plugin-timers`' alerts "Timer finished" (they still ring and can be stopped).
 - **Forgot passcode**, on the unlock screen and in Settings, resets the lock and clears every
   storage group marked `sensitive`, after two confirmations that name them. It offers no backup:
   one made while locked would hand over what the lock keeps out.
@@ -79,6 +81,9 @@ The API:
 - `unlock(code)`, `change(current, next, kind)` and `turnOff(current)` resolve to `'ok'`,
   `'wrong'` or `'wait'`. After 5 wrong tries the next one waits 30 s, then 1 min, 5 min, 15 min
   and an hour, and the count survives a reload. `lock()` locks now.
+- `hides(path)` says whether a notice raised on `path` must hide what it says: the app is locked
+  and the lock keeps that page out (any page but the unlock screen for the whole app). False
+  for an unknown path. Plugins that show notices ask it, so they need no other part of the lock.
 - `reset()` is for a forgotten passcode: there's no recovery, so it clears every storage group
   marked `sensitive` (`sensitiveGroups()` lists them) along with the passcode.
 

@@ -93,9 +93,15 @@ export default definePlugin(
 			}
 		});
 
+		const setting = (): LockSetting => app.settings.get().lock ?? DEFAULT_LOCK;
+		const routes = () => (app as { routes?: RoutesLike }).routes;
+		const isUnlock = (path: string) => trim(path) === options.unlock;
+		/** Whether a locked app keeps `path` behind the unlock screen. */
+		const locks = (path: string) => needsUnlock(routes(), path, setting().scope, options.unlock);
+
 		// Read now: the kernel hands plugins the device's storage before they register (and an
 		// in-memory one at prerender, where no passcode is ever set).
-		const { lock, stop: stopLock } = createLock(app.storage, lockEntries(app.storage));
+		const { lock, stop: stopLock } = createLock(app.storage, lockEntries(app.storage), { locks });
 		app.decorate('lock', lock satisfies AppLock);
 
 		/** Where a locked navigation was going, for after unlocking. In memory, never in the URL. */
@@ -109,11 +115,6 @@ export default definePlugin(
 			}
 		} satisfies LockScreen);
 
-		const setting = (): LockSetting => app.settings.get().lock ?? DEFAULT_LOCK;
-		const routes = () => (app as { routes?: RoutesLike }).routes;
-		const isUnlock = (path: string) => trim(path) === options.unlock;
-		/** Whether a locked app keeps `path` behind the unlock screen. */
-		const locks = (path: string) => needsUnlock(routes(), path, setting().scope, options.unlock);
 		/** A route as the guard remembers it: its path with the query and hash. */
 		const full = (to: Route) => to.path + (to.url ? to.url.search + to.url.hash : '');
 		/** The page showing now (from `afterNavigate`). */

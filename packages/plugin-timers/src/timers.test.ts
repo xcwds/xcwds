@@ -196,6 +196,34 @@ describe('the page', () => {
 		expect(timers.remaining(timers.get(long.id)!)).toBe(10 * t.MINUTE);
 	});
 
+	it('records the page a timer was started on, and keeps it across a reload', async () => {
+		fakeDevice();
+		const storage = memoryStorage({
+			// Saved before timers recorded their page: it still loads, with none.
+			'app:cooking-timer:timers': JSON.stringify([
+				{ id: 1, label: 'Old', state: { duration: 1000, endsAt: null, pausedRemaining: 1000 } },
+				{
+					id: 2,
+					label: 'Odd',
+					path: 42,
+					state: { duration: 1000, endsAt: null, pausedRemaining: 1000 }
+				}
+			])
+		});
+		const plugins = [[client, { storageKey: 'app:cooking-timer:timers' }]] as const;
+		const app = await buildTestApp({ plugins: [...plugins] }, { now: NOW, storage });
+		await app.hooks.run('afterNavigate', [{ path: '/journal' }], { path: '/journal' });
+		app.timers!.create('Breathe', t.MINUTE);
+		expect(app.timers!.list().map((i) => [i.label, i.path])).toEqual([
+			['Old', undefined],
+			['Odd', undefined],
+			['Breathe', '/journal']
+		]);
+		await app.close();
+		const reloaded = await buildTestApp({ plugins: [...plugins] }, { now: NOW, storage });
+		expect(reloaded.timers!.list().at(-1)!.path).toBe('/journal');
+	});
+
 	it('keeps an app update waiting while a timer runs', async () => {
 		fakeDevice();
 		const app = await buildTestApp({ plugins: [[client, {}]] }, { now: NOW });

@@ -19,7 +19,16 @@ import {
 import * as t from './timer.js';
 import type { TimerState } from './timer.js';
 
-export type TimerItem = { readonly id: number; readonly label: string; readonly state: TimerState };
+export type TimerItem = {
+	readonly id: number;
+	readonly label: string;
+	readonly state: TimerState;
+	/**
+	 * The page it was started on (an app path), so a locked app can hide its label. Timers saved
+	 * before it was recorded have none, and count as started on a page that isn't private.
+	 */
+	readonly path?: string;
+};
 
 /** `app.timers`. */
 export type AppTimers = {
@@ -80,12 +89,12 @@ function parseItems(v: unknown): TimerItem[] | undefined {
 	const items: TimerItem[] = [];
 	for (const raw of v) {
 		if (typeof raw !== 'object' || raw === null) continue;
-		const { id, label, state } = raw as Record<string, unknown>;
+		const { id, label, state, path } = raw as Record<string, unknown>;
 		const parsed = t.parseTimer(state);
 		if (typeof id !== 'number' || !Number.isFinite(id) || typeof label !== 'string' || !parsed)
 			continue;
 		if (items.some((i) => i.id === id)) continue;
-		items.push({ id, label, state: parsed });
+		items.push({ id, label, state: parsed, ...(typeof path === 'string' ? { path } : {}) });
 	}
 	return items;
 }
@@ -236,6 +245,10 @@ export default definePlugin(
 		const update = (id: number, change: (state: TimerState) => TimerState) =>
 			apply((list) => list.map((i) => (i.id === id ? { ...i, state: change(i.state) } : i)));
 
+		/** The page showing now, which new timers record. */
+		let here: string | undefined;
+		app.addHook('afterNavigate', (to) => void (here = to.path));
+
 		const timers: AppTimers = {
 			page: options.page,
 			list: () => items,
@@ -257,7 +270,8 @@ export default definePlugin(
 					// Unique across tabs and reloads, and still a plain number for the saved shape.
 					id: Date.now() + Math.random(),
 					label: label.trim() || `${t.formatDuration(duration)} timer`,
-					state: t.start(t.timer(duration), Date.now())
+					state: t.start(t.timer(duration), Date.now()),
+					...(here === undefined ? {} : { path: here })
 				};
 				apply((list) => [...list, created]);
 				return created;

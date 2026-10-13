@@ -61,5 +61,9 @@ export default defineConfig({
   - `Countdown.svelte`: one timer's remaining time, `<Countdown id={item.id} />`.
   - `TimerAlert.svelte`: finished timers with +1 min, Stop and Open (`openLabel` names the Open
     link for screen readers; defaults to "Open timers").
+  - Each timer records the page it was started on (`path`). While
+    [`@xcwds/plugin-lock`](../plugin-lock) has the app locked, a timer started on a page it keeps
+    out shows `privateText` instead of its label ("Timer finished" in `TimerAlert`, "Private
+    timer" in `TimerList`), and still rings, snoozes and stops.
 - **Pure functions** from the main entry (`start`, `pause`, `add`, `remaining`,
   `formatDuration` and others) for tests and custom timers.

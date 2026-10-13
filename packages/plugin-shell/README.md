@@ -100,7 +100,10 @@ paths (and everything under them) highlight it too.
 
 - **`app.toast(message, { action?, durationMs? })`** shows a short confirmation in the stack
   (3 s, or 8 s with an action link `{ label, path, hash? }`; at most three at once). A save that
-  fails (`app.storage.onSaveFailure`) shows one "Couldn't save on this device" toast.
+  fails (`app.storage.onSaveFailure`) shows one "Couldn't save on this device" toast. A toast
+  records the page it was raised on (`path`); while [`@xcwds/plugin-lock`](../plugin-lock) has
+  the app locked, one from a page it keeps out says "Private page" instead (the toaster's
+  `privateText`).
 - **`app.shell.home.add(Component, { props?, order? })`** adds a block to Home (lowest `order`
   first), below `brand.name` and `brand.tagline`.
 - **`app.shell.header.add(Component, { props?, order? })`** adds a button beside the title.

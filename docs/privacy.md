@@ -154,7 +154,8 @@ instead, then the page that was asked for. Where they were going is kept in memo
 URL. Every page load starts locked, and the app locks itself after it has been hidden for a
 while (right away, or after 1, 5 or 15 minutes). While a passcode is set, each page stays hidden
 from its first paint until the app has booted and knows the page isn't locked. While the app is
-locked, Settings offers no backup, import or clear.
+locked, Settings offers no backup, import or clear, and notices raised on a locked page (toasts,
+finished timers) say only "Private page" or "Timer finished" instead of what they're about.
 
 What it does and doesn't protect against:
 

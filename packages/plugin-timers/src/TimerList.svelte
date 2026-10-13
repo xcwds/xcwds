@@ -1,14 +1,18 @@
 <script lang="ts">
 	/**
 	 * Every timer, with a form to start a new one: what a timers page renders. While it shows,
-	 * finished timers aren't also shown as alerts.
+	 * finished timers aren't also shown as alerts. While `@xcwds/plugin-lock` has the app locked,
+	 * a timer started on a page it keeps out shows `privateText` instead of its label.
 	 */
 	import { useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
 	import type { TimerItem } from './client.js';
 	import { MINUTE, formatDuration, running } from './timer.js';
+	import { useHides } from './hides.svelte.js';
 
+	let { privateText = 'Private timer' }: { privateText?: string } = $props();
 	const timers = useApp().timers;
+	const hides = useHides();
 	let items = $state<readonly TimerItem[]>([]);
 	// Read with `items`, so remaining times follow every tick.
 	let now = $state(0);
@@ -75,17 +79,16 @@
 			{@const left =
 				item.state.endsAt === null ? item.state.pausedRemaining : item.state.endsAt - now}
 			{@const ringing = running(item.state) && left <= 0}
+			{@const name = hides(item.path) ? privateText : item.label}
 			<li
 				class="flex flex-wrap items-center gap-2 rounded-xl px-4 py-2 {ringing
 					? 'bg-amber-300 text-gray-900 dark:bg-amber-700 dark:text-white'
 					: 'bg-(--xcwds-shell-card)'}"
 				data-testid="timer"
 			>
-				<span class="min-w-0 flex-1 truncate font-medium">{item.label}</span>
-				<span
-					class="font-mono text-xl tabular-nums"
-					role="timer"
-					aria-label="{item.label} remaining">{ringing ? 'Done' : formatDuration(left)}</span
+				<span class="min-w-0 flex-1 truncate font-medium">{name}</span>
+				<span class="font-mono text-xl tabular-nums" role="timer" aria-label="{name} remaining"
+					>{ringing ? 'Done' : formatDuration(left)}</span
 				>
 				{#if ringing}
 					<button type="button" class={button} onclick={() => timers?.add(item.id, MINUTE)}

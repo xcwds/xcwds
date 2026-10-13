@@ -218,4 +218,13 @@ describe('app.shell and app.toast', () => {
 		await clock.advance(3000);
 		expect(messages()).toEqual(['long']);
 	});
+
+	it('records the page a toast was raised on', async () => {
+		stubDocument();
+		const app = await buildTestApp({ plugins: [[client, {}]] });
+		app.toast!('at home');
+		await app.hooks.run('afterNavigate', [{ path: '/journal' }], { path: '/journal' });
+		app.toast!('on the journal');
+		expect(app.shell!.toasts.list().map((t) => t.path)).toEqual(['/', '/journal']);
+	});
 });

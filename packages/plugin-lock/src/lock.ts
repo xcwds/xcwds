@@ -45,6 +45,12 @@ export type AppLock = {
 	unlock(code: string): Promise<TryResult>;
 	/** Locks now (nothing happens without a passcode). */
 	lock(): void;
+	/**
+	 * Whether a notice raised on `path` (an app path) must hide what it says: the app is locked
+	 * and the lock keeps that page behind the unlock screen. False for an unknown path. Other
+	 * plugins ask it (`app.lock?.hides(path)`), so it works without them knowing the scope.
+	 */
+	hides(path: string | undefined): boolean;
 	/** Changes the passcode; a problem with the new one comes back as a sentence. */
 	change(current: string, next: string, kind: PasscodeKind): Promise<TryResult | string>;
 	/** Turns the lock off; private pages open freely again. */
@@ -97,9 +103,15 @@ type Storage = Pick<StorageScope, 'read' | 'write' | 'remove' | 'groups' | 'clea
 export function createLock(
 	storage: Storage,
 	entries: LockEntries,
-	options: { now?: () => number; iterations?: number } = {}
+	options: {
+		now?: () => number;
+		iterations?: number;
+		/** Whether the lock keeps `path` behind the unlock screen (none without it). */
+		locks?: (path: string) => boolean;
+	} = {}
 ): { lock: AppLock; stop(): void } {
 	const now = options.now ?? Date.now;
+	const locks = options.locks ?? (() => false);
 	const iterations = options.iterations ?? ITERATIONS;
 	const listeners = new Set<(state: LockState) => void>();
 	const verifier = () => storage.read(entries.verifier);
@@ -210,6 +222,7 @@ export function createLock(
 			locked = true;
 			changed();
 		},
+		hides: (path) => state.locked && path !== undefined && locks(path),
 		change: (current, next, kind) =>
 			serial(async () => {
 				const problem = passcodeProblem(next, kind);

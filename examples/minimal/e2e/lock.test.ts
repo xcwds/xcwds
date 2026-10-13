@@ -297,3 +297,46 @@ test('forgot passcode clears only what the lock protects', async ({ page }) => {
 	expect(saved['app:lock:verifier']).toBeUndefined();
 	expect(saved['app:hello:count']).toBe('1');
 });
+
+test("a locked app hides what a private page's notices say, and they keep working (#77)", async ({
+	page
+}) => {
+	await page.clock.install();
+	const lock = await setUpLock(page);
+	await openJournal(page);
+	await page.getByRole('button', { name: 'Remind me in a minute' }).click();
+	await page
+		.getByRole('link', { name: /Settings/ })
+		.first()
+		.click();
+	await lock.getByRole('button', { name: 'Lock now' }).click();
+	await page.clock.fastForward(61_000);
+
+	const alert = page.getByTestId('timer-alert');
+	await expect(alert).toContainText('Timer finished');
+	await expect(alert).not.toContainText('Journal reminder');
+	// Still a working alert: +1 min snoozes it.
+	await alert.getByRole('button', { name: '+1 min' }).click();
+	await expect(alert).toHaveCount(0);
+	await page.clock.fastForward(61_000);
+	await expect(alert).toContainText('Timer finished');
+
+	// The timers page doesn't show the label either.
+	await page.getByRole('link', { name: /Utils/ }).first().click();
+	await page
+		.getByRole('link', { name: /Several labeled timers/ })
+		.first()
+		.click();
+	await expect(page.getByTestId('timer')).toContainText('Private timer');
+	await expect(page.getByTestId('timer')).not.toContainText('Journal reminder');
+
+	// Unlocked, it says what it is again.
+	await page
+		.getByRole('link', { name: /Settings/ })
+		.first()
+		.click();
+	await page.getByTestId('lock-status').getByRole('link', { name: 'Unlock' }).click();
+	await unlock(page);
+	await expect(page.getByTestId('timer-alert')).toContainText('Journal reminder is done');
+	await page.getByTestId('timer-alert').getByRole('button', { name: 'Stop' }).click();
+});
