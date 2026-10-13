@@ -10,7 +10,6 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
 	XcwdsError,
-	checkNetwork,
 	codes,
 	createApp,
 	createManifest,
@@ -18,6 +17,7 @@ import {
 	memoryStorage,
 	pluginMeta,
 	resolveConfig,
+	resolveNetwork,
 	type Plugin
 } from '@xcwds/core';
 import { decorateRoutes } from '../routes.js';
@@ -161,8 +161,9 @@ export async function generate({
 	plugins.forEach((p, i) => {
 		const plugin = buildPlugin(p.name, entries.default[i]!);
 		if (!plugin) return;
-		// The build entry declares the package's network use (#22); the kernel checks it on load.
-		p.network = checkNetwork(pluginMeta(plugin).network, p.name);
+		// The build entry declares the package's network use (#22), perhaps from its options (#103).
+		const { prefix: _prefix, ...options } = p.options;
+		p.network = resolveNetwork(pluginMeta(plugin).network, options, p.name);
 		app.register(plugin, { ...p.options } as never);
 	});
 	await app.ready();

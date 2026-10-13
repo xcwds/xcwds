@@ -22,9 +22,47 @@ export function isOrigin(value: unknown): value is string {
 	}
 }
 
+/**
+ * A plugin's `network` metadata: its {@link NetworkUse}, or a function that works it out from the
+ * options the plugin is registered with (#103), for origins the app picks, like a relay's.
+ * The result must be fixed at build time: the page's CSP is written when it is prerendered.
+ */
+export type NetworkDeclaration<Options = Record<string, unknown>> =
+	NetworkUse | ((options: Options) => NetworkUse | undefined);
+
+/**
+ * Resolves a plugin's `network` metadata with its registered options (without `prefix`) and checks
+ * the result like {@link checkNetwork}. A function that throws fails the same way.
+ */
+export function resolveNetwork(
+	value: unknown,
+	options: Record<string, unknown>,
+	plugin: string
+): NetworkUse {
+	if (typeof value !== 'function') return checkNetwork(value, plugin);
+	let resolved: unknown;
+	try {
+		resolved = (value as (options: Record<string, unknown>) => unknown)(options);
+	} catch (cause) {
+		const message = cause instanceof Error ? cause.message : String(cause);
+		throw new XcwdsError(
+			codes.PLUGIN_META,
+			`Plugin "${plugin}" has invalid \`network\`: its function threw: ${message}.`,
+			{ plugin, cause }
+		);
+	}
+	return checkNetwork(resolved, plugin);
+}
+
 /** Checks a plugin's `network` metadata and returns it with the default filled in. */
 export function checkNetwork(value: unknown, plugin: string): NetworkUse {
 	if (value === undefined || value === false) return false;
+	if (typeof value === 'function')
+		throw new XcwdsError(
+			codes.PLUGIN_META,
+			`Plugin "${plugin}" has invalid \`network\`: a function needs the plugin's options; use resolveNetwork.`,
+			{ plugin }
+		);
 	const fail = (message: string): never => {
 		throw new XcwdsError(
 			codes.PLUGIN_META,

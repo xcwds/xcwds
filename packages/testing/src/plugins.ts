@@ -8,6 +8,7 @@ import {
 	memoryStorage,
 	pluginMeta,
 	resolveConfig,
+	resolveNetwork,
 	type Descriptor,
 	type LogLevel,
 	type Plugin,
@@ -87,8 +88,10 @@ export async function prepare(
 	const routes = decorateRoutes(builder);
 	const plugins: Prepared['plugins'] = [];
 	const origins = new Set(config?.privacy.allowOrigins ?? []);
-	const declare = (plugin: Plugin<never>) => {
-		const network = pluginMeta(plugin).network;
+	const declare = (plugin: Plugin<never>, options: Record<string, unknown> = {}) => {
+		const { prefix: _prefix, ...rest } = options;
+		const name = pluginMeta(plugin).name ?? plugin.name;
+		const network = resolveNetwork(pluginMeta(plugin).network, rest, name);
 		if (network) for (const origin of network.origins) origins.add(origin);
 	};
 	for (const item of list) {
@@ -101,7 +104,7 @@ export async function prepare(
 					'A [plugin, options] pair needs a plugin function first (was the plugin imported?).'
 				);
 			plugins.push([item[0], { ...item[1] }]);
-			declare(item[0]);
+			declare(item[0], item[1]);
 		} else if (isDescriptor(item)) {
 			const options = { ...(item.options as Record<string, unknown>) };
 			const main = await load(importer, item.name, item.name);
@@ -109,12 +112,12 @@ export async function prepare(
 			if (typeof main.build === 'function') {
 				builder.register(named(main.build as Plugin<never>, item.name), options as never);
 				// The build entry declares the package's network use (#22).
-				declare(main.build as Plugin<never>);
+				declare(main.build as Plugin<never>, options);
 			}
 			const mod = await load(importer, `${item.name}/${entry}`, item.name);
 			if (mod && typeof mod.default === 'function') {
 				plugins.push([mod.default as Plugin<never>, options]);
-				declare(mod.default as Plugin<never>);
+				declare(mod.default as Plugin<never>, options);
 			}
 		} else
 			throw new TypeError(

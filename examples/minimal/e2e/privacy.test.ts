@@ -139,3 +139,86 @@ test('Settings says the app contacts no servers, and lists every plugin', async 
 		/@xcwds\/plugin-shell\s*No network/
 	);
 });
+
+// The base-path build gives plugin-hello an `origin` option, and its `network` function declares it
+// (#103): the CSP, the worker guard and Settings all take the origin the options name.
+test.describe('with network use worked out from options', () => {
+	const sub = fileURLToPath(new URL('../build-sub', import.meta.url));
+	const ORIGIN = 'https://greetings.example';
+	let subServer: StaticServer;
+	const subUrl = (path: string) => subServer.url(path);
+	test.beforeAll(async () => {
+		subServer = await serveStatic(sub, { base: '/sub' });
+	});
+	test.afterAll(() => subServer.close());
+
+	test('the CSP allows the declared origin and still blocks others', async ({ page }) => {
+		const reached: string[] = [];
+		await page.route(/^https:\/\/(greetings\.example|example\.com)\//, (route) => {
+			reached.push(new URL(route.request().url()).origin);
+			return route.fulfill({
+				status: 200,
+				body: 'ok',
+				headers: { 'access-control-allow-origin': '*' }
+			});
+		});
+		await gotoHydrated(page, subUrl('/'));
+		const csp = await page
+			.locator('meta[http-equiv="content-security-policy"]')
+			.getAttribute('content');
+		expect(csp).toMatch(/connect-src 'self' https:\/\/greetings\.example[;\s]/);
+		const result = await page.evaluate(async (origin) => {
+			const host = ['example', 'com'].join('.');
+			const attempt = (target: string) =>
+				fetch(target).then(
+					() => 'sent',
+					() => 'failed'
+				);
+			return {
+				declared: await attempt(`${origin}/hi`),
+				undeclared: await attempt(`https://${host}/collect`)
+			};
+		}, ORIGIN);
+		expect(result).toEqual({ declared: 'sent', undeclared: 'failed' });
+		expect(reached).toEqual([ORIGIN]);
+	});
+
+	test.describe('with the service worker', () => {
+		test.use({ serviceWorkers: 'allow' });
+
+		test('the worker guard allows the declared origin and blocks others', async ({
+			page,
+			context
+		}) => {
+			await context.route(/^https:\/\/(greetings\.example|example\.com)\//, (route) =>
+				route.fulfill({ body: 'reached' })
+			);
+			const registered = context.waitForEvent('serviceworker');
+			await gotoHydrated(page, subUrl('/'));
+			const worker = context.serviceWorkers()[0] ?? (await registered);
+			const result = await worker.evaluate(async (origin) => {
+				const host = ['example', 'com'].join('.');
+				const attempt = (target: string) =>
+					fetch(target).then(
+						() => 'sent',
+						(error: unknown) => String(error)
+					);
+				return {
+					declared: await attempt(`${origin}/hi`),
+					undeclared: await attempt(`https://${host}/collect`)
+				};
+			}, ORIGIN);
+			expect(result.declared).toBe('sent');
+			expect(result.undeclared).toMatch(/blocked a request to https:\/\/example\.com/);
+		});
+	});
+
+	test('Settings credits the origin to the plugin', async ({ page }) => {
+		await gotoHydrated(page, subUrl('/settings'));
+		const privacy = page.getByTestId('settings-privacy');
+		await expect(privacy).toContainText('Minimal only contacts these servers.');
+		await expect(privacy.getByRole('listitem').first()).toHaveText(
+			/^greetings\.example:\s*Fetches greetings\s*\(@xcwds-example\/plugin-hello\)$/
+		);
+	});
+});

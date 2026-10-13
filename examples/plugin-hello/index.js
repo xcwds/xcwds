@@ -16,5 +16,10 @@ export const build = definePlugin(
 		);
 		app.route({ path: '/hello', title: 'Hello', emoji: '👋', parent: '/', width: 'narrow' });
 	},
-	{ name: '@xcwds-example/plugin-hello' }
+	{
+		name: '@xcwds-example/plugin-hello',
+		// Worked out from the options (#103): the app picks the origin, so it's fixed at build time.
+		network: (/** @type {import('./index.js').HelloOptions} */ options) =>
+			options.origin ? { origins: [options.origin], reason: 'Fetches greetings' } : false
+	}
 );

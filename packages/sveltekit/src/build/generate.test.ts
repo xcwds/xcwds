@@ -289,6 +289,33 @@ Object.defineProperty(build, Symbol.for('xcwds.plugin-meta'), {
 		expect(adapted).toBe(false);
 	});
 
+	it('resolves network use from the options the config gives the plugin', async () => {
+		await plugin(
+			'relay',
+			{ '.': './index.js' },
+			`export const build = () => {};
+Object.defineProperty(build, Symbol.for('xcwds.plugin-meta'), {
+	value: { network: (options) => ({ origins: [options.relay], reason: 'Syncs pages' }) }
+});`
+		);
+		await write(
+			'xcwds.config.js',
+			`export default { brand: { name: 'T' }, plugins: [{ name: 'relay', options: { relay: 'https://relay.example' } }] };`
+		);
+		await rm(join(root, 'xcwds.config.ts'));
+		const config = await withXcwds({}, { root });
+		expect(config.kit!.csp!.directives!['connect-src']).toEqual(['self', 'https://relay.example']);
+		expect(recall(root)?.plugins.map((p) => p.network)).toEqual([
+			{ origins: ['https://relay.example'], reason: 'Syncs pages' }
+		]);
+
+		await write(
+			'xcwds.config.js',
+			`export default { brand: { name: 'T' }, plugins: [{ name: 'relay', options: { relay: 'http://relay.example' } }] };`
+		);
+		await expect(generate({ root })).rejects.toThrow('Plugin "relay" has invalid `network`');
+	});
+
 	it('fails on invalid network metadata, naming the plugin', async () => {
 		await plugin(
 			'leaky',

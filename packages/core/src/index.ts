@@ -29,7 +29,14 @@ export {
 } from './hooks.js';
 export { createLogger, type LogLevel, type Logger } from './log.js';
 export { notJson } from './json.js';
-export { checkNetwork, isOrigin, savedDataInQuery, type NetworkUse } from './privacy.js';
+export {
+	checkNetwork,
+	isOrigin,
+	resolveNetwork,
+	savedDataInQuery,
+	type NetworkDeclaration,
+	type NetworkUse
+} from './privacy.js';
 export { satisfies } from './semver.js';
 export {
 	createStorage,

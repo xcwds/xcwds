@@ -60,7 +60,11 @@ export default defineConfig({
 				}
 			]
 		}),
-		hello({ greeting: 'hi' }),
+		// The base-path build (HELLO_ORIGIN in `build:base`) declares an origin from the options (#103).
+		hello({
+			greeting: 'hi',
+			...(process.env.HELLO_ORIGIN ? { origin: process.env.HELLO_ORIGIN } : {})
+		}),
 		// What others share arrives at /inbox; it stays private, so it has no Share button.
 		share({ target: '/inbox', exclude: ['/inbox', '/settings'] }),
 		settings({

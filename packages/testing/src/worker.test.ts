@@ -178,6 +178,20 @@ describe('buildTestWorker globals and errors', () => {
 		await worker.close();
 	});
 
+	it('allows origins a plugin works out from its options (#103)', async () => {
+		const relay = definePlugin<{ relay?: string }>(() => {}, {
+			name: 'relay',
+			network: ({ relay }) => (relay ? { origins: [relay], reason: 'Syncs' } : false)
+		});
+		const worker = await buildTestWorker(
+			{ plugins: [[relay, { relay: 'https://relay.example' }]] },
+			{ network: (request) => new Response(new URL(request.url).origin) }
+		);
+		expect(await (await fetch('https://relay.example/x')).text()).toBe('https://relay.example');
+		await expect(fetch('https://other.example/x')).rejects.toThrow(/other\.example/);
+		await worker.close();
+	});
+
 	it('fails operations on errors hooks report, unless not strict', async () => {
 		const failing = (app: App) => {
 			app.addHook('onFetch', () => {

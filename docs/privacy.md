@@ -37,6 +37,28 @@ Origins are `https:` or `wss:` origins exactly as `new URL(x).origin` writes the
 trailing slash). `reason` is shown to people on the settings page, so write it for them. A plugin
 with invalid `network` metadata fails to load with `XCWDS_ERR_PLUGIN_META`.
 
+When the origin depends on the plugin's options (a relay the app picks, say), make `network` a
+function of them. The kernel calls it with the options the plugin is registered with (without
+`prefix`) and checks what it returns the same way; a function that throws fails the plugin with
+`XCWDS_ERR_PLUGIN_META` too:
+
+```ts
+// xcwds-plugin-sync/index.ts
+export const build = definePlugin<{ relay?: string }>(() => {}, {
+	name: 'xcwds-plugin-sync',
+	network: ({ relay }) =>
+		relay ? { origins: [relay], reason: 'Syncs your pages through the relay you set up.' } : false
+});
+
+// xcwds.config.ts
+plugins: [sync({ relay: 'https://relay.example.com' })];
+```
+
+The origins must be fixed when the app is built: the page's CSP is a hashed `<meta>` written when
+each page is prerendered, so an origin only known at runtime (a URL someone types into the app)
+can't be allowed. Write the function on the build entry; since it only reads options, the page and
+worker entries can share it.
+
 A declaration covers its own plugin only: if another plugin's sources use the same origin, that
 plugin must declare it too, so the settings page names everyone who contacts it. A plugin
 without a build entry can't declare anything; give it one (`export const build = definePlugin(...)`).

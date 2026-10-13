@@ -203,7 +203,9 @@ include it. The kernel stores paths without the base; the integration adds it at
 ### 10. "Never phone home" is checked at build time and enforced by the CSP
 
 **Decision.** Plugins declare `network: false | { origins, reason }` (default `false`), read
-from their build entry. After SvelteKit builds the site, `withXcwds()`'s adapter wrapper scans
+from their build entry. `network` may instead be a function of the plugin's options, for origins
+the app picks (#103); it is resolved with the options from the config, so origins stay fixed at
+build time, which the prerendered CSP needs. After SvelteKit builds the site, `withXcwds()`'s adapter wrapper scans
 SvelteKit's output (page bundle, service worker, static files, prerendered pages) for URLs on
 other origins where they load or send something, and fails the build on any origin that no
 plugin declares and `privacy.allowOrigins` doesn't list, naming the plugin whose package mentions

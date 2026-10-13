@@ -8,7 +8,7 @@ import {
 	type Hooks
 } from './hooks.js';
 import { createLogger, type LogLevel, type Logger } from './log.js';
-import { checkNetwork, type NetworkUse } from './privacy.js';
+import { resolveNetwork, type NetworkDeclaration } from './privacy.js';
 import { satisfies, validRange } from './semver.js';
 import { createSettings, type SettingsRegistry, type SettingsScope } from './settings.js';
 import {
@@ -22,7 +22,7 @@ import { VERSION } from './version.js';
 // ---------------------------------------------------------------------------------------------
 // Plugins
 
-export type PluginMeta = {
+export type PluginMeta<Options = Record<string, unknown>> = {
 	/** Unique name, usually the package name (`@xcwds/plugin-timers`). */
 	name?: string;
 	/** Semver range of @xcwds/core this plugin supports, checked at boot. */
@@ -39,9 +39,10 @@ export type PluginMeta = {
 	/**
 	 * Network use (#22): `false` (the default) or the `https:`/`wss:` origins it contacts and
 	 * why. Checked when the plugin loads; the build fails on origins plugins don't declare, and the
-	 * page's CSP only allows declared ones.
+	 * page's CSP only allows declared ones. A function works it out from the options the plugin is
+	 * registered with (without `prefix`), for origins the app picks; see `resolveNetwork`.
 	 */
-	network?: NetworkUse;
+	network?: NetworkDeclaration<Options>;
 	/** Storage namespace (`app:<namespace>:<key>`). Defaults to a short form of `name`. */
 	namespace?: string;
 };
@@ -63,7 +64,7 @@ const META = Symbol.for('xcwds.plugin-meta');
 /** Attaches metadata to a plugin function, like `fastify-plugin`. */
 export function definePlugin<Options = Record<string, unknown>>(
 	fn: PluginFunction<Options>,
-	meta: PluginMeta = {}
+	meta: PluginMeta<NoInfer<Options>> = {}
 ): Plugin<Options> {
 	if (typeof fn !== 'function')
 		throw new XcwdsError(codes.PLUGIN_NOT_A_FUNCTION, 'definePlugin() needs a function.', {
@@ -601,7 +602,8 @@ async function loadPlugin(parent: State, { plugin, options }: QueueItem): Promis
 			`Plugin "${name}" needs @xcwds/core ${meta.core}, but this is ${k.version}.`,
 			{ plugin: name }
 		);
-	checkNetwork(meta.network, name);
+	const { prefix, ...pluginOptions } = options as RegisterOptions & Record<string, unknown>;
+	resolveNetwork(meta.network, pluginOptions, name);
 	if (named && isRegistered(parent, meta.name!))
 		throw new XcwdsError(codes.PLUGIN_DUPLICATE, `Plugin "${name}" is already registered here.`, {
 			plugin: name
@@ -636,7 +638,6 @@ async function loadPlugin(parent: State, { plugin, options }: QueueItem): Promis
 	}
 	if (named) parent.scope.registered.add(meta.name!);
 
-	const { prefix, ...pluginOptions } = options as RegisterOptions & Record<string, unknown>;
 	const encapsulate = meta.encapsulate !== false;
 	const s: State = {
 		kernel: k,
