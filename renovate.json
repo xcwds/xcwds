@@ -1,6 +1,6 @@
 {
 	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
-	"extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+	"extends": ["config:recommended", "helpers:pinGitHubActionDigests", "group:allNonMajor"],
 	"packageRules": [
 		{
 			"description": "CI's node-22 job tests the oldest Node that engines allows; change it with engines, not on its own.",
