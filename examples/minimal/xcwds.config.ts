@@ -75,7 +75,8 @@ export default defineConfig({
 		changelog({ entries: notes }),
 		theme(),
 		install(),
-		// Covers private pages (the Journal) in the app switcher; no spellcheck in their fields.
+		// A passcode lock for private pages (the Journal), with its unlock screen at /unlock; a cover
+		// in the app switcher and no spellcheck in their fields.
 		lock()
 	]
 });

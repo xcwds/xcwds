@@ -145,6 +145,33 @@ shares it, and `@xcwds/plugin-tools` keeps it out of Recently used and home-scre
   a server, and autocomplete keeps it in the browser's form history, so text fields in a private
   page's `<main>` get `spellcheck="false"`, `autocomplete="off"` and `autocapitalize="off"`.
 
+## Locking private pages
+
+With `@xcwds/plugin-lock`, people can lock private pages, or the whole app, with a passcode in
+Settings → Privacy: 6 or more digits, or a passphrase of 8 or more characters. Opening a locked
+page (by link, from a pin, with back and forward, or after a reload) shows the unlock screen
+instead, then the page that was asked for. Where they were going is kept in memory, never in the
+URL. Every page load starts locked, and the app locks itself after it has been hidden for a
+while (right away, or after 1, 5 or 15 minutes). While a passcode is set, each page stays hidden
+from its first paint until the app has booted and knows the page isn't locked. While the app is
+locked, Settings offers no backup, import or clear.
+
+What it does and doesn't protect against:
+
+- **It keeps people out of the pages.** Someone who picks up an unlocked phone sees the unlock
+  screen, not the pages. After 5 wrong tries each next try waits longer (30 seconds, then 1, 5
+  and 15 minutes, then an hour), and the count survives a reload.
+- **It doesn't encrypt what's saved.** Someone with the device's storage (developer tools, a
+  copy of the browser profile) can read it. They can also try passcodes against the saved
+  verifier offline, as fast as their computer allows; that's why only a PBKDF2-SHA-256 verifier
+  with 600,000 iterations is saved, never the passcode, and why short PINs aren't allowed.
+  Encrypting saved data is planned ([#79](https://github.com/xcwds/xcwds/issues/79)).
+- **There's no recovery.** "Forgot passcode" turns the lock off and clears every storage group
+  with a `sensitive` entry, after two confirmations that name them. Setting up offers a backup
+  first; it isn't encrypted. The unlock screen offers no backup, since one made while locked
+  would hand over what the lock keeps out.
+- **The wait follows the device's clock**, so moving the clock forward shortens it.
+
 ## Plugins are trusted code
 
 A plugin runs with full access to the page, its storage and the network the CSP allows. Storage

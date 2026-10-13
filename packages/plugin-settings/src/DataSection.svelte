@@ -2,7 +2,8 @@
 	/**
 	 * Your data: download, share or import a backup of everything the app saved, and clear it per
 	 * storage group (named and ordered by the `groups` option) or all at once (ported from
-	 * xcwds.github.io's Settings).
+	 * xcwds.github.io's Settings). While a passcode lock (`app.lock`, from `@xcwds/plugin-lock`)
+	 * is locked, none of it is offered: a backup would hand over what the lock keeps out.
 	 */
 	import type { Group, ParsedBackup } from '@xcwds/core';
 	import { brand, useApp } from '@xcwds/sveltekit';
@@ -24,6 +25,15 @@
 	let pending = $state<Extract<ParsedBackup, { ok: true }> | null>(null);
 	let importError = $state('');
 	let fileInput: HTMLInputElement | undefined = $state();
+	/** What this page uses of `app.lock` (from `@xcwds/plugin-lock`, if present). */
+	type LockLike = { subscribe(listener: (state: { locked: boolean }) => void): () => void };
+	let locked = $state(false);
+	onMount(() =>
+		(app as { lock?: LockLike }).lock?.subscribe((state) => {
+			locked = state.locked;
+			if (locked) pending = null;
+		})
+	);
 
 	const hasData = (group: Group) => {
 		void version;
@@ -125,106 +135,113 @@
 <p class={muted}>
 	Everything is saved only on this device. Back it up to move it to another phone or keep a copy.
 </p>
-{#if !writable}
-	<p class="text-sm text-amber-800 dark:text-amber-300" data-testid="storage-warning">
-		This browser isn't letting {brand.name} save anything right now (storage is full, or site data is
-		blocked). Changes last only until you close the app. If storage is full, download a backup, then clear
-		data you don't need.
+{#if locked}
+	<p class="text-sm" data-testid="data-locked">
+		Locked. Unlock with your passcode to back up, import or clear your data.
 	</p>
-{/if}
-
-<div class="grid gap-2 {canShareFiles ? 'grid-cols-2' : 'grid-cols-1'}">
-	<button type="button" class={primary} onclick={download}>Download backup</button>
-	{#if canShareFiles}
-		<button type="button" class={primary} onclick={share}>Share backup</button>
-	{/if}
-</div>
-
-<input
-	bind:this={fileInput}
-	type="file"
-	accept="application/json,.json"
-	class="hidden"
-	aria-label="Backup file"
-	onchange={chooseFile}
-/>
-<button type="button" class={button} onclick={() => fileInput?.click()}>Import backup…</button>
-
-{#if importError}
-	<p class="text-sm text-red-700 dark:text-red-400" role="alert">{importError}</p>
-{/if}
-
-{#if pending}
-	<div
-		class="flex flex-col gap-2 rounded-xl bg-(--xcwds-shell-card) p-3"
-		data-testid="import-preview"
-	>
-		<p class="font-medium">
-			Backup{pending.backup.exportedAt
-				? ` from ${new Date(pending.backup.exportedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`
-				: ''}
+{:else}
+	{#if !writable}
+		<p class="text-sm text-amber-800 dark:text-amber-300" data-testid="storage-warning">
+			This browser isn't letting {brand.name} save anything right now (storage is full, or site data is
+			blocked). Changes last only until you close the app. If storage is full, download a backup, then
+			clear data you don't need.
 		</p>
-		{#if pending.found.length}
-			<ul class="list-disc pl-5 text-sm">
-				{#each pending.found as e (e.key)}
-					<li>{e.label}</li>
-				{/each}
-			</ul>
-		{:else}
-			<p class="text-sm">It has no data this app can use.</p>
+	{/if}
+
+	<div class="grid gap-2 {canShareFiles ? 'grid-cols-2' : 'grid-cols-1'}">
+		<button type="button" class={primary} onclick={download}>Download backup</button>
+		{#if canShareFiles}
+			<button type="button" class={primary} onclick={share}>Share backup</button>
 		{/if}
-		{#if pending.skipped.length}
-			<p class="text-sm text-amber-800 dark:text-amber-300">
-				{pending.skipped.length} unrecognized or invalid {pending.skipped.length === 1
-					? 'item'
-					: 'items'} will be skipped.
+	</div>
+
+	<input
+		bind:this={fileInput}
+		type="file"
+		accept="application/json,.json"
+		class="hidden"
+		aria-label="Backup file"
+		onchange={chooseFile}
+	/>
+	<button type="button" class={button} onclick={() => fileInput?.click()}>Import backup…</button>
+
+	{#if importError}
+		<p class="text-sm text-red-700 dark:text-red-400" role="alert">{importError}</p>
+	{/if}
+
+	{#if pending}
+		<div
+			class="flex flex-col gap-2 rounded-xl bg-(--xcwds-shell-card) p-3"
+			data-testid="import-preview"
+		>
+			<p class="font-medium">
+				Backup{pending.backup.exportedAt
+					? ` from ${new Date(pending.backup.exportedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`
+					: ''}
 			</p>
-		{/if}
-		<div class="grid grid-cols-2 gap-2 text-sm">
-			<button
-				type="button"
-				class={primary}
-				disabled={!pending.found.length}
-				onclick={() => apply('merge')}>Merge</button
-			>
-			<button
-				type="button"
-				class={button}
-				disabled={!pending.found.length}
-				onclick={() => apply('replace')}>Replace everything</button
+			{#if pending.found.length}
+				<ul class="list-disc pl-5 text-sm">
+					{#each pending.found as e (e.key)}
+						<li>{e.label}</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="text-sm">It has no data this app can use.</p>
+			{/if}
+			{#if pending.skipped.length}
+				<p class="text-sm text-amber-800 dark:text-amber-300">
+					{pending.skipped.length} unrecognized or invalid {pending.skipped.length === 1
+						? 'item'
+						: 'items'} will be skipped.
+				</p>
+			{/if}
+			<div class="grid grid-cols-2 gap-2 text-sm">
+				<button
+					type="button"
+					class={primary}
+					disabled={!pending.found.length}
+					onclick={() => apply('merge')}>Merge</button
+				>
+				<button
+					type="button"
+					class={button}
+					disabled={!pending.found.length}
+					onclick={() => apply('replace')}>Replace everything</button
+				>
+			</div>
+			<p class="text-xs text-(--xcwds-shell-muted)">
+				Merge keeps data that isn't in the backup. Replace clears everything first.
+			</p>
+			<button type="button" class="{button} text-sm" onclick={() => (pending = null)}>Cancel</button
 			>
 		</div>
-		<p class="text-xs text-(--xcwds-shell-muted)">
-			Merge keeps data that isn't in the backup. Replace clears everything first.
-		</p>
-		<button type="button" class="{button} text-sm" onclick={() => (pending = null)}>Cancel</button>
-	</div>
-{/if}
+	{/if}
 
-<h3 class="mt-2 font-semibold">Clear data</h3>
-<ul class="flex flex-col gap-2">
-	{#each groups as group (group.id)}
-		{@const note = backupNote(group.entries)}
-		<li class="flex items-center justify-between gap-3">
-			<span class="flex flex-col">
-				{group.label}
-				{#if note}<span class={muted} data-testid="backup-note">{note}</span>{/if}
-			</span>
-			<button
-				type="button"
-				class="{button} text-sm"
-				disabled={!hasData(group)}
-				aria-label="Clear {group.label}"
-				onclick={() => clearGroup(group)}>Clear</button
-			>
-		</li>
-	{/each}
-</ul>
-<button
-	type="button"
-	class="min-h-11 rounded-xl bg-red-600 px-3 py-2 font-semibold text-white disabled:opacity-40"
-	disabled={!anyData}
-	onclick={clearAll}
->
-	Clear all data
-</button>
+	<h3 class="mt-2 font-semibold">Clear data</h3>
+	<ul class="flex flex-col gap-2">
+		{#each groups as group (group.id)}
+			{@const note = backupNote(group.entries)}
+			<li class="flex items-center justify-between gap-3">
+				<span class="flex flex-col">
+					{group.label}
+					{#if note}<span class={muted} data-testid="backup-note">{note}</span>{/if}
+				</span>
+				<button
+					type="button"
+					class="{button} text-sm"
+					disabled={!hasData(group)}
+					aria-label="Clear {group.label}"
+					onclick={() => clearGroup(group)}>Clear</button
+				>
+			</li>
+		{/each}
+	</ul>
+	<button
+		type="button"
+		class="min-h-11 rounded-xl bg-red-600 px-3 py-2 font-semibold text-white disabled:opacity-40"
+		disabled={!anyData}
+		onclick={clearAll}
+	>
+		Clear all data
+	</button>
+{/if}

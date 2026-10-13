@@ -9,30 +9,51 @@
  * - **Leak hygiene.** Text fields in `<main>` get `spellcheck="false"`, `autocomplete="off"` and
  *   `autocapitalize="off"`, including fields added later; a field that sets one itself keeps it.
  *
- * And `app.lock`, the passcode lock's state (#76, see `lock.ts`): set up, unlock, lock, change,
- * turn off and reset. Unlocking lives in memory only, so every start is locked.
+ * And the passcode lock (#76): `app.lock` holds its state (see `lock.ts`). While it's locked, an
+ * `onNavigate` guard sends locked pages (the private ones, or every page for the whole app) to
+ * the unlock screen and remembers, in memory only, where they were going; locking while on one
+ * hides it and goes there too. The app locks itself after being hidden for `autoLockMinutes`.
+ * Unlocking lives in memory only, so every start is locked.
  *
  * Imported at prerender too, so it only touches browser globals once the app boots.
  */
-import { definePlugin } from '@xcwds/core';
+import { definePlugin, type Route } from '@xcwds/core';
+import type { Component } from 'svelte';
 import { createLock, lockEntries, type AppLock } from './lock.js';
 import {
+	CONCEALED,
 	CORE,
 	DEFAULT_LOCK,
 	HYGIENE,
 	NAME,
 	isPrivate,
 	isTextField,
+	needsUnlock,
 	parseLock,
 	resolveOptions,
 	type LockOptions,
 	type LockSetting
 } from './options.js';
 
+export type { AppLock, LockState, TryResult } from './lock.js';
+
+/** `app.lockScreen`: what the unlock screen needs besides `app.lock`. */
+export type LockScreen = {
+	/** The unlock screen's path (an app path, without the base path). */
+	readonly path: string;
+	/**
+	 * Where to go after unlocking: the page that was asked for (with its query and hash), or `/`.
+	 * Forgets it, so it's only used once.
+	 */
+	next(): string;
+};
+
 declare module '@xcwds/core' {
 	interface App {
 		/** From `@xcwds/plugin-lock`. */
 		readonly lock?: AppLock;
+		/** From `@xcwds/plugin-lock`. */
+		readonly lockScreen?: LockScreen;
 	}
 	interface Settings {
 		/** From `@xcwds/plugin-lock`. */
@@ -43,11 +64,17 @@ declare module '@xcwds/core' {
 /** What this plugin uses of `app.routes` (from @xcwds/sveltekit). */
 type RoutesLike = { get(path: string): { private?: boolean } | undefined };
 
+/** What this plugin uses of `app.settingsPage` (from `@xcwds/plugin-settings`, if present). */
+type SettingsPageLike = { control(name: string, component: Component): () => void };
+
 const FIELDS = 'input, textarea';
+
+/** A path as the guard compares it: no trailing slash (but `/` stays `/`). */
+const trim = (path: string) => (path.length > 1 ? path.replace(/\/+$/, '') : path);
 
 export default definePlugin(
 	(app, input: LockOptions) => {
-		resolveOptions(input);
+		const options = resolveOptions(input);
 		app.settings.field('lock', {
 			default: DEFAULT_LOCK,
 			parse: parseLock,
@@ -71,6 +98,61 @@ export default definePlugin(
 		const { lock, stop: stopLock } = createLock(app.storage, lockEntries(app.storage));
 		app.decorate('lock', lock satisfies AppLock);
 
+		/** Where a locked navigation was going, for after unlocking. In memory, never in the URL. */
+		let target: string | null = null;
+		app.decorate('lockScreen', {
+			path: options.unlock,
+			next() {
+				const next = target ?? '/';
+				target = null;
+				return next;
+			}
+		} satisfies LockScreen);
+
+		const setting = (): LockSetting => app.settings.get().lock ?? DEFAULT_LOCK;
+		const routes = () => (app as { routes?: RoutesLike }).routes;
+		const isUnlock = (path: string) => trim(path) === options.unlock;
+		/** Whether a locked app keeps `path` behind the unlock screen. */
+		const locks = (path: string) => needsUnlock(routes(), path, setting().scope, options.unlock);
+		/** A route as the guard remembers it: its path with the query and hash. */
+		const full = (to: Route) => to.path + (to.url ? to.url.search + to.url.hash : '');
+		/** The page showing now (from `afterNavigate`). */
+		let current: Route | null = null;
+		/** When the app was hidden while unlocked, for auto-lock (ms since the epoch). */
+		let hiddenAt: number | null = null;
+
+		app.addHook('onNavigate', (to) => {
+			// Nothing to unlock (any more): on to the page that was asked for.
+			if (isUnlock(to.path)) return lock.state.locked ? undefined : app.lockScreen!.next();
+			if (!lock.state.locked || !locks(to.path)) return undefined;
+			target = full(to);
+			return options.unlock;
+		});
+
+		/** Hides the whole page (the head script does the same before first paint). */
+		function conceal() {
+			const root = document.documentElement;
+			root.setAttribute(CONCEALED, '');
+			root.style.setProperty('visibility', 'hidden', 'important');
+		}
+
+		function reveal() {
+			const root = document.documentElement;
+			if (!root.hasAttribute(CONCEALED)) return;
+			root.removeAttribute(CONCEALED);
+			root.style.removeProperty('visibility');
+		}
+
+		/** Locked while on a locked page: hide it and show the unlock screen in its place. */
+		function lockedHere() {
+			if (!current || !locks(current.path)) return;
+			target = full(current);
+			conceal();
+			void import('./navigate.js')
+				.then(({ go }) => go(options.unlock, true))
+				.catch((error: unknown) => app.reportError(error));
+		}
+
 		let onPrivate = false;
 		let cover: HTMLElement | null = null;
 		/** Whether the cover is up (it waits on private pages, out of sight, until it's needed). */
@@ -79,6 +161,7 @@ export default definePlugin(
 		/** Attributes this plugin set, per field, so leaving the page can take them off again. */
 		let touched = new Map<Element, string[]>();
 		let stops: (() => void)[] = [];
+		let closed = false;
 
 		const coverWanted = () => (app.settings.get().lock ?? DEFAULT_LOCK).cover;
 
@@ -131,11 +214,20 @@ export default definePlugin(
 
 		function onVisibility() {
 			if (document.visibilityState === 'hidden') {
+				if (lock.state.enabled && !lock.state.locked) {
+					if (setting().autoLockMinutes === 0) lock.lock();
+					else hiddenAt = Date.now();
+				}
 				if (!onPrivate || !coverWanted()) return;
 				makeCover();
 				cover!.style.background = background();
 				setShown(true);
-			} else if (cover) {
+			} else {
+				const minutes = setting().autoLockMinutes;
+				// Locked before the cover lifts, so the page is already hidden when it does.
+				if (hiddenAt !== null && Date.now() - hiddenAt >= minutes * 60_000) lock.lock();
+				hiddenAt = null;
+				if (!cover) return;
 				setShown(false);
 				if (!onPrivate) removeCover();
 			}
@@ -183,8 +275,12 @@ export default definePlugin(
 
 		app.addHook('afterNavigate', (to) => {
 			if (typeof document === 'undefined') return;
-			const routes = (app as { routes?: RoutesLike }).routes;
-			const next = isPrivate(routes, to.path);
+			current = to;
+			// A locked page that still showed (the first page, before the guards ran) stays hidden
+			// until the unlock screen replaces it; anything else shows.
+			if (lock.state.locked && locks(to.path)) conceal();
+			else reveal();
+			const next = isPrivate(routes(), to.path);
 			if (next) enter();
 			else if (onPrivate) leave();
 			onPrivate = next;
@@ -195,9 +291,25 @@ export default definePlugin(
 			if (typeof document === 'undefined') return;
 			document.addEventListener('visibilitychange', onVisibility);
 			stops.push(() => document.removeEventListener('visibilitychange', onVisibility));
+			let wasLocked = lock.state.locked;
+			stops.push(
+				lock.subscribe((state) => {
+					if (state.locked && !wasLocked) lockedHere();
+					wasLocked = state.locked;
+				})
+			);
+			// With @xcwds/plugin-settings, Settings → Privacy shows the lock's controls. Loaded
+			// lazily: the component imports @xcwds/sveltekit, which imports this entry.
+			const page = (app as { settingsPage?: SettingsPageLike }).settingsPage;
+			if (page)
+				void import('./LockSettings.svelte').then(({ default: LockSettings }) => {
+					if (!closed) stops.push(page.control('lock', LockSettings));
+				});
 		});
 
 		app.addHook('onClose', () => {
+			closed = true;
+			if (typeof document !== 'undefined') reveal();
 			if (onPrivate) leave();
 			onPrivate = false;
 			removeCover();

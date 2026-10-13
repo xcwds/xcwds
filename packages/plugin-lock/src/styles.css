@@ -1,0 +1,6 @@
+/*
+ * Lets Tailwind see the classes this package's components use. Import it after Tailwind and
+ * `@xcwds/plugin-shell/styles.css` (whose colours it uses):
+ *   @import '@xcwds/plugin-lock/styles.css';
+ */
+@source './';

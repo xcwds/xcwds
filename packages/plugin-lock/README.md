@@ -1,8 +1,8 @@
 # @xcwds/plugin-lock
 
 Privacy for the private pages of an @xcwds app on [`@xcwds/sveltekit`](../sveltekit): pages whose
-route has `private: true` (a private tool from `@xcwds/plugin-tools`, for example). It needs no
-passcode; the passcode lock will build on it.
+route has `private: true` (a private tool from `@xcwds/plugin-tools`, for example). A passcode
+lock keeps people out of them (or out of the whole app), and two protections need no passcode.
 
 ```ts
 // xcwds.config.ts
@@ -11,6 +11,23 @@ import lock from '@xcwds/plugin-lock';
 
 export default defineConfig({ brand, plugins: [lock()] });
 ```
+
+```svelte
+<!-- src/routes/unlock/+page.svelte -->
+<script lang="ts">
+	import UnlockScreen from '@xcwds/plugin-lock/UnlockScreen.svelte';
+</script>
+
+<main class="page-narrow pt-2 pb-6"><UnlockScreen /></main>
+```
+
+```css
+/* After Tailwind and @xcwds/plugin-shell/styles.css */
+@import '@xcwds/plugin-lock/styles.css';
+```
+
+Options: `unlock`, the unlock screen's path (default `/unlock`). The plugin adds it to the
+route registry, titled "Locked" and not private, so it never needs unlocking.
 
 ## What it does
 
@@ -27,13 +44,33 @@ export default defineConfig({ brand, plugins: [lock()] });
   browser's form history. A field that sets one of these itself keeps its own value. The
   attributes go on when the app has booted, so fields in the prerendered page get them a moment
   after it appears.
-- **Settings.** A `lock` settings field (`{ cover: boolean }`, cover on by default) adds "Cover
-  private pages in the app switcher" to Settings → Privacy with `@xcwds/plugin-settings`.
+- **Settings.** The `lock` settings field: `cover` (on by default), `scope` (`'private'` or
+  `'app'`) and `autoLockMinutes` (0, 1, 5 or 15; default 1). With `@xcwds/plugin-settings`,
+  Settings → Privacy shows the cover switch and the passcode lock's controls
+  (`LockSettings.svelte`).
 
-## The passcode lock (in progress)
+## The passcode lock
 
-`app.lock` holds the passcode lock's state (#76). The unlock screen and the Settings controls
-come next; until then nothing sets a passcode unless the app calls `setUp`.
+People set it up in Settings → Privacy, which says that a forgotten passcode can't be recovered
+and offers a backup first (not encrypted). Then:
+
+- **What it locks.** Private pages, or the whole app (every page but the unlock screen). An
+  `onNavigate` guard sends a locked page to the unlock screen and remembers, in memory only,
+  where it was going; after unlocking, that page opens. Locking while on a locked page hides it
+  and shows the unlock screen in its place.
+- **When it locks.** Lock now in Settings; after the app has been hidden for `autoLockMinutes`
+  (0 locks as soon as it's hidden); and on every page load, since unlocking lives in memory.
+  While a passcode is set, a head script hides each page from its first paint
+  (`data-xcwds-locked` and `visibility: hidden` on `<html>`) until the app has booted and knows
+  whether the page is locked. If the app fails to boot, the page stays hidden. A timer on a page
+  that gets locked keeps running (timers count wall-clock time).
+- **While locked**, Settings → Privacy offers only Unlock and Forgot passcode, and
+  `@xcwds/plugin-settings` offers no backup, import or clear.
+- **Forgot passcode**, on the unlock screen and in Settings, resets the lock and clears every
+  storage group marked `sensitive`, after two confirmations that name them. It offers no backup:
+  one made while locked would hand over what the lock keeps out.
+
+The API:
 
 - `state`: `enabled` (a passcode is set), `locked`, `kind` (`'digits'` or `'passphrase'`) and
   `retryAt` (when the next try is allowed). `subscribe(listener)` follows it.
@@ -54,5 +91,8 @@ read it, and can try passcodes against the verifier offline (which is why short 
 allowed). The wait follows the device's clock, so moving the clock forward shortens it, and
 when storage can't save, wrong tries aren't counted.
 
-`isPrivate(app.routes, path)` says whether a path is a private page. The plugin declares
+`app.lockScreen` has the unlock screen's `path` and `next()`, where to go after unlocking.
+`isPrivate(app.routes, path)` says whether a path is a private page, and
+`needsUnlock(app.routes, path, scope, unlockPath)` whether a locked app keeps it behind the
+unlock screen. The plugin declares
 `network: false` and contacts no server.

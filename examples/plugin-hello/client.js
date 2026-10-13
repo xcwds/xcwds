@@ -16,6 +16,13 @@ export default definePlugin(
 			count: app.storage.entry('count', {
 				label: 'Hello count',
 				parse: (v) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : undefined)
+			}),
+			// The example's private Journal: a passcode lock's reset clears it (`sensitive`).
+			journal: app.storage.entry('journal', {
+				label: 'Journal',
+				parse: (v) => (typeof v === 'string' ? v : undefined),
+				group: 'journal',
+				sensitive: true
 			})
 		});
 		// A cache that can be fetched again, so backups leave it out (`backup: false`).

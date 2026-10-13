@@ -1,10 +1,13 @@
 {
 	"name": "@xcwds/plugin-lock",
 	"version": "0.0.0",
-	"description": "Privacy for private pages in @xcwds apps: a cover over them in the app switcher, and no spellcheck or autocomplete in their fields.",
+	"description": "Privacy for private pages in @xcwds apps: a passcode lock with an unlock screen, a cover in the app switcher, and no spellcheck or autocomplete in their fields.",
 	"license": "MIT",
 	"type": "module",
-	"sideEffects": false,
+	"sideEffects": [
+		"**/*.svelte",
+		"**/*.css"
+	],
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/xcwds/xcwds.git",
@@ -20,6 +23,17 @@
 			"types": "./dist/client.d.ts",
 			"default": "./dist/client.js"
 		},
+		"./UnlockScreen.svelte": {
+			"types": "./dist/UnlockScreen.svelte.d.ts",
+			"svelte": "./dist/UnlockScreen.svelte",
+			"default": "./dist/UnlockScreen.svelte"
+		},
+		"./LockSettings.svelte": {
+			"types": "./dist/LockSettings.svelte.d.ts",
+			"svelte": "./dist/LockSettings.svelte",
+			"default": "./dist/LockSettings.svelte"
+		},
+		"./styles.css": "./dist/styles.css",
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -28,7 +42,7 @@
 	],
 	"scripts": {
 		"build": "svelte-package -i src -o dist",
-		"check": "tsc -p tsconfig.json --noEmit",
+		"check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
 		"publint": "publint"
 	},
 	"peerDependencies": {
@@ -54,7 +68,8 @@
 		"xcwds",
 		"xcwds-plugin",
 		"privacy",
-		"private-pages"
+		"private-pages",
+		"passcode"
 	],
 	"engines": {
 		"node": ">=22.18"

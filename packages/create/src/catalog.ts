@@ -109,9 +109,19 @@ export const CATALOG: Record<PluginId, PluginInfo> = {
 		id: 'lock',
 		package: '@xcwds/plugin-lock',
 		recommended: false,
-		summary: 'A cover over private pages in the app switcher, no spellcheck in their fields',
+		summary: 'A passcode lock for private pages, a cover over them in the app switcher',
 		requires: [],
-		call: 'lock()'
+		call: 'lock()',
+		css: '@xcwds/plugin-lock/styles.css',
+		files: () => [
+			{
+				path: 'src/routes/unlock/+page.svelte',
+				content: page(
+					'<main class="page-narrow pt-2 pb-6">\n\t<UnlockScreen />\n</main>',
+					"\timport UnlockScreen from '@xcwds/plugin-lock/UnlockScreen.svelte';"
+				)
+			}
+		]
 	},
 	settings: {
 		id: 'settings',
