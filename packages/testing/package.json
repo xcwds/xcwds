@@ -37,7 +37,7 @@
 		"@playwright/test": "1.64.0",
 		"@xcwds-example/plugin-hello": "workspace:*",
 		"@xcwds/core": "workspace:^",
-		"typescript": "^5.9.3",
+		"typescript": "^7.0.0",
 		"vitest": "^4.0.15"
 	},
 	"peerDependencies": {

@@ -32,7 +32,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "^24",
-		"typescript": "^5.9.3",
+		"typescript": "^7.0.0",
 		"vitest": "^4.0.15"
 	},
 	"keywords": [
