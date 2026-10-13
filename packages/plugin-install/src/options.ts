@@ -6,7 +6,7 @@ export const NAME = '@xcwds/plugin-install';
  * The @xcwds/core versions this plugin works with, checked at boot: the same range as its peer
  * dependency (`scripts/sync-core-version.js` moves it along with core's minor versions).
  */
-export const CORE = '^0.1.0';
+export const CORE = '^0.2.0';
 
 /** The plugin has no options yet; this keeps the config honest about that. */
 export type InstallOptions = Record<string, never>;

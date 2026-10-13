@@ -1,5 +1,25 @@
 # @xcwds/core
 
+## 0.2.0
+
+### Minor Changes
+
+- 8163df3: Entries can stay out of backups: `app.storage.entry(name, { backup: false })` is left out of exports, and imports neither write nor clear it (secrets such as access tokens, caches that can be downloaded again). Clearing its group still removes it, and the settings page's Your data marks it "Not in backups".
+- 9894dfd: Storage entries can be `sensitive: true`, which marks their group `sensitive` in `storage.groups()`. `@xcwds/plugin-lock` adds `app.lock`, the passcode lock's state: set up, unlock, lock, change, turn off, and a reset that clears the sensitive groups. Only a PBKDF2 verifier is saved, with a growing wait after 5 wrong tries; the unlock screen and Settings controls follow.
+
+### Patch Changes
+
+- da6e2df: Backups import again after a plugin with migrations is removed: its data is kept as unclaimed together with its schema version, and is migrated from that version if the plugin comes back (#51). Deleting the last of a removed plugin's data also deletes its schema version.
+- 61623c5: Kernel and integration edge cases (#58):
+
+  - `satisfies()` compares prerelease tags identifier by identifier (`beta.2` < `beta.10`) and supports hyphen ranges (`1.2.3 - 2.0.0`); a plugin whose `core` range can't be read fails with a clear "unsupported range" error instead of a version mismatch.
+  - `hasDecorator()` no longer counts `Object.prototype` names (`toString`, `isPrototypeOf`…) as decorators.
+  - Other tabs' storage listeners no longer see the `probe` key `storage.writable()` writes.
+  - `app.load()` documents that a failed load keeps rejecting, so the app must be recreated.
+  - An `onNavigate` guard answer that isn't an app path (`//host/…`, `https://…`) stops the navigation and goes to `onError` instead of leaving the app.
+
+- 6b25d5a: Saved data is no longer hidden or lost when storage is full. A migration that can't be saved keeps its migrated data in memory, so reads and backups still see it, and saves it with the version on the next write that fits. A "replace" import that runs out of room puts the previous data back, and the settings page says so.
+
 ## 0.1.0
 
 ### Minor Changes

@@ -1,5 +1,25 @@
 # @xcwds/testing
 
+## 1.0.0
+
+### Patch Changes
+
+- 378f9d5: `@xcwds/core` is now a peer dependency, so an app always has one kernel, even after core moves
+  to a new minor before a plugin is re-released. Apps already depend on `@xcwds/core` directly (the
+  starter adds it). Every first-party plugin also declares `core` in its metadata, so an app on an
+  incompatible core gets `XCWDS_ERR_PLUGIN_VERSION_MISMATCH` at boot instead of a broken page.
+- 54329f6: The service worker can no longer contact origins the app doesn't declare. The page's CSP doesn't reach the worker, so the generated worker now installs a guard (`@xcwds/sveltekit/guard`) before any plugin's worker code runs: `fetch`, `WebSocket`, `EventSource`, `WebTransport`, `Cache#add`/`addAll` and background fetches refuse any origin other than the app's own, the ones plugins declare and `privacy.allowOrigins`, with an error naming it (#55). `buildTestWorker` applies the same rule, with an `allowOrigins` option.
+- Updated dependencies [eb3be18]
+- Updated dependencies [da6e2df]
+- Updated dependencies [378f9d5]
+- Updated dependencies [8163df3]
+- Updated dependencies [61623c5]
+- Updated dependencies [9894dfd]
+- Updated dependencies [6b25d5a]
+- Updated dependencies [54329f6]
+  - @xcwds/sveltekit@1.0.0
+  - @xcwds/core@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes

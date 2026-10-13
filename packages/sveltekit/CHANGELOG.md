@@ -1,5 +1,30 @@
 # @xcwds/sveltekit
 
+## 1.0.0
+
+### Patch Changes
+
+- eb3be18: Write the generated `.xcwds/` files atomically, so builds that run at once (Vitest loads the config once per project) never import an empty `build.js` (#110).
+- 378f9d5: `@xcwds/core` is now a peer dependency, so an app always has one kernel, even after core moves
+  to a new minor before a plugin is re-released. Apps already depend on `@xcwds/core` directly (the
+  starter adds it). Every first-party plugin also declares `core` in its metadata, so an app on an
+  incompatible core gets `XCWDS_ERR_PLUGIN_VERSION_MISMATCH` at boot instead of a broken page.
+- 61623c5: Kernel and integration edge cases (#58):
+
+  - `satisfies()` compares prerelease tags identifier by identifier (`beta.2` < `beta.10`) and supports hyphen ranges (`1.2.3 - 2.0.0`); a plugin whose `core` range can't be read fails with a clear "unsupported range" error instead of a version mismatch.
+  - `hasDecorator()` no longer counts `Object.prototype` names (`toString`, `isPrototypeOf`…) as decorators.
+  - Other tabs' storage listeners no longer see the `probe` key `storage.writable()` writes.
+  - `app.load()` documents that a failed load keeps rejecting, so the app must be recreated.
+  - An `onNavigate` guard answer that isn't an app path (`//host/…`, `https://…`) stops the navigation and goes to `onError` instead of leaving the app.
+
+- 54329f6: The service worker can no longer contact origins the app doesn't declare. The page's CSP doesn't reach the worker, so the generated worker now installs a guard (`@xcwds/sveltekit/guard`) before any plugin's worker code runs: `fetch`, `WebSocket`, `EventSource`, `WebTransport`, `Cache#add`/`addAll` and background fetches refuse any origin other than the app's own, the ones plugins declare and `privacy.allowOrigins`, with an error naming it (#55). `buildTestWorker` applies the same rule, with an `allowOrigins` option.
+- Updated dependencies [da6e2df]
+- Updated dependencies [8163df3]
+- Updated dependencies [61623c5]
+- Updated dependencies [9894dfd]
+- Updated dependencies [6b25d5a]
+  - @xcwds/core@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes

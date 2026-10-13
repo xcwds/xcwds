@@ -6,7 +6,7 @@ export const NAME = '@xcwds/plugin-settings';
  * The @xcwds/core versions this plugin works with, checked at boot: the same range as its peer
  * dependency (`scripts/sync-core-version.js` moves it along with core's minor versions).
  */
-export const CORE = '^0.1.0';
+export const CORE = '^0.2.0';
 
 export type SettingsOptions = {
 	/** The settings page. Defaults to `/settings`. */
