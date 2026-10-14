@@ -24,6 +24,13 @@ export default definePlugin(
 				group: 'journal',
 				sensitive: true
 			}),
+			// Notes saved one key per id (`app:hello:note:<id>`, #157): a prefixed entry claims them
+			// all, so backups, Your data and migrations cover every note.
+			notes: app.storage.entry('note', {
+				label: 'Hello notes',
+				parse: (v) => (typeof v === 'string' && v.length <= 1000 ? v : undefined),
+				prefix: true
+			}),
 			// Files kept in IndexedDB (#144), in the Hello group: "Clear data" clears them with the count.
 			files: app.blobs.register({
 				key: 'files',

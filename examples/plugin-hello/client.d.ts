@@ -1,4 +1,4 @@
-import type { Collection, Entry, Plugin } from '@xcwds/core';
+import type { Collection, Entry, Plugin, PrefixEntry } from '@xcwds/core';
 import type { HelloOptions } from './index.js';
 
 declare module '@xcwds/core' {
@@ -6,6 +6,7 @@ declare module '@xcwds/core' {
 		hello: {
 			count: Entry<number>;
 			journal: Entry<string>;
+			notes: PrefixEntry<string>;
 			files: Collection<{ name: string }>;
 		};
 	}

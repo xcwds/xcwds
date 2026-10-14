@@ -8,7 +8,7 @@
  *
  * Imported at prerender too, so nothing touches browser globals until a function runs.
  */
-import { XcwdsError, codes, type StorageAdapter, type StorageScope } from '@xcwds/core';
+import { XcwdsError, codes, type Entry, type StorageAdapter, type StorageScope } from '@xcwds/core';
 import { open, parseSealed, seal } from './seal.js';
 
 export type VaultState = {
@@ -122,6 +122,12 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 	const enabled = () => savedSalt() !== undefined;
 	const locked = () => enabled() && key === null;
 
+	/** Whether `entry` claims `storageKey`: its own key, or one id under a prefixed entry. */
+	const owns = (entry: Entry<unknown>, storageKey: string) =>
+		entry.prefix
+			? storageKey.length > entry.key.length && storageKey.startsWith(entry.key)
+			: entry.key === storageKey;
+
 	/** The sensitive group a storage key belongs to, if any. */
 	function sensitiveGroup(storageKey: string): string | undefined {
 		if (
@@ -130,21 +136,31 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 			storageKey === checkKey
 		)
 			return undefined;
-		const entry = storage.entries().find((e) => e.key === storageKey);
+		// An exact entry, or a prefixed one (#157) that claims the key.
+		const entry = storage.entries().find((e) => owns(e, storageKey));
 		if (!entry) return undefined;
 		return storage.groups().some((g) => g.id === entry.group && g.sensitive)
 			? entry.group
 			: undefined;
 	}
 
-	const sensitiveKeys = () => {
+	/** The saved keys of sensitive groups: exact entries, and every id under a prefixed one. */
+	const sensitiveKeys = (): { key: string; group: string }[] => {
 		const groups = new Set(
 			storage
 				.groups()
 				.filter((g) => g.sensitive)
 				.map((g) => g.id)
 		);
-		return storage.entries().filter((e) => groups.has(e.group));
+		const sensitive = storage.entries().filter((e) => groups.has(e.group));
+		const below = sensitive.some((e) => e.prefix)
+			? inner.keys().filter((k) => !k.startsWith(sealedPrefix))
+			: [];
+		return sensitive.flatMap((e) =>
+			e.prefix
+				? below.filter((k) => owns(e, k)).map((key) => ({ key, group: e.group }))
+				: [{ key: e.key, group: e.group }]
+		);
 	};
 
 	const lockedError = () =>

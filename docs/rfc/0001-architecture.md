@@ -168,6 +168,9 @@ Fastify scopes decorators and hooks by a context tree. Here a plugin's child con
 route `prefix` (route-bound hooks such as `onNavigate` only fire under it) and a storage
 namespace (`app:<plugin>:<key>`). One namespace belongs to one plugin: a second plugin that derives
 or asks for the same one fails to load, since sharing would mix their data and migration versions.
+Within its namespace a plugin can also own a key prefix (`app:<plugin>:<name>:<id>`, #157) for
+keys made at runtime: one prefixed entry claims them all, with one validator, so backups, groups
+and migrations still know every key.
 
 This is API hygiene, not isolation. Every script on the origin can read all of `localStorage`, so
 **plugins are trusted code**. The docs say so, and #22 lists each plugin's declared network use.

@@ -269,3 +269,28 @@ describe('the vault', () => {
 		expect(await s.vault.flush()).toBe(true);
 	});
 });
+
+describe('prefixed entries (#157)', () => {
+	it('seals every id of a sensitive prefixed entry, and lists them only while unlocked', async () => {
+		const adapter = memoryStorage();
+		const storage = createStorage({ adapter, onError: vi.fn() });
+		const days = storage
+			.scope('diary')
+			.entry('day', { label: 'Days', parse: text, prefix: true, sensitive: true });
+		const vault = createVault(storage.scope('vault'), { onError: vi.fn() });
+		storage.write(days.at('a'), SECRET);
+		const salt = newSalt();
+		expect(await vault.enable(await key(salt), salt)).toBe(true);
+		storage.write(days.at('b'), 'cycle day 13');
+		expect(await vault.flush()).toBe(true);
+		expect(dump(adapter)).not.toContain('cycle');
+		expect(storage.keys(days)).toEqual(['a', 'b']);
+		vault.lock();
+		expect(storage.keys(days)).toEqual([]);
+		expect(storage.read(days.at('a'))).toBeUndefined();
+		expect(storage.write(days.at('c'), 'nope')).toBe(false);
+		expect(await vault.unlock(await key(salt))).toBe(true);
+		expect(storage.read(days.at('b'))).toBe('cycle day 13');
+		expect(storage.unclaimed()).toEqual([]);
+	});
+});
