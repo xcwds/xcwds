@@ -74,7 +74,9 @@ export function indexedDbBlobs(name: string): BlobBackend {
 	let opening: Promise<IDBDatabase> | null = null;
 
 	function open(): Promise<IDBDatabase> {
-		opening ??= new Promise<IDBDatabase>((resolve, reject) => {
+		if (opening) return opening;
+		const attempt: Promise<IDBDatabase> = new Promise<IDBDatabase>((resolve, reject) => {
+			let gaveUp = false;
 			const factory = globalThis.indexedDB;
 			if (!factory) throw new Error('IndexedDB is not available');
 			const r = factory.open(name, 1);
@@ -84,22 +86,30 @@ export function indexedDbBlobs(name: string): BlobBackend {
 			};
 			r.onsuccess = () => {
 				const db = r.result;
+				// Opened after a block was reported: nothing will use it.
+				if (gaveUp) return db.close();
 				// Another tab upgrading (or deleting) the database waits until this one lets go.
 				db.onversionchange = () => {
 					db.close();
-					opening = null;
+					if (opening === attempt) opening = null;
 				};
-				db.onclose = () => (opening = null);
+				db.onclose = () => {
+					if (opening === attempt) opening = null;
+				};
 				resolve(db);
 			};
 			r.onerror = () => reject(r.error);
-			r.onblocked = () => reject(new Error('IndexedDB is blocked by another tab'));
+			r.onblocked = () => {
+				gaveUp = true;
+				reject(new Error('IndexedDB is blocked by another tab'));
+			};
 		}).catch((error: unknown) => {
 			// Try again next time: a blocked open may succeed later.
-			opening = null;
+			if (opening === attempt) opening = null;
 			throw error;
 		});
-		return opening;
+		opening = attempt;
+		return attempt;
 	}
 
 	async function write(run: (store: IDBObjectStore) => void): Promise<void> {
@@ -258,6 +268,21 @@ const NAME = /^[^\s]+$/;
 /** `meta` is for small things like a caption or a date, not for data of its own. */
 const MAX_META = 64 * 1024;
 
+/**
+ * A random v4 UUID. `crypto.randomUUID` needs a secure context, and IndexedDB doesn't (a phone
+ * trying the dev server over the network), so it falls back to `getRandomValues`.
+ */
+function newId(): string | undefined {
+	const c = globalThis.crypto;
+	if (typeof c?.randomUUID === 'function') return c.randomUUID();
+	if (typeof c?.getRandomValues !== 'function') return undefined;
+	const b = c.getRandomValues(new Uint8Array(16));
+	b[6] = (b[6]! & 0x0f) | 0x40;
+	b[8] = (b[8]! & 0x3f) | 0x80;
+	const hex = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 /** `meta` as saved: JSON, small, and valid for the collection. `false` when it isn't. */
 function checkMeta(collection: Collection, meta: unknown): unknown {
 	if (meta === undefined) return undefined;
@@ -298,6 +323,8 @@ export function createBlobs(options: BlobOptions = {}): BlobRegistry {
 		if (channel !== undefined) return channel;
 		if (typeof globalThis.BroadcastChannel !== 'function') return (channel = null);
 		channel = new BroadcastChannel(`xcwds-blobs:${prefix}`);
+		// Node's channel keeps the process alive (prerender, tests); a page's never needs to.
+		(channel as { unref?: () => void }).unref?.();
 		channel.onmessage = (event: MessageEvent) => {
 			const key = (event.data as { key?: unknown } | null)?.key;
 			if (key === null || (typeof key === 'string' && key.startsWith(prefix))) emit(key);
@@ -379,7 +406,7 @@ export function createBlobs(options: BlobOptions = {}): BlobRegistry {
 				return false;
 			}
 			if (saved === false) return false;
-			const id = globalThis.crypto?.randomUUID?.();
+			const id = newId();
 			if (!id) return false;
 			const row: BlobRow = {
 				collection: c.key,
@@ -440,6 +467,7 @@ export function createBlobs(options: BlobOptions = {}): BlobRegistry {
 		async clear(list) {
 			const targets = list === undefined ? [...collections.values()] : [list].flat();
 			for (const c of targets) known(c);
+			if (!targets.length) return true;
 			let ok = true;
 			for (const c of targets) {
 				try {

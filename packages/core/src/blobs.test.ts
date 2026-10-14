@@ -1,4 +1,4 @@
-import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';
+import { IDBDatabase, IDBFactory, IDBKeyRange } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, definePlugin } from './app.js';
 import {
@@ -154,7 +154,28 @@ describe('put, get, list, delete', () => {
 	});
 });
 
+describe('ids', () => {
+	it('are UUIDs outside secure contexts too', async () => {
+		const { getRandomValues } = globalThis.crypto;
+		vi.stubGlobal('crypto', { getRandomValues: getRandomValues.bind(globalThis.crypto) });
+		const { blobs, photos } = setup();
+		const id = await blobs.put(photos, new Blob(['x']));
+		expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+		expect(await text((await blobs.get(photos, id as string))?.blob)).toBe('x');
+	});
+});
+
 describe('clear', () => {
+	it('does nothing, quietly, for no collections', async () => {
+		const { blobs, photos } = setup();
+		await blobs.put(photos, new Blob(['x']));
+		const heard = vi.fn();
+		blobs.onChange(heard);
+		expect(await blobs.clear([])).toBe(true);
+		expect(heard).not.toHaveBeenCalled();
+		expect(await blobs.list(photos)).toHaveLength(1);
+	});
+
 	it('clears the given collections, or every one', async () => {
 		const { blobs, camera, photos } = setup();
 		const notes = blobs.scope('notes').register({ key: 'images', label: 'Images' });
@@ -187,6 +208,25 @@ describe('when IndexedDB is missing or blocked', () => {
 		expect(await blobs.delete(photos, 'id')).toBe(false);
 		expect(await blobs.clear()).toBe(false);
 		expect(await blobs.usage()).toEqual([{ collection: photos, count: 0, bytes: 0 }]);
+	});
+
+	it('closes a database that opens after it was reported blocked', async () => {
+		const factory = new IDBFactory();
+		const real = factory.open.bind(factory);
+		let request: IDBOpenDBRequest | undefined;
+		vi.spyOn(factory, 'open').mockImplementation((...args) => (request = real(...args)));
+		vi.stubGlobal('indexedDB', factory);
+		vi.stubGlobal('IDBKeyRange', IDBKeyRange);
+		const { blobs, photos } = setup(indexedDbBlobs('app:blobs'));
+		const listing = blobs.list(photos);
+		// Report it blocked before it opens.
+		request!.onblocked?.(new Event('blocked') as IDBVersionChangeEvent);
+		expect(await listing).toEqual([]);
+		const close = vi.spyOn(IDBDatabase.prototype, 'close');
+		await new Promise<void>((resolve) => request!.addEventListener('success', () => resolve()));
+		expect(close).toHaveBeenCalled();
+		// The next call opens it again.
+		expect(await blobs.put(photos, new Blob(['x']))).toBeTruthy();
 	});
 
 	it('reads as empty when opening the database fails', async () => {
