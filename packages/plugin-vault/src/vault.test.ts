@@ -127,6 +127,47 @@ describe('the vault', () => {
 		expect(dump(adapter)).not.toContain('dear diary');
 	});
 
+	it('keeps a write that lands while enable is sealing', async () => {
+		const { storage, adapter, note, vault } = setup();
+		storage.write(note, SECRET);
+		const { subtle } = globalThis.crypto;
+		const encrypt = subtle.encrypt.bind(subtle);
+		let wrote = false;
+		const spy = vi.spyOn(subtle, 'encrypt').mockImplementation((...args) => {
+			if (!wrote) {
+				wrote = true;
+				storage.write(note, 'written meanwhile');
+			}
+			return encrypt(...args);
+		});
+		const salt = newSalt();
+		try {
+			expect(await vault.enable(await key(salt), salt)).toBe(true);
+		} finally {
+			spy.mockRestore();
+		}
+		expect(wrote).toBe(true);
+		expect(storage.read(note)).toBe('written meanwhile');
+		expect(await vault.flush()).toBe(true);
+		await Promise.resolve();
+		expect(dump(adapter)).not.toContain('meanwhile');
+		vault.lock();
+		await vault.flush();
+		expect(await vault.unlock(await key(salt))).toBe(true);
+		expect(storage.read(note)).toBe('written meanwhile');
+	});
+
+	it('refuses a wrong key even with nothing sensitive saved', async () => {
+		const { storage, note, vault } = setup();
+		const salt = newSalt();
+		expect(await vault.enable(await key(salt), salt)).toBe(true);
+		vault.lock();
+		expect(await vault.unlock(await key(salt, '000000'))).toBe(false);
+		expect(vault.state.locked).toBe(true);
+		expect(await vault.unlock(await key(salt))).toBe(true);
+		expect(storage.write(note, SECRET)).toBe(true);
+	});
+
 	it('turns off by writing the plaintext back', async () => {
 		const { storage, adapter, note, vault } = await enabled();
 		expect(await vault.disable()).toBe(true);

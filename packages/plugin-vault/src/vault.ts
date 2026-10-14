@@ -64,6 +64,16 @@ export type VaultOptions = {
 
 const SALT_FIELD = /^[A-Za-z0-9+/]+={0,2}$/;
 
+/** Parsed JSON, or undefined for none or anything that doesn't parse. */
+function json(text: string | null): unknown {
+	if (text === null) return undefined;
+	try {
+		return JSON.parse(text);
+	} catch {
+		return undefined;
+	}
+}
+
 /** Group contents as sealed: storage key → the stored text. */
 type Contents = Map<string, string>;
 
@@ -82,6 +92,9 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 	const blobKey = (group: string) => sealedPrefix + encodeURIComponent(group);
 	const groupOfBlob = (key: string) => decodeURIComponent(key.slice(sealedPrefix.length));
 	const context = (group: string) => `group:${group}`;
+	/** A value sealed with the key on `enable`, so `unlock` can tell a wrong key with nothing else saved. */
+	const checkKey = `${storage.prefix}${storage.namespace}:check`;
+	const CHECK = 'xcwds-vault';
 
 	let inner!: StorageAdapter;
 	let key: CryptoKey | null = null;
@@ -111,7 +124,12 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 
 	/** The sensitive group a storage key belongs to, if any. */
 	function sensitiveGroup(storageKey: string): string | undefined {
-		if (storageKey.startsWith(sealedPrefix) || storageKey === saltEntry.key) return undefined;
+		if (
+			storageKey.startsWith(sealedPrefix) ||
+			storageKey === saltEntry.key ||
+			storageKey === checkKey
+		)
+			return undefined;
 		const entry = storage.entries().find((e) => e.key === storageKey);
 		if (!entry) return undefined;
 		return storage.groups().some((g) => g.id === entry.group && g.sensitive)
@@ -172,6 +190,21 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 		sealing = sealing.then(run, run);
 	}
 
+	/** Removes plaintext moved into memory, once its group's seal is saved (it stays otherwise). */
+	function removeAfterSealing(keys: string[]) {
+		if (!keys.length) return;
+		const failed = failures;
+		void sealing.then(() => {
+			if (failures !== failed) return;
+			for (const k of keys)
+				try {
+					inner.remove(k);
+				} catch {
+					// Blocked storage: the plaintext stays until the next unlock moves it again.
+				}
+		});
+	}
+
 	/** Every sealed group in storage, as group → blob. */
 	function blobs(): Map<string, unknown> {
 		const out = new Map<string, unknown>();
@@ -179,11 +212,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 			if (!k.startsWith(sealedPrefix)) continue;
 			const text = inner.get(k);
 			if (text === null) continue;
-			try {
-				out.set(groupOfBlob(k), JSON.parse(text));
-			} catch {
-				out.set(groupOfBlob(k), undefined);
-			}
+			out.set(groupOfBlob(k), json(text));
 		}
 		return out;
 	}
@@ -230,7 +259,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 				if (memory.get(group)?.delete(k)) schedule(group);
 			},
 			keys() {
-				const out = below.keys().filter((k) => !k.startsWith(sealedPrefix));
+				const out = below.keys().filter((k) => !k.startsWith(sealedPrefix) && k !== checkKey);
 				if (!enabled()) return out;
 				const open = key ? [...memory.values()].flatMap((c) => [...c.keys()]) : [];
 				return [...new Set([...out, ...open])];
@@ -247,6 +276,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 
 	function dropSealed() {
 		for (const k of inner.keys()) if (k.startsWith(sealedPrefix)) inner.remove(k);
+		inner.remove(checkKey);
 	}
 
 	// Another tab re-sealed a group, turned the vault off or dropped it.
@@ -271,9 +301,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 		const text = inner.get(k);
 		void (async () => {
 			const c =
-				text === null
-					? new Map<string, string>()
-					: await openGroup(opening, group, JSON.parse(text));
+				text === null ? new Map<string, string>() : await openGroup(opening, group, json(text));
 			if (!c || key !== opening) return;
 			memory.set(group, c);
 			storage.reload();
@@ -301,6 +329,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 					blobKey(group),
 					JSON.stringify(await seal(newKey, JSON.stringify(Object.fromEntries(c)), context(group)))
 				);
+			sealed.set(checkKey, JSON.stringify(await seal(newKey, CHECK, 'check')));
 			if (enabled()) return false;
 			const written: string[] = [];
 			changing = true;
@@ -318,7 +347,20 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 			changing = false;
 			key = newKey;
 			memory = groups;
-			for (const c of groups.values()) for (const k of c.keys()) inner.remove(k);
+			// Writes that landed while sealing went to storage as plaintext: take them in, and remove
+			// their plaintext only once they're sealed.
+			const changed: string[] = [];
+			for (const e of sensitiveKeys()) {
+				const text = inner.get(e.key);
+				if (text === null) continue;
+				if (groups.get(e.group)?.get(e.key) === text) inner.remove(e.key);
+				else {
+					contents(e.group).set(e.key, text);
+					schedule(e.group);
+					changed.push(e.key);
+				}
+			}
+			removeAfterSealing(changed);
 			storage.reload();
 			return true;
 		},
@@ -328,6 +370,9 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 			// Seals still running from before a lock finish first, so what they save is opened here.
 			await sealing;
 			if (key) return true;
+			// Checked first, so a wrong key fails even with nothing sensitive saved.
+			const sealedCheck = parseSealed(json(inner.get(checkKey)));
+			if (!sealedCheck || (await open(newKey, sealedCheck, 'check')) !== CHECK) return false;
 			const opened = new Map<string, Contents>();
 			for (const [group, blob] of blobs()) {
 				const c = await openGroup(newKey, group, blob);
@@ -346,10 +391,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 				schedule(e.group);
 				moved.push(e.key);
 			}
-			if (moved.length)
-				void sealing.then(() => {
-					if (failures === 0) for (const k of moved) inner.remove(k);
-				});
+			removeAfterSealing(moved);
 			storage.reload();
 			return true;
 		},
