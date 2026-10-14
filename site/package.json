@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"prepare": "svelte-kit sync || echo ''",
+		"prepare": "node scripts/prepare.js",
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",

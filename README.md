@@ -27,6 +27,10 @@ The same pages, with a reference for every package, are a docs site built with @
 | [`@xcwds/testing`](packages/testing)     | Test kit: `buildTestApp()` for Vitest, Playwright helpers and presets     |
 | [`@xcwds/create`](packages/create)       | `npm create @xcwds`: a new app in one command, and `xcwds add <plugin>`   |
 
+The plugins (`@xcwds/plugin-*`: shell, theme, settings, offline, updates, timers, tools, lock and
+more) are published from `packages/` too. [Ecosystem](docs/ecosystem.md) lists every one, and
+the docs site has a [reference page for each package](https://docs.xcwds.com/reference).
+
 ## Repository
 
 - `packages/*`: published packages, all under the `@xcwds` npm scope
