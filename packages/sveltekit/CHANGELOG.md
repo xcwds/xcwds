@@ -1,5 +1,18 @@
 # @xcwds/sveltekit
 
+## 1.0.0
+
+### Minor Changes
+
+- 29be2bb: Apps no longer keep lists that follow the plugin list: `withXcwds()` writes `.xcwds/types.d.ts` (a type-only import of each plugin's `./client` entry) and adds it to SvelteKit's generated tsconfig, so the `import type {} from '@xcwds/plugin-*/client'` lines in `src/app.d.ts` can go; and `xcwds()` adds installed plugins' page entries to `optimizeDeps.include`, so a hand-kept list in `vite.config.ts` can go too.
+
+### Patch Changes
+
+- 8c4940e: A config's `manifest.shortcuts` no longer replaces the shortcuts plugins add in `onManifest` (such as `@xcwds/plugin-tools`' `shortcut: true` tools): the config's come first, then the plugins'. Every other `manifest` field still overrides what plugins set.
+- 55dd748: A plugin's `network` metadata may be a function of its options, `(options) => NetworkUse`, for origins the app picks (a relay's, say). The kernel resolves it with the options the plugin is registered with and checks the result as before (`resolveNetwork`); the build's scan, CSP, worker guard and the settings page's Privacy section use the resolved origins.
+- Updated dependencies [55dd748]
+  - @xcwds/core@0.3.0
+
 ## 0.2.0
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-lock",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"description": "Privacy for private pages in @xcwds apps: a passcode lock with an unlock screen, a cover in the app switcher, and no spellcheck or autocomplete in their fields.",
 	"license": "MIT",
 	"type": "module",

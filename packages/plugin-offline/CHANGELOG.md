@@ -1,5 +1,15 @@
 # @xcwds/plugin-offline
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [8c4940e]
+- Updated dependencies [55dd748]
+- Updated dependencies [29be2bb]
+  - @xcwds/sveltekit@1.0.0
+  - @xcwds/core@0.3.0
+
 ## 0.2.0
 
 ### Patch Changes

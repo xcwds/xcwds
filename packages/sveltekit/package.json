@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/sveltekit",
-	"version": "0.2.0",
+	"version": "1.0.0",
 	"description": "Binds the @xcwds kernel to SvelteKit: a Vite plugin, svelte.config and server hooks, the <App> component, Svelte 5 persist() and reactive settings, and a route registry.",
 	"license": "MIT",
 	"type": "module",

@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-theme",
-	"version": "0.2.0",
+	"version": "1.0.0",
 	"description": "Light, dark and system colour schemes for @xcwds apps, applied before first paint so nothing flashes.",
 	"license": "MIT",
 	"type": "module",

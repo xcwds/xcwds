@@ -1,5 +1,21 @@
 # @xcwds/plugin-timers
 
+## 1.0.0
+
+### Minor Changes
+
+- a5a2c8f: While the app is locked, notices from a page the lock keeps out hide what they say (#77): `@xcwds/plugin-shell`'s toasts read "Private page" and `@xcwds/plugin-timers`' alerts "Timer finished" (the timers list shows "Private timer"), and timers still ring, snooze and stop. Toasts and timers record the page they came from (`path`; timers saved before this have none and show normally), and `app.lock.hides(path)` says whether to hide one.
+
+### Patch Changes
+
+- Updated dependencies [a5a2c8f]
+- Updated dependencies [8c4940e]
+- Updated dependencies [55dd748]
+- Updated dependencies [29be2bb]
+  - @xcwds/plugin-shell@1.0.0
+  - @xcwds/sveltekit@1.0.0
+  - @xcwds/core@0.3.0
+
 ## 0.2.0
 
 ### Patch Changes

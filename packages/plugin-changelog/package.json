@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-changelog",
-	"version": "0.2.0",
+	"version": "1.0.0",
 	"description": "What's new for @xcwds apps: release notes on the settings page, a New badge on the ones not seen yet, and a toast after an update.",
 	"license": "MIT",
 	"type": "module",
