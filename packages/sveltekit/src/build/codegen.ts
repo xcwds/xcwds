@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { ICONS, headTags } from '@xcwds/core';
 import type { ClientData, WorkerData } from '../data.js';
 import { allowedOrigins } from './privacy.js';
-import type { BuildState } from './state.js';
+import type { BuildState, PluginInfo } from './state.js';
 
 const json = (value: unknown) => JSON.stringify(value);
 
@@ -90,4 +90,28 @@ export function guardModule(state: BuildState): string {
 export function buildModule(names: string[]): string {
 	const lines = names.map((name, i) => `import * as p${i} from ${json(name)};\n`).join('');
 	return `${HEADER}${lines}export default [${names.map((_, i) => `p${i}`).join(', ')}];\n`;
+}
+
+/**
+ * `.xcwds/types.d.ts`: a type-only import of every plugin's page entry, so the app sees what each
+ * adds to `App` and its settings without listing them in `src/app.d.ts`. `withXcwds()` adds it to
+ * the tsconfig SvelteKit generates.
+ */
+export function typesModule(plugins: PluginInfo[]): string {
+	const lines = plugins
+		.filter((p) => p.client)
+		.map((p) => `import type {} from ${json(`${p.name}/client`)};\n`)
+		.join('');
+	return `${HEADER}${lines}export {};\n`;
+}
+
+/**
+ * Page entries for Vite to pre-bundle up front (`optimizeDeps.include`): only the generated
+ * `virtual:xcwds/client` imports them, so its dependency scan misses them and the page reloads
+ * when it finds them. Only installed packages: a plugin linked from the app's source (outside
+ * `node_modules`) is compiled with the app, like any of its files.
+ */
+export function prebundled(plugins: PluginInfo[]): string[] {
+	const installed = plugins.filter((p) => p.client && /[\\/]node_modules[\\/]/.test(p.dir));
+	return installed.length ? ['@xcwds/core', ...installed.map((p) => `${p.name}/client`)] : [];
 }

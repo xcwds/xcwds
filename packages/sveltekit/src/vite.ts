@@ -10,7 +10,7 @@
 import { resolve } from 'node:path';
 import type { Plugin, ResolvedConfig } from 'vite';
 import { buildAssets, contentType } from './build/assets.js';
-import { assetCollisions, clientModule } from './build/codegen.js';
+import { assetCollisions, clientModule, prebundled } from './build/codegen.js';
 import { recall, type BuildState } from './build/state.js';
 import { stripBase } from './routes.js';
 
@@ -26,12 +26,20 @@ export function xcwds(): Plugin {
 
 	return {
 		name: 'xcwds',
-		config: () => ({
-			// The package imports `virtual:xcwds/client`, so Vite must process it rather than leave it
-			// to Node (SSR) or pre-bundle it with esbuild (dev).
-			ssr: { noExternal: [PACKAGE] },
-			optimizeDeps: { exclude: [PACKAGE] }
-		}),
+		config: (config) => {
+			// withXcwds() has run: SvelteKit's plugin loads svelte.config.js before Vite calls this.
+			const found = recall(resolve(config.root ?? process.cwd()));
+			return {
+				// The package imports `virtual:xcwds/client`, so Vite must process it rather than leave
+				// it to Node (SSR) or pre-bundle it with esbuild (dev).
+				ssr: { noExternal: [PACKAGE] },
+				optimizeDeps: {
+					exclude: [PACKAGE],
+					// The plugins' page entries, which its dependency scan can't see (see `prebundled`).
+					...(found ? { include: prebundled(found.plugins) } : {})
+				}
+			};
+		},
 		configResolved(config) {
 			vite = config;
 			const found = recall(resolve(config.root));
