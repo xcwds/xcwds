@@ -169,6 +169,22 @@ An entry registered with `sensitive: true` is personal data (a journal, a log of
 group is marked sensitive in `storage.groups()`, and resetting a forgotten passcode in
 `@xcwds/plugin-lock` clears exactly the sensitive groups.
 
+Files and images don't fit in that storage (a phone photo is several megabytes), so they go in
+**blob collections**, kept in IndexedDB. A collection is registered like an entry, with a key, a
+label, a group and optionally `sensitive`, and each blob can carry a little JSON (`meta`) that
+the collection's `validate` checks:
+
+```ts
+const photos = app.blobs.register({ key: 'photos', label: 'Photos', sensitive: true });
+const id = await app.blobs.put(photos, file, { caption: 'Receipt' }); // the id, or false
+await app.blobs.list(photos); // newest first: id, size, type, created and meta
+```
+
+The calls are asynchronous and never throw: where the browser blocks IndexedDB, lists are empty
+and saves return false, as they do when the disk is full. Blobs aren't in backups.
+`app.blobs.persist()` asks the browser not to delete the site's data when the disk runs low;
+call it after the user saves something they'd miss, since some browsers ask first.
+
 **Settings** are one app-wide object (saved as `app:settings`), to which each plugin adds fields
 with a default, a `parse` function and optionally a control that the settings page shows:
 

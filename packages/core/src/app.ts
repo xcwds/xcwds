@@ -1,3 +1,4 @@
+import { createBlobs, type BlobBackend, type BlobRegistry, type BlobScope } from './blobs.js';
 import { XcwdsError, codes } from './errors.js';
 import {
 	KNOWN_HOOKS,
@@ -164,6 +165,8 @@ export interface App {
 	readonly log: Logger;
 	/** This plugin's storage namespace (`app:<namespace>:<key>`). */
 	readonly storage: StorageScope;
+	/** Files and images, in IndexedDB, under the same namespace as `storage`. */
+	readonly blobs: BlobScope;
 	/** App-wide settings; `field()` records which plugin added a field. */
 	readonly settings: SettingsScope;
 	readonly hooks: HookRunner;
@@ -200,6 +203,8 @@ export type AppOptions = {
 	storage?: StorageAdapter;
 	/** Storage key prefix. */
 	storagePrefix?: string;
+	/** Where blobs are kept; defaults to IndexedDB. */
+	blobs?: BlobBackend;
 	/** Name written into backups, and checked when importing one. */
 	appName?: string;
 	/** The core version plugins are checked against (tests only). */
@@ -217,6 +222,7 @@ type Kernel = {
 	routeHooks: Set<string>;
 	runner: HookRunner;
 	storage: StorageRegistry;
+	blobs: BlobRegistry;
 	settings: SettingsRegistry;
 	loading: Promise<void> | null;
 	loaded: boolean;
@@ -256,6 +262,7 @@ const RESERVED = new Set<string>([
 	'prefix',
 	'log',
 	'storage',
+	'blobs',
 	'settings',
 	'hooks',
 	'register',
@@ -317,8 +324,9 @@ const proto: App = {
 	get hooks() {
 		return state(this).kernel.runner;
 	},
-	// `storage` and `settings` are own properties of each view (see `view()`).
+	// `storage`, `blobs` and `settings` are own properties of each view (see `view()`).
 	storage: undefined as never,
+	blobs: undefined as never,
 	settings: undefined as never,
 
 	register(plugin, options) {
@@ -368,6 +376,7 @@ const proto: App = {
 		k.closing ??= (async () => {
 			await k.runner.run('onClose', [], { reverse: true });
 			k.storage.stopSync();
+			k.blobs.stop();
 		})();
 		return k.closing;
 	},
@@ -566,6 +575,10 @@ function view(parent: object, s: State): App {
 		value: s.kernel.storage.scope(s.namespace),
 		enumerable: false
 	});
+	Object.defineProperty(app, 'blobs', {
+		value: s.kernel.blobs.scope(s.namespace),
+		enumerable: false
+	});
 	Object.defineProperty(app, 'settings', {
 		value: s.kernel.settings.scope(s.plugin),
 		enumerable: false
@@ -691,6 +704,7 @@ export function createApp(options: AppOptions = {}): App {
 		routeHooks: new Set(),
 		runner: createRunner(() => kernel),
 		storage,
+		blobs: createBlobs({ backend: options.blobs, prefix: options.storagePrefix }),
 		settings: createSettings(storage),
 		loading: null,
 		loaded: false,

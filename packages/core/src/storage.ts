@@ -271,6 +271,28 @@ function decode(text: string): unknown {
 	}
 }
 
+/** Asks the browser not to evict this site's data under storage pressure. */
+export async function requestPersistence(): Promise<'granted' | 'denied' | 'unsupported'> {
+	const storage = globalThis.navigator?.storage;
+	if (!storage?.persist) return 'unsupported';
+	try {
+		return (await storage.persist()) ? 'granted' : 'denied';
+	} catch {
+		return 'denied';
+	}
+}
+
+/** Whether the browser has agreed to keep this site's data under storage pressure. */
+export async function persisted(): Promise<boolean | 'unsupported'> {
+	const storage = globalThis.navigator?.storage;
+	if (!storage?.persisted) return 'unsupported';
+	try {
+		return await storage.persisted();
+	} catch {
+		return false;
+	}
+}
+
 const NAMESPACE = /^[a-z0-9][a-z0-9-]*$/;
 const NAME = /^[^\s]+$/;
 
@@ -971,24 +993,8 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 				}
 			}
 		},
-		async requestPersistence() {
-			const storage = globalThis.navigator?.storage;
-			if (!storage?.persist) return 'unsupported';
-			try {
-				return (await storage.persist()) ? 'granted' : 'denied';
-			} catch {
-				return 'denied';
-			}
-		},
-		async persisted() {
-			const storage = globalThis.navigator?.storage;
-			if (!storage?.persisted) return 'unsupported';
-			try {
-				return await storage.persisted();
-			} catch {
-				return false;
-			}
-		}
+		requestPersistence,
+		persisted
 	};
 	return registry;
 }

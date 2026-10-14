@@ -240,6 +240,25 @@ with the sealed groups in an encrypted section, made with the passcode, so a bac
 locked still carries them; format 2 still imports. That format lands with the vault, after this
 extension point.
 
+### 12. Files and images live in a separate, asynchronous blob store
+
+**Decision.** `app.blobs` keeps files and images in IndexedDB, beside `app.storage` rather than
+under it (#144). `localStorage` holds strings, about 5 MB per origin, and one phone photo is
+1-4 MB; IndexedDB stores `Blob`s and gets a share of the disk. It is asynchronous, so it can't
+sit behind the synchronous `StorageAdapter` that entries, migrations and backups rely on, and
+moving all saved data to it would make every read async. So blobs get their own registry with
+the same model: a plugin registers a **collection** (`app:<namespace>:<key>`, a label, a group,
+`sensitive`, an optional `validate` for each blob's small JSON `meta`), and every call is async
+and never throws: missing or blocked IndexedDB reads as empty, and writes (including a full
+disk) return false. One database per app (`<prefix>blobs`) holds one object store keyed by
+`[collection, id]`, opened on the first call (decision 6). Other tabs hear about changes
+through a `BroadcastChannel`. A plugin wraps the backend with `app.blobs.layer((inner) =>
+backend)`, the async counterpart of decision 11, so sensitive collections can be encrypted. Blobs
+stay out of backups (format unchanged): backing up collections is a later decision.
+`persist()` asks the browser not to evict the site's data but is never called automatically,
+since Firefox asks the user. "Clear data", a lock's reset and Settings' usage list count
+collections by group, as they do entries.
+
 ## Hook families
 
 Defined in #5; listed here so the decisions above have names to point at.
