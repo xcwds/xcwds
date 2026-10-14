@@ -1,11 +1,25 @@
 {
 	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
 	"extends": ["config:recommended", "helpers:pinGitHubActionDigests", "group:allNonMajor"],
+	"ignorePaths": [
+		"**/node_modules/**",
+		"**/bower_components/**",
+		"**/vendor/**",
+		"**/__tests__/**",
+		"**/test/**",
+		"**/tests/**",
+		"**/__fixtures__/**"
+	],
 	"packageRules": [
 		{
 			"description": "CI's node-22 job tests the oldest Node that engines allows; change it with engines, not on its own.",
 			"matchManagers": ["github-actions"],
 			"matchDepNames": ["node"],
+			"enabled": false
+		},
+		{
+			"description": "docs/plugin-guide.md quotes this package.json and a site test compares them, so it's updated by hand with the guide.",
+			"matchFileNames": ["examples/plugin-tally/package.json"],
 			"enabled": false
 		}
 	]
