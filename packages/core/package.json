@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/core",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "The @xcwds kernel: plugins, hooks, decorators, config, storage and settings for private, offline-first PWAs.",
 	"license": "MIT",
 	"type": "module",

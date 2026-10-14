@@ -1,5 +1,17 @@
 # @xcwds/plugin-tools
 
+## 0.3.0
+
+### Patch Changes
+
+- Updated dependencies [a5a2c8f]
+- Updated dependencies [8c4940e]
+- Updated dependencies [55dd748]
+- Updated dependencies [29be2bb]
+  - @xcwds/plugin-shell@0.3.0
+  - @xcwds/sveltekit@0.3.0
+  - @xcwds/core@0.3.0
+
 ## 0.2.0
 
 ### Patch Changes
