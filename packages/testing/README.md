@@ -43,7 +43,7 @@ close it yourself.
   from a plugin package's factory. A descriptor's build entry runs for its routes
   (`app.routes`), then its `./client` entry is registered.
 - `storage`: a `memoryStorage()` (the default), any adapter, or a `sharedStorage()` you keep to
-  look at.
+  look at. Blobs (`app.blobs`) are kept in memory, shared by every tab of one app.
 - `now`: a start time (or a `fakeClock()`) to fake `Date`, `performance` and timers until the app
   closes. `advance(ms)` runs the timers due on the way; `jump(ms)` moves the wall clock (not
   `performance.now()`) without them, as when a phone sleeps, so you can check that timers count

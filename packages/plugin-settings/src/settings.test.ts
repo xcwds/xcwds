@@ -6,6 +6,8 @@ import settingsFactory from './index.js';
 import {
 	backupFileName,
 	backupNote,
+	filesNote,
+	formatBytes,
 	orderGroups,
 	resolveOptions,
 	sectionOrder,
@@ -78,6 +80,18 @@ describe('options', () => {
 			)
 		).toEqual(['Workout history', 'Home shortcuts', 'timers entries', 'constructor entries']);
 		expect(orderGroups(groups, {})).toEqual(groups);
+	});
+
+	it('says how much room files take', () => {
+		expect(formatBytes(1)).toBe('1 byte');
+		expect(formatBytes(999)).toBe('999 bytes');
+		expect(formatBytes(4_210)).toBe('4.2 KB');
+		expect(formatBytes(15_600_000)).toBe('16 MB');
+		expect(formatBytes(999_999)).toBe('1 MB');
+		expect(formatBytes(2_000_000_000_000_000)).toBe('2000 TB');
+		expect(filesNote(0, 0)).toBeUndefined();
+		expect(filesNote(1, 2_500_000)).toBe('1 file, 2.5 MB');
+		expect(filesNote(3, 512)).toBe('3 files, 512 bytes');
 	});
 
 	it('notes which data backups leave out', () => {

@@ -23,6 +23,15 @@ export default definePlugin(
 				parse: (v) => (typeof v === 'string' ? v : undefined),
 				group: 'journal',
 				sensitive: true
+			}),
+			// Files kept in IndexedDB (#144), in the Hello group: "Clear data" clears them with the count.
+			files: app.blobs.register({
+				key: 'files',
+				label: 'Hello files',
+				validate: (v) =>
+					typeof (/** @type {{ name?: unknown }} */ (v)?.name) === 'string'
+						? /** @type {{ name: string }} */ (v)
+						: undefined
 			})
 		});
 		// A cache that can be fetched again, so backups leave it out (`backup: false`).

@@ -101,5 +101,8 @@ Both are usually called on boot, with the component imported dynamically (the co
   (e.g. "Clear Home shortcuts"), the ones `groups` lists first, and Clear all data, each
   confirmed first. Clears and imports reach every component on this tab through
   `app.storage.onChange`, so what's showing updates without a reload.
+- **Files:** a group's blob collections (`app.blobs`) are listed under it with how many files
+  they hold and their size ("3 files, 4.2 MB"), marked "Not in backups", and cleared with the
+  group or by Clear all data.
 - **A warning** shows when the browser won't let the app save.
 - **Toasts** (`app.toast`) confirm what happened; an invalid backup shows an inline error.

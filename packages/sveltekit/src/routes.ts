@@ -14,6 +14,7 @@ import {
 	codes,
 	createApp,
 	type App,
+	type BlobBackend,
 	type LogLevel,
 	type Plugin,
 	type Route,
@@ -153,6 +154,8 @@ export type AppSetup = {
 	plugins: readonly (readonly [Plugin<never>, Record<string, unknown>])[];
 	/** Defaults to `localStorage` (in a browser). */
 	storage?: StorageAdapter;
+	/** Where blobs are kept; defaults to IndexedDB. */
+	blobs?: BlobBackend;
 	logLevel?: LogLevel;
 };
 
@@ -160,6 +163,7 @@ export type AppSetup = {
 export function setupApp(setup: AppSetup): App {
 	const app = createApp({
 		storage: setup.storage,
+		...(setup.blobs ? { blobs: setup.blobs } : {}),
 		storagePrefix: setup.storagePrefix,
 		appName: setup.appName ?? setup.name,
 		logLevel: setup.logLevel

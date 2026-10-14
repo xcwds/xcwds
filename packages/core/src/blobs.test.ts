@@ -9,7 +9,7 @@ import {
 	type BlobRegistry
 } from './blobs.js';
 import { XcwdsError, codes } from './errors.js';
-import { memoryStorage } from './storage.js';
+import { createStorage, memoryStorage } from './storage.js';
 
 type Caption = { caption: string };
 const isCaption = (raw: unknown): Caption | undefined =>
@@ -73,10 +73,14 @@ describe('register', () => {
 		fails(() => camera.register({ key: 'v', label: 'X', validate: 1 as never }), codes.STORAGE_KEY);
 	});
 
-	it('refuses collections it never registered', async () => {
-		// Another registry's collection with the same key.
-		const { photos } = setup();
-		await expect(setup().blobs.list(photos)).rejects.toThrow(/registered/);
+	it('refuses collections it never registered, and finds copies by key', async () => {
+		const { blobs, photos } = setup();
+		await expect(blobs.list({ ...photos, key: 'app:camera:nope' })).rejects.toThrow(/registered/);
+		// A copy, as a page's reactive state hands back.
+		const id = (await blobs.put({ ...photos }, new Blob(['x']), { caption: 'c' })) as string;
+		expect((await blobs.get(photos, id))?.meta).toEqual({ caption: 'c' });
+		expect(await blobs.clear([{ ...photos }])).toBe(true);
+		expect(await blobs.list(photos)).toEqual([]);
 	});
 });
 
@@ -365,5 +369,25 @@ describe('app.blobs', () => {
 		expect(() => app.decorate('blobs', 1 as never)).toThrow(/own API/);
 		await app.close();
 		expect(backend.close).toHaveBeenCalled();
+	});
+
+	it('puts collections in the storage groups', () => {
+		const blobs = createBlobs({ backend: memoryBlobs() });
+		const storage = createStorage({ collections: () => blobs.collections() });
+		const text = storage.scope('notes').entry('text', { label: 'Notes', parse: (v) => v });
+		const images = blobs
+			.scope('notes')
+			.register({ key: 'images', label: 'Note images', sensitive: true });
+		const photos = blobs.scope('camera').register({ key: 'photos', label: 'Photos' });
+		expect(storage.groups()).toEqual([
+			{
+				id: 'notes',
+				label: 'Notes, Note images',
+				entries: [text],
+				collections: [images],
+				sensitive: true
+			},
+			{ id: 'camera', label: 'Photos', entries: [], collections: [photos], sensitive: false }
+		]);
 	});
 });

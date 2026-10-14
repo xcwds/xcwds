@@ -160,3 +160,24 @@ export function backupNote(entries: readonly { label: string; backup?: boolean }
 	if (left.length === entries.length) return 'Not in backups';
 	return `Not in backups: ${left.map((e) => e.label).join(', ')}`;
 }
+
+/** A size for people: "512 bytes", "4.2 KB", "1.5 MB" (1 KB = 1000 bytes, as phones count). */
+export function formatBytes(bytes: number): string {
+	if (bytes < 1000) return `${bytes} ${bytes === 1 ? 'byte' : 'bytes'}`;
+	const units = ['KB', 'MB', 'GB', 'TB'];
+	let value = bytes / 1000;
+	let unit = 0;
+	// 999,999 bytes is "1 MB", not "1000 KB".
+	while (value >= 999.5 && unit < units.length - 1) {
+		value /= 1000;
+		unit++;
+	}
+	const shown = value < 10 ? Math.round(value * 10) / 10 : Math.round(value);
+	return `${shown} ${units[unit]}`;
+}
+
+/** What Your data says about a group's files (blob collections): "3 files, 4.2 MB". */
+export function filesNote(count: number, bytes: number): string | undefined {
+	if (!count) return undefined;
+	return `${count} ${count === 1 ? 'file' : 'files'}, ${formatBytes(bytes)}`;
+}

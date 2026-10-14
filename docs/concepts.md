@@ -181,7 +181,9 @@ await app.blobs.list(photos); // newest first: id, size, type, created and meta
 ```
 
 The calls are asynchronous and never throw: where the browser blocks IndexedDB, lists are empty
-and saves return false, as they do when the disk is full. Blobs aren't in backups.
+and saves return false, as they do when the disk is full. Blobs aren't in backups, but they
+belong to groups: Settings → Your data shows how many files each group holds and clears them with
+it, and a lock's reset clears the sensitive ones.
 `app.blobs.persist()` asks the browser not to delete the site's data when the disk runs low;
 call it after the user saves something they'd miss, since some browsers ask first.
 

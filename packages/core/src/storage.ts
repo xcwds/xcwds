@@ -8,6 +8,7 @@
  * boundary: any script on the origin can read all of `localStorage`, so plugins are trusted code.
  */
 import { XcwdsError, codes } from './errors.js';
+import type { Collection } from './blobs.js';
 import { isRecord } from './json.js';
 
 // ---------------------------------------------------------------------------------------------
@@ -129,7 +130,9 @@ export type Group = {
 	id: string;
 	label: string;
 	entries: Entry<unknown>[];
-	/** Any of its entries is `sensitive`, so a lock's reset clears the whole group. */
+	/** The group's blob collections (`app.blobs`), which clearing the group clears too. */
+	collections: Collection[];
+	/** Any of its entries or collections is `sensitive`, so a lock's reset clears the whole group. */
 	sensitive: boolean;
 };
 
@@ -260,6 +263,8 @@ export type StorageOptions = {
 	appName?: string | undefined;
 	/** Where unexpected errors (a failing migration) are reported. */
 	onError?: ((error: unknown) => void) | undefined;
+	/** The registered blob collections, which `groups()` lists beside the entries. */
+	collections?: (() => Collection[]) | undefined;
 };
 
 /** Values were JSON, except a few raw strings older apps saved. */
@@ -870,15 +875,24 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		entries: () => [...entries.values()],
 		groups() {
 			const out = new Map<string, Group>();
+			const group = (id: string) => {
+				if (!out.has(id))
+					out.set(id, { id, label: '', entries: [], collections: [], sensitive: false });
+				return out.get(id)!;
+			};
 			for (const e of entries.values()) {
-				if (!out.has(e.group))
-					out.set(e.group, { id: e.group, label: '', entries: [], sensitive: false });
-				const group = out.get(e.group)!;
-				group.entries.push(e);
-				if (e.sensitive) group.sensitive = true;
+				const g = group(e.group);
+				g.entries.push(e);
+				if (e.sensitive) g.sensitive = true;
+			}
+			for (const c of options.collections?.() ?? []) {
+				const g = group(c.group);
+				g.collections.push(c);
+				if (c.sensitive) g.sensitive = true;
 			}
 			// Named after what's in it, e.g. "Home shortcuts" or "Workout, Workout history".
-			for (const g of out.values()) g.label = g.entries.map((e) => e.label).join(', ');
+			for (const g of out.values())
+				g.label = [...g.entries, ...g.collections].map((x) => x.label).join(', ');
 			return [...out.values()];
 		},
 		read,

@@ -339,9 +339,15 @@ export function createBlobs(options: BlobOptions = {}): BlobRegistry {
 		}
 	};
 
-	const known = (c: Collection) => {
-		if (collections.get(c?.key) !== c)
+	/**
+	 * The registered collection with `c`'s key. Looked up by key, not identity: a page's reactive
+	 * state (a Svelte `$state` proxy) hands back a copy of the object it was given.
+	 */
+	const known = <M>(c: Collection<M>): Collection<M> => {
+		const registered = collections.get(c?.key);
+		if (!registered)
 			throw new XcwdsError(codes.STORAGE_KEY, `"${c?.key}" isn't a registered blob collection.`);
+		return registered as Collection<M>;
 	};
 
 	const registry: BlobRegistry = {
@@ -396,8 +402,8 @@ export function createBlobs(options: BlobOptions = {}): BlobRegistry {
 		},
 		collections: () => [...collections.values()],
 
-		async put(c, blob, meta) {
-			known(c as Collection);
+		async put(collection, blob, meta) {
+			const c = known(collection);
 			if (typeof Blob === 'undefined' || !(blob instanceof Blob)) return false;
 			let saved: unknown;
 			try {
@@ -426,8 +432,8 @@ export function createBlobs(options: BlobOptions = {}): BlobRegistry {
 			announce(c.key);
 			return id;
 		},
-		async get(c, id) {
-			known(c as Collection);
+		async get(collection, id) {
+			const c = known(collection);
 			try {
 				const row = await backend.get(c.key, id);
 				if (!row || typeof Blob === 'undefined' || !(row.blob instanceof Blob)) return undefined;
@@ -436,8 +442,8 @@ export function createBlobs(options: BlobOptions = {}): BlobRegistry {
 				return undefined;
 			}
 		},
-		async list(c) {
-			known(c as Collection);
+		async list(collection) {
+			const c = known(collection);
 			let rows: Omit<BlobRow, 'blob'>[];
 			try {
 				rows = await backend.list(c.key);
@@ -454,8 +460,8 @@ export function createBlobs(options: BlobOptions = {}): BlobRegistry {
 				}))
 				.sort((a, b) => b.created - a.created);
 		},
-		async delete(c, id) {
-			known(c);
+		async delete(collection, id) {
+			const c = known(collection);
 			try {
 				await backend.delete(c.key, id);
 			} catch {
@@ -465,8 +471,8 @@ export function createBlobs(options: BlobOptions = {}): BlobRegistry {
 			return true;
 		},
 		async clear(list) {
-			const targets = list === undefined ? [...collections.values()] : [list].flat();
-			for (const c of targets) known(c);
+			const targets =
+				list === undefined ? [...collections.values()] : [list].flat().map((c) => known(c));
 			if (!targets.length) return true;
 			let ok = true;
 			for (const c of targets) {
