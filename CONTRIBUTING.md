@@ -25,9 +25,10 @@ anything a generated app uses, including `packages/create`).
 - Docs live in `docs/` and each package's README; `site/` renders them (`pnpm --filter
 @xcwds/site dev`). Links between them are relative file links, which work on GitHub and the
   site alike. The plugin guide shows `examples/plugin-tally`'s files in full: when you change
-  one, copy it into `docs/plugin-guide.md` (a unit test compares them). Reference pages list
-  each plugin's options, decorators and settings from its types, so document those with doc
-  comments.
+  one, copy it into `docs/plugin-guide.md` (a unit test compares them). Renovate leaves its
+  `package.json` alone for that reason, so bump its dependencies by hand, with the guide.
+  Reference pages list each plugin's options, decorators and settings from its types, so
+  document those with doc comments.
 - Design changes go through an RFC in `docs/rfc/`.
 - CI also runs the build, unit tests and `pnpm test:starter` on Node 22.18, the oldest Node the
   packages' `engines` allow; raise that job's `node-version` together with `engines`.
