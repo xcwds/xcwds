@@ -12,7 +12,7 @@
 import { resolve } from 'node:path';
 import adapter from '@sveltejs/adapter-static';
 import type { Adapter, Config } from '@sveltejs/kit';
-import { generate } from './build/generate.js';
+import { OUT_DIR, TYPES_FILE, generate } from './build/generate.js';
 import { allowedOrigins, enforcePrivacy } from './build/privacy.js';
 import { remember, type BuildState } from './build/state.js';
 
@@ -80,6 +80,21 @@ function scanned(adapter: Adapter, state: BuildState): Adapter {
 	};
 }
 
+type TsConfigHook = NonNullable<NonNullable<KitConfig['typescript']>['config']>;
+
+/**
+ * Adds `.xcwds/types.d.ts` (the plugins' type references) to the tsconfig SvelteKit generates in
+ * `.svelte-kit/`, then runs the app's own hook.
+ */
+function withTypes(own: TsConfigHook | undefined): TsConfigHook {
+	return (config) => {
+		const file = `../${OUT_DIR}/${TYPES_FILE}`;
+		const include = Array.isArray(config.include) ? (config.include as unknown[]) : [];
+		if (!include.includes(file)) config.include = [...include, file];
+		return own ? own(config) : config;
+	};
+}
+
 export async function withXcwds(
 	svelteConfig: Config = {},
 	options: XcwdsKitOptions = {}
@@ -104,7 +119,8 @@ export async function withXcwds(
 			prerender: { ...kit.prerender, entries: [...new Set(entries)] },
 			csp: csp(kit.csp, [
 				...allowedOrigins(state.plugins, state.config.privacy.allowOrigins).keys()
-			])
+			]),
+			typescript: { ...kit.typescript, config: withTypes(kit.typescript?.config) }
 		}
 	};
 }

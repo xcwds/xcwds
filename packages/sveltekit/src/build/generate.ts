@@ -21,7 +21,7 @@ import {
 	type Plugin
 } from '@xcwds/core';
 import { decorateRoutes } from '../routes.js';
-import { assetCollisions, buildModule, guardModule, workerModule } from './codegen.js';
+import { assetCollisions, buildModule, guardModule, typesModule, workerModule } from './codegen.js';
 import type { BuildState, PluginInfo } from './state.js';
 
 export const CONFIG_FILES = [
@@ -33,6 +33,8 @@ export const CONFIG_FILES = [
 
 /** The directory generated files go in, relative to the app's root. */
 export const OUT_DIR = '.xcwds';
+/** The plugins' type references, in `OUT_DIR` (see `typesModule`). */
+export const TYPES_FILE = 'types.d.ts';
 
 /**
  * Writes a generated file in one step: to a temporary file, then renamed over it. `generate`
@@ -169,6 +171,8 @@ export async function generate({
 			network: false
 		};
 	});
+
+	await writeGenerated(join(dir, TYPES_FILE), typesModule(plugins));
 
 	// Plugins' `.` entries, imported from the app's root as the config imported them.
 	const buildFile = join(dir, 'build.js');

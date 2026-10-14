@@ -56,10 +56,16 @@ export const prerender = true;
   only the app's origin plus the origins plugins declare (`network` metadata) and
   `privacy.allowOrigins` lists; your `kit.csp` directives are added to it. Its adapter wrapper
   scans the built site and fails the build on any other origin it finds
-  ([docs/privacy.md](../../docs/privacy.md)).
+  ([docs/privacy.md](../../docs/privacy.md)). It also writes `.xcwds/types.d.ts`, a type-only
+  import of each plugin's `./client` entry, and adds it to the tsconfig SvelteKit generates, so
+  the app sees what plugins add to `App` and its settings without listing them in `src/app.d.ts`
+  (your `kit.typescript.config` still runs after).
 - **`xcwds()`** serves `virtual:xcwds/client` (each plugin's `./client` entry, routes and head
   data) to the page bundle, and emits `manifest.webmanifest` and the icons rendered from
-  `brand.icon` (with `@xcwds/core/build`, which needs `@resvg/resvg-js`).
+  `brand.icon` (with `@xcwds/core/build`, which needs `@resvg/resvg-js`). It adds the page
+  entries of plugins installed in `node_modules` (and `@xcwds/core`, when the app depends on
+  it) to `optimizeDeps.include`: only the generated module imports them, so Vite's dependency
+  scan can't find them up front.
 - **`handle`** puts the manifest, icon and iOS tags and one pre-paint script (plugins' `onHead`
   snippets and settings' `prePaint` fields) in place of `%xcwds.head%`, and adds the script's
   hash to the page's CSP. **`init`** loads the plugins before the first render, so pages render

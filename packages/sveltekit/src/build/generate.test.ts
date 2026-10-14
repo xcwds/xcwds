@@ -6,9 +6,9 @@ import type { Rollup } from 'vite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { withXcwds } from '../config.js';
 import { xcwds } from '../vite.js';
-import { clientModule, guardModule } from './codegen.js';
+import { clientModule, guardModule, prebundled } from './codegen.js';
 import { generate, withConfigManifest } from './generate.js';
-import { recall } from './state.js';
+import { recall, type PluginInfo } from './state.js';
 
 let root: string;
 
@@ -134,6 +134,10 @@ describe('generate', () => {
 		// The network guard comes first, so it's in place before any plugin's worker code (#55).
 		expect(worker.indexOf("import './worker-guard.js';")).toBeGreaterThan(-1);
 		expect(worker.indexOf("import './worker-guard.js';")).toBeLessThan(worker.indexOf('import p0'));
+		// What each plugin adds to the app's types, without a list in src/app.d.ts (#133).
+		const types = await readFile(join(root, '.xcwds/types.d.ts'), 'utf8');
+		expect(types).toContain('import type {} from "xcwds-plugin-timers/client";');
+		expect(types).not.toContain('plain');
 		const guard = await readFile(join(root, '.xcwds/worker-guard.js'), 'utf8');
 		expect(guard).toContain(`import { guardNetwork } from '@xcwds/sveltekit/guard';`);
 		expect(guard).toContain('guardNetwork(self, []);');
@@ -166,6 +170,7 @@ describe('generate', () => {
 		expect((await readdir(join(root, '.xcwds'))).sort()).toEqual([
 			'.gitignore',
 			'build.js',
+			'types.d.ts',
 			'worker-guard.js',
 			'worker.js'
 		]);
@@ -212,6 +217,24 @@ describe('generate', () => {
 });
 
 describe('withXcwds', () => {
+	it("adds the plugins' type references to SvelteKit's tsconfig, then runs the app's hook (#133)", async () => {
+		const plain = await withXcwds({}, { root });
+		const hook = plain.kit!.typescript!.config!;
+		const tsconfig = { include: ['ambient.d.ts'] };
+		hook(tsconfig);
+		hook(tsconfig);
+		expect(tsconfig.include).toEqual(['ambient.d.ts', '../.xcwds/types.d.ts']);
+
+		const own = await withXcwds(
+			{ kit: { typescript: { config: (c) => ({ ...c, extra: true }) } } },
+			{ root }
+		);
+		expect(own.kit!.typescript!.config!({})).toEqual({
+			include: ['../.xcwds/types.d.ts'],
+			extra: true
+		});
+	});
+
 	it('sets the adapter, prerender entries and a hash-mode CSP, and remembers the build', async () => {
 		const config = await withXcwds(
 			{
@@ -359,14 +382,47 @@ Object.defineProperty(build, Symbol.for('xcwds.plugin-meta'), { value: { network
 	});
 });
 
+describe('prebundled', () => {
+	const info = (name: string, dir: string, client = true): PluginInfo => ({
+		name,
+		options: {},
+		dir,
+		client,
+		worker: false,
+		network: false
+	});
+
+	it('lists installed page entries, not linked plugins or ones without a page entry (#133)', async () => {
+		const plugins = [
+			info('@xcwds/plugin-shell', '/app/node_modules/.pnpm/x/node_modules/@xcwds/plugin-shell'),
+			info('app-plugin', '/app/src/plugins/app'),
+			info('worker-only', '/app/node_modules/worker-only', false)
+		];
+		// @xcwds/core only when the app can resolve it (pnpm doesn't hoist peers).
+		expect(prebundled(plugins, root)).toEqual(['@xcwds/plugin-shell/client']);
+		await write('node_modules/@xcwds/core/package.json', '{}');
+		expect(prebundled(plugins, root)).toEqual(['@xcwds/core', '@xcwds/plugin-shell/client']);
+		expect(prebundled([info('app-plugin', '/app/src/plugins/app')], root)).toEqual([]);
+		expect(prebundled([info('win', 'C:\\app\\node_modules\\win')], root)).toEqual([
+			'@xcwds/core',
+			'win/client'
+		]);
+	});
+});
+
 describe('the Vite plugin', () => {
 	it('serves the client module and emits the manifest in the client build only', async () => {
 		await withXcwds({}, { root });
 		const plugin = xcwds();
 		const hook = <T>(h: unknown): T =>
 			(typeof h === 'function' ? h : (h as { handler: unknown }).handler) as T;
-		expect(hook<() => unknown>(plugin.config).call({})).toMatchObject({
-			ssr: { noExternal: ['@xcwds/sveltekit'] }
+		expect(hook<(c: unknown) => unknown>(plugin.config).call({}, { root })).toEqual({
+			ssr: { noExternal: ['@xcwds/sveltekit'] },
+			// Installed plugins' page entries, which Vite's scan can't see (#133); not `plain`.
+			optimizeDeps: {
+				exclude: ['@xcwds/sveltekit'],
+				include: ['xcwds-plugin-timers/client']
+			}
 		});
 		const resolved = (ssr: boolean) =>
 			({ root, command: 'build', build: { ssr } }) as unknown as Parameters<
