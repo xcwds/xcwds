@@ -39,9 +39,27 @@ export {
 } from './privacy.js';
 export { satisfies } from './semver.js';
 export {
+	createBlobs,
+	indexedDbBlobs,
+	memoryBlobs,
+	type BlobBackend,
+	type BlobChangeListener,
+	type BlobInfo,
+	type BlobLayer,
+	type BlobOptions,
+	type BlobRegistry,
+	type BlobRow,
+	type BlobScope,
+	type BlobUsage,
+	type Collection,
+	type CollectionOptions
+} from './blobs.js';
+export {
 	createStorage,
 	localStorageAdapter,
 	memoryStorage,
+	persisted,
+	requestPersistence,
 	type Backup,
 	type ChangeListener,
 	type Entry,

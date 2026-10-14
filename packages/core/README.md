@@ -82,6 +82,20 @@ A layer throws for a key it can't serve right now (`XCWDS_ERR_LOCKED` while lock
 return `undefined`, writes return false and migrations wait, and calls `reload()` when its view
 of the data changes, so they run and change listeners hear `null`.
 
+## Blobs
+
+Files and images go in `app.blobs`, kept in IndexedDB (photos don't fit in `localStorage`).
+`app.blobs.register({ key, label, group?, sensitive?, validate? })` names a collection
+(`app:<namespace>:<key>`); `put(collection, blob, meta?)` returns the new id or false,
+`get(collection, id)` returns `{ blob, meta }`, `list(collection)` returns each blob's id, size,
+type, `created` and `meta` (newest first, without loading the blobs), and `delete`, `clear` and
+`usage()` do what they say. Every call is async and never throws: without IndexedDB (blocked,
+some private windows) reads are empty and writes return false, as they do when the disk is full.
+`meta` is small JSON, checked by `validate`. Blobs stay out of backups. `onChange` hears other
+tabs, `layer((inner) => backend)` wraps the backend like a storage layer, and `persist()` asks
+the browser to keep the data (call it after a user action; Firefox asks first). Pass another
+`BlobBackend`, such as `memoryBlobs()`, to `createApp({ blobs })` to change where blobs live.
+
 Namespaces are API hygiene, not a sandbox: every plugin can read all of the origin's storage.
 Only add plugins you trust.
 
