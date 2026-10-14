@@ -51,9 +51,15 @@ every peer dependent to a **major**: a core 0.2.0 would release them all as 1.0.
    - in its `package.json`, set `version` to the next minor (`1.0.0` → `0.2.0` when it was
      `0.1.x`);
    - in its `CHANGELOG.md`, change the new heading to that version and `### Major Changes` to
-     `### Minor Changes`.
-3. Check that no `1.0.0` is left (`git grep -n '"version": "1.0.0"' -- 'packages/*/package.json'`),
-   push, and merge. CI runs on `main` before anything is published.
+     `### Minor Changes`;
+   - in every `CHANGELOG.md`, change its "Updated dependencies" lines (`- @xcwds/<name>@1.0.0`)
+     to that version.
+3. Check that no `1.0.0` is left
+   (`git grep -n '1\.0\.0' -- 'packages/*/package.json' 'packages/*/CHANGELOG.md'`) and push.
+4. Update the PR description the same way: its "Releases" list repeats the changelogs, so change
+   each `@xcwds/<name>@1.0.0` heading and dependency line to the new version, and add a line
+   saying the versions were hand-edited per #90. Then merge. CI runs on `main` before anything is
+   published.
 
 The plugins' `core` ranges (`CORE` in each `options.ts`) already follow core's minor:
 `pnpm version-packages` runs `scripts/sync-core-version.js`.
