@@ -16,6 +16,10 @@
 			"types": "./dist/seal.d.ts",
 			"default": "./dist/seal.js"
 		},
+		"./vault": {
+			"types": "./dist/vault.d.ts",
+			"default": "./dist/vault.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"files": [

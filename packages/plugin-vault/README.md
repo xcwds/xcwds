@@ -4,7 +4,16 @@ Encryption at rest for the sensitive storage groups of an @xcwds app that uses
 [`@xcwds/plugin-lock`](../plugin-lock). **Work in progress** ([#79](https://github.com/xcwds/xcwds/issues/79)):
 not published yet, and not a plugin you can install yet.
 
-So far it holds the sealing the plugin will be built on:
+So far it holds the sealing and the storage layer the plugin will be built on.
+
+From `@xcwds/plugin-vault/vault`, `createVault(app.storage)` puts a storage layer over the app's
+storage (RFC 0001, decision 11). Once turned on with `enable(key, salt)`, it keeps every sensitive
+group sealed as one blob, serves its keys from memory while unlocked, and re-seals after writes,
+in order. Locked, sensitive keys read as `undefined` and refuse writes, and migrations wait until
+`unlock(key)`. `lock()` still saves writes already made. `disable()` writes the plaintext back.
+`drop()` deletes the sealed groups unread, for a forgotten passcode, as does clearing the group
+its salt is saved in (`lock` by default). Another tab's re-seal is opened again in each unlocked
+tab. Connecting it to `@xcwds/plugin-lock`'s passcode comes next.
 
 From `@xcwds/plugin-vault/seal`:
 
