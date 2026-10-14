@@ -51,6 +51,7 @@ export {
 	type ParsedBackup,
 	type SaveFailureListener,
 	type StorageAdapter,
+	type StorageLayer,
 	type StorageOptions,
 	type StorageRegistry,
 	type StorageScope,

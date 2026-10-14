@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { codes } from './errors.js';
-import { createStorage, memoryStorage, type StorageAdapter } from './storage.js';
+import { XcwdsError, codes } from './errors.js';
+import { createStorage, memoryStorage, type StorageAdapter, type StorageLayer } from './storage.js';
 
 const isNumber = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 
@@ -728,5 +728,162 @@ describe('persistence', () => {
 		expect(await storage.requestPersistence()).toBe('granted');
 		expect(await storage.persisted()).toBe(true);
 		vi.unstubAllGlobals();
+	});
+});
+
+describe('storage layers (#79)', () => {
+	const SECRET = 'app:diary:';
+	const BLOB = 'app:sealed';
+	/** Like a vault: keys under `app:diary:` live in memory while unlocked, kept below as one blob. */
+	function sealing() {
+		const state = { locked: false, memory: new Map<string, string>() };
+		const scramble = (text: string) => btoa([...text].reverse().join(''));
+		const unscramble = (text: string) => [...atob(text)].reverse().join('');
+		let inner: StorageAdapter;
+		const save = () => inner.set(BLOB, scramble(JSON.stringify(Object.fromEntries(state.memory))));
+		const check = () => {
+			if (state.locked) throw new XcwdsError(codes.LOCKED, 'Locked.');
+		};
+		const layer: StorageLayer = (below) => {
+			inner = below;
+			const blob = below.get(BLOB);
+			if (blob) state.memory = new Map(Object.entries(JSON.parse(unscramble(blob))));
+			return {
+				get: (key) =>
+					key.startsWith(SECRET) ? (check(), state.memory.get(key) ?? null) : below.get(key),
+				set: (key, value) =>
+					key.startsWith(SECRET)
+						? (check(), state.memory.set(key, value), save())
+						: below.set(key, value),
+				remove: (key) =>
+					key.startsWith(SECRET) ? (check(), state.memory.delete(key), save()) : below.remove(key),
+				keys: () => [
+					...below.keys().filter((key) => key !== BLOB),
+					...(state.locked ? [] : state.memory.keys())
+				]
+			};
+		};
+		return { state, layer };
+	}
+
+	function diary(initial: Record<string, string> = {}) {
+		const s = setup(initial);
+		const vault = sealing();
+		const d = s.storage.scope('diary');
+		const note = d.entry('note', {
+			label: 'Note',
+			parse: (v) => (typeof v === 'string' ? v : undefined),
+			sensitive: true
+		});
+		const other = s.storage.scope('other').entry('n', { label: 'N', parse: isNumber });
+		return { ...s, vault, note, other };
+	}
+
+	it('keeps what a layer claims out of the adapter below, and passes the rest through', () => {
+		const { storage, adapter, vault, note, other } = diary();
+		storage.layer(vault.layer);
+		expect(storage.write(note, 'cycle day 12')).toBe(true);
+		expect(storage.write(other, 3)).toBe(true);
+		expect(storage.read(note)).toBe('cycle day 12');
+		expect(adapter.data.get('app:other:n')).toBe('3');
+		expect(adapter.data.has('app:diary:note')).toBe(false);
+		expect([...adapter.data.values()].join()).not.toContain('cycle');
+		expect(storage.unclaimed()).toEqual([]);
+	});
+
+	it('reads nothing and saves nothing while locked, then serves the data again after reload()', () => {
+		const { storage, vault, note, other } = diary();
+		storage.layer(vault.layer);
+		storage.write(note, 'cycle day 12');
+		vault.state.locked = true;
+		storage.reload();
+		expect(storage.read(note)).toBeUndefined();
+		expect(storage.write(note, 'changed')).toBe(false);
+		expect(storage.remove(note)).toBe(false);
+		expect(storage.update(note, undefined, () => 'again').saved).toBe(false);
+		expect(storage.read(other)).toBeUndefined();
+		expect(storage.write(other, 1)).toBe(true);
+		vault.state.locked = false;
+		storage.reload();
+		expect(storage.read(note)).toBe('cycle day 12');
+	});
+
+	it('runs a migration that waited while locked once reloaded', () => {
+		const { storage, adapter, vault, note } = diary();
+		storage.layer(vault.layer);
+		storage.write(note, 'old');
+		vault.state.locked = true;
+		storage.reload();
+		storage.scope('diary').migration({
+			to: 1,
+			run(data) {
+				data['app:diary:note'] = `${data['app:diary:note'] as string} (migrated)`;
+			}
+		});
+		expect(storage.read(note)).toBeUndefined();
+		expect(adapter.data.has('app:version:diary')).toBe(false);
+		vault.state.locked = false;
+		storage.reload();
+		expect(storage.read(note)).toBe('old (migrated)');
+		expect(adapter.data.get('app:version:diary')).toBe('1');
+		expect(storage.read(note)).toBe('old (migrated)');
+	});
+
+	it('tells change listeners when it reloads, and when a layer is added', () => {
+		const { storage, vault } = diary();
+		const seen: unknown[] = [];
+		storage.onChange((key, value) => seen.push([key, value]));
+		storage.layer(vault.layer);
+		storage.reload();
+		expect(seen).toEqual([
+			[null, undefined],
+			[null, undefined]
+		]);
+	});
+
+	it('keeps a migrated copy storage could not save yet', () => {
+		const { storage, full, mem } = fullable({ 'app:t:list': '["a"]' });
+		const t = storage.scope('t');
+		t.migration({
+			to: 1,
+			run(d) {
+				d['app:t:list'] = { items: d['app:t:list'] };
+			}
+		});
+		const e = t.entry('list', { label: 'L', parse: (v) => v as { items: string[] } });
+		expect(storage.read(e)).toEqual({ items: ['a'] });
+		storage.reload();
+		expect(storage.read(e)).toEqual({ items: ['a'] });
+		full.on = false;
+		expect(storage.write(e, { items: ['b'] })).toBe(true);
+		expect(mem.data.get('app:version:t')).toBe('1');
+	});
+
+	it('stacks layers, the last one on top', () => {
+		const { storage, adapter } = setup();
+		const calls: string[] = [];
+		const tag =
+			(name: string): StorageLayer =>
+			(inner) => ({
+				...inner,
+				set: (key, value) => {
+					calls.push(name);
+					inner.set(key, value);
+				}
+			});
+		storage.layer(tag('first'));
+		storage.layer(tag('second'));
+		const e = storage.scope('x').entry('v', { label: 'V', parse: isNumber });
+		storage.write(e, 1);
+		expect(calls).toEqual(['second', 'first']);
+		expect(adapter.data.get('app:x:v')).toBe('1');
+	});
+
+	it('refuses a layer that is not a function or returns no adapter', () => {
+		const { storage } = setup();
+		expect(() => storage.layer('nope' as unknown as StorageLayer)).toThrow(
+			expect.objectContaining({ code: codes.STORAGE_KEY })
+		);
+		expect(() => storage.layer(() => ({}) as StorageAdapter)).toThrow(/`get`/);
 	});
 });

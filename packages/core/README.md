@@ -76,6 +76,11 @@ version, so a backup still imports after a plugin is removed, and the plugin's m
 up where they left off if it comes back.
 `startSync()` follows other tabs. `localStorage` holds about 5 MB per origin; pass another
 `StorageAdapter` to `createApp({ storage })` to change where data lives.
+A plugin that changes how some keys are kept (encrypting them, say) wraps the adapter with
+`layer((inner) => adapter)`; layers stack, and the rest of the registry works on top unchanged.
+A layer throws for a key it can't serve right now (`XCWDS_ERR_LOCKED` while locked), so reads
+return `undefined`, writes return false and migrations wait, and calls `reload()` when its view
+of the data changes, so they run and change listeners hear `null`.
 
 Namespaces are API hygiene, not a sandbox: every plugin can read all of the origin's storage.
 Only add plugins you trust.
