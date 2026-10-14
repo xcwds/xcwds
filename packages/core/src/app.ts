@@ -688,7 +688,9 @@ async function loadPlugin(parent: State, { plugin, options }: QueueItem): Promis
 export function createApp(options: AppOptions = {}): App {
 	const log = createLogger(options.logLevel);
 	const kernel = {} as Kernel;
+	const blobs = createBlobs({ backend: options.blobs, prefix: options.storagePrefix });
 	const storage = createStorage({
+		collections: () => blobs.collections(),
 		adapter: options.storage,
 		prefix: options.storagePrefix,
 		appName: options.appName,
@@ -704,7 +706,7 @@ export function createApp(options: AppOptions = {}): App {
 		routeHooks: new Set(),
 		runner: createRunner(() => kernel),
 		storage,
-		blobs: createBlobs({ backend: options.blobs, prefix: options.storagePrefix }),
+		blobs,
 		settings: createSettings(storage),
 		loading: null,
 		loaded: false,

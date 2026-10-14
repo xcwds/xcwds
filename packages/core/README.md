@@ -91,7 +91,9 @@ Files and images go in `app.blobs`, kept in IndexedDB (photos don't fit in `loca
 type, `created` and `meta` (newest first, without loading the blobs), and `delete`, `clear` and
 `usage()` do what they say. Every call is async and never throws: without IndexedDB (blocked,
 some private windows) reads are empty and writes return false, as they do when the disk is full.
-`meta` is small JSON, checked by `validate`. Blobs stay out of backups. `onChange` hears other
+`meta` is small JSON, checked by `validate`. Blobs stay out of backups. `storage.groups()` lists
+each group's `collections` beside its `entries` (a sensitive collection makes its group
+sensitive), so clearing a group, or a lock's reset, clears its files too. `onChange` hears other
 tabs, `layer((inner) => backend)` wraps the backend like a storage layer, and `persist()` asks
 the browser to keep the data (call it after a user action; Firefox asks first). Pass another
 `BlobBackend`, such as `memoryBlobs()`, to `createApp({ blobs })` to change where blobs live.

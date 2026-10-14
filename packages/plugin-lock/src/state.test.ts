@@ -1,5 +1,5 @@
-import { createStorage, memoryStorage } from '@xcwds/core';
-import { describe, expect, it } from 'vitest';
+import { createBlobs, createStorage, memoryBlobs, memoryStorage } from '@xcwds/core';
+import { describe, expect, it, vi } from 'vitest';
 import { createLock, lockEntries } from './lock.js';
 
 /** A device: storage with the lock's entries, a sensitive journal and a plain setting. */
@@ -82,6 +82,31 @@ describe('the lock', () => {
 		expect(d.storage.read(d.journal)).toBeUndefined();
 		expect(d.storage.read(d.prefs)).toBe(3);
 		expect(lock.state).toMatchObject({ enabled: false, locked: false });
+	});
+
+	it('clears sensitive blob collections too, and only those', async () => {
+		const blobs = createBlobs({ backend: memoryBlobs() });
+		const storage = createStorage({
+			adapter: memoryStorage(),
+			appName: 'test',
+			collections: () => blobs.collections()
+		});
+		const photos = blobs
+			.scope('camera')
+			.register({ key: 'photos', label: 'Photos', sensitive: true });
+		const icons = blobs.scope('icons').register({ key: 'cache', label: 'Icons' });
+		await blobs.put(photos, new Blob(['p']));
+		await blobs.put(icons, new Blob(['i']));
+		const lockScope = storage.scope('lock');
+		const entries = lockEntries(lockScope);
+		const open = () => createLock(lockScope, entries, { iterations: 100_000, blobs });
+		await open().lock.setUp('123456', 'digits');
+		const { lock } = open();
+		expect(lock.sensitiveGroups().map((g) => g.label)).toEqual(['Photos']);
+		expect(lock.reset().map((g) => g.id)).toEqual(['camera']);
+		await vi.waitFor(async () => expect(await blobs.list(photos)).toEqual([]));
+		expect(await blobs.list(icons)).toHaveLength(1);
+		blobs.stop();
 	});
 
 	it('clearing the passcode some other way clears the sensitive data too', async () => {

@@ -3,7 +3,7 @@
  * wait after wrong tries. Unlocking lives in memory only, so every reload starts locked. Kept
  * apart from the page entry so it can be tested with a plain storage scope.
  */
-import type { Entry, Group, StorageScope } from '@xcwds/core';
+import type { BlobScope, Entry, Group, StorageScope } from '@xcwds/core';
 import {
 	ITERATIONS,
 	NO_ATTEMPTS,
@@ -116,6 +116,8 @@ export function createLock(
 		locks?: (path: string) => boolean;
 		/** The page showing now. */
 		here?: () => string | undefined;
+		/** `app.blobs`, whose sensitive collections a reset clears too. */
+		blobs?: Pick<BlobScope, 'clear'>;
 	} = {}
 ): { lock: AppLock; stop(): void } {
 	const now = options.now ?? Date.now;
@@ -153,6 +155,11 @@ export function createLock(
 	function clearSensitive(): Group[] {
 		const groups = sensitiveGroups();
 		storage.clear(groups.flatMap((g) => g.entries));
+		// Files go too, in the background: blob storage is asynchronous. A core before #144 has no
+		// collections.
+		const collections = groups.flatMap((g) => g.collections ?? []);
+		// Nothing to do on failure: the reset has happened, and Your data still shows the files.
+		if (collections.length) options.blobs?.clear(collections).catch(() => {});
 		return groups;
 	}
 

@@ -138,6 +138,51 @@ for (const { name, dir, base } of targets) {
 			expect(await page.evaluate(() => localStorage.getItem('app:hello:cache'))).toBeNull();
 		});
 
+		test('files kept in IndexedDB survive a reload, show in Your data and clear with their group (#144)', async ({
+			page
+		}) => {
+			page.on('dialog', (dialog) => dialog.accept());
+			await gotoHydrated(page, url('/hello'));
+			await page.getByTestId('attach').setInputFiles({
+				name: 'receipt.txt',
+				mimeType: 'text/plain',
+				buffer: Buffer.from('x'.repeat(2500))
+			});
+			await expect(page.getByTestId('toast').filter({ hasText: 'File saved.' })).toBeVisible();
+			await expect(page.getByTestId('files').getByRole('listitem')).toHaveText(['receipt.txt']);
+			await page.reload();
+			await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+			await expect(page.getByTestId('files').getByRole('listitem')).toHaveText(['receipt.txt']);
+
+			await gotoHydrated(page, url('/settings'));
+			await expect(page.getByTestId('files-note')).toHaveText('1 file, 2.5 KB');
+			// Files are never in backups.
+			await expect(page.getByTestId('backup-note')).toContainText(['Hello files']);
+			const clear = page.getByRole('button', { name: /^Clear Hello/ });
+			await expect(clear).toBeEnabled();
+			// Files that can't be cleared (IndexedDB failing) are reported, not called cleared.
+			await page.evaluate(() => {
+				IDBObjectStore.prototype.delete = () => {
+					throw new DOMException('Not now', 'InvalidStateError');
+				};
+			});
+			await clear.click();
+			await expect(page.getByTestId('toast').last()).toContainText(
+				"some files couldn't be cleared"
+			);
+			await expect(page.getByTestId('files-note')).toHaveText('1 file, 2.5 KB');
+			await page.reload();
+			await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+			await clear.click();
+			await expect(page.getByTestId('toast').last()).toHaveText(/^Cleared Hello/);
+			await expect(page.getByTestId('files-note')).toHaveCount(0);
+			await expect(clear).toBeDisabled();
+
+			await gotoHydrated(page, url('/hello'));
+			await expect(page.getByTestId('toast').filter({ hasText: 'File saved.' })).toHaveCount(0);
+			await expect(page.getByTestId('files').getByRole('listitem')).toHaveCount(0);
+		});
+
 		test('importing a file that is not a backup shows an error', async ({ page }) => {
 			await gotoHydrated(page, url('/settings'));
 			await page.getByLabel('Backup file').setInputFiles({

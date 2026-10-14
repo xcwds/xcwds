@@ -103,7 +103,8 @@ export default definePlugin(
 		// in-memory one at prerender, where no passcode is ever set).
 		const { lock, stop: stopLock } = createLock(app.storage, lockEntries(app.storage), {
 			locks,
-			here: () => current?.path
+			here: () => current?.path,
+			blobs: app.blobs
 		});
 		app.decorate('lock', lock satisfies AppLock);
 

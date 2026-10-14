@@ -2,7 +2,8 @@
 	/**
 	 * Your data: download, share or import a backup of everything the app saved, and clear it per
 	 * storage group (named and ordered by the `groups` option) or all at once (ported from
-	 * xcwds.github.io's Settings). While a passcode lock (`app.lock`, from `@xcwds/plugin-lock`)
+	 * xcwds.github.io's Settings). A group's files (`app.blobs` collections, #144) are counted under
+	 * it and cleared with it; backups leave them out. While a passcode lock (`app.lock`, from `@xcwds/plugin-lock`)
 	 * is locked, none of it is offered: a backup would hand over what the lock keeps out.
 	 */
 	import type { Group, ParsedBackup } from '@xcwds/core';
@@ -10,14 +11,19 @@
 	import { onMount } from 'svelte';
 	import type {} from '@xcwds/plugin-shell/client';
 	import type {} from './client.js';
-	import { backupFileName, backupNote, orderGroups } from './options.js';
+	import { backupFileName, backupNote, filesNote, orderGroups } from './options.js';
 
 	const app = useApp();
 	const storage = app.storage;
+	// A core before #144 has no blob store.
+	const blobs = (app as { blobs?: typeof app.blobs }).blobs;
+	const collectionsOf = (group: Group) => group.collections ?? [];
 	const name = app.settingsPage?.options.backupName ?? 'backup';
 	const toast = (message: string) => app.toast?.(message);
 
 	let groups = $state<Group[]>([]);
+	/** Each collection's files: how many and their total size, by collection key. */
+	let files = $state.raw(new Map<string, { count: number; bytes: number }>());
 	// Bumped on every change to saved data, so "has data" checks storage again.
 	let version = $state(0);
 	let writable = $state(true);
@@ -35,10 +41,30 @@
 		})
 	);
 
+	/** What each of the group's collections holds, named when the group has more than one. */
+	const groupFiles = (group: Group) => {
+		const collections = collectionsOf(group);
+		return collections.flatMap((c) => {
+			const usage = files.get(c.key);
+			const note = usage && filesNote(usage.count, usage.bytes);
+			if (!note) return [];
+			return [{ key: c.key, note: collections.length > 1 ? `${c.label}: ${note}` : note }];
+		});
+	};
 	const hasData = (group: Group) => {
 		void version;
-		return group.entries.some((e) => storage.read(e) !== undefined);
+		return group.entries.some((e) => storage.read(e) !== undefined) || groupFiles(group).length > 0;
 	};
+
+	/** Counts the files again; the latest call wins if several overlap. */
+	let counting = 0;
+	async function countFiles() {
+		if (!blobs) return;
+		const run = ++counting;
+		const usage = await blobs.usage();
+		if (run !== counting) return;
+		files = new Map(usage.map((u) => [u.collection.key, { count: u.count, bytes: u.bytes }]));
+	}
 	const anyData = $derived(groups.some(hasData));
 
 	onMount(() => {
@@ -52,6 +78,10 @@
 		const bump = () => void version++;
 		// Other tabs, this tab's clears and imports, and settings changed on this page.
 		const stops = [storage.onChange(bump), app.settings.subscribe(bump)];
+		if (blobs) {
+			void countFiles();
+			stops.push(blobs.onChange(() => void countFiles()));
+		}
 		return () => stops.forEach((stop) => stop());
 	});
 
@@ -111,18 +141,34 @@
 		);
 	}
 
-	function clearGroup(group: Group) {
+	/** Clears files; false if some couldn't be (IndexedDB blocked, or locked). */
+	async function clearFiles(collections?: Group['collections']) {
+		if (!blobs || collections?.length === 0) return true;
+		const ok = await blobs.clear(collections);
+		await countFiles();
+		return ok;
+	}
+
+	async function clearGroup(group: Group) {
 		if (!confirm(`Clear saved data for ${group.label}?`)) return;
 		storage.clear(group.entries);
 		version++;
-		toast(`Cleared ${group.label}.`);
+		const ok = await clearFiles(collectionsOf(group));
+		toast(
+			ok
+				? `Cleared ${group.label}.`
+				: `Cleared ${group.label}, but some files couldn't be cleared. Try again.`
+		);
 	}
 
-	function clearAll() {
+	async function clearAll() {
 		if (!confirm('Clear all data saved by this app on this device? This cannot be undone.')) return;
 		storage.clear();
 		version++;
-		toast('All data cleared.');
+		const ok = await clearFiles();
+		toast(
+			ok ? 'All data cleared.' : "Data cleared, but some files couldn't be cleared. Try again."
+		);
 	}
 
 	const button =
@@ -220,10 +266,13 @@
 	<h3 class="mt-2 font-semibold">Clear data</h3>
 	<ul class="flex flex-col gap-2">
 		{#each groups as group (group.id)}
-			{@const note = backupNote(group.entries)}
+			{@const note = backupNote([...group.entries, ...collectionsOf(group)])}
 			<li class="flex items-center justify-between gap-3">
 				<span class="flex flex-col">
 					{group.label}
+					{#each groupFiles(group) as used (used.key)}
+						<span class={muted} data-testid="files-note">{used.note}</span>
+					{/each}
 					{#if note}<span class={muted} data-testid="backup-note">{note}</span>{/if}
 				</span>
 				<button

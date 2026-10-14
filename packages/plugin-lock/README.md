@@ -87,7 +87,8 @@ The API:
 - `here()` is the page showing now, which notices record. The lock follows every page, so
   plugins registered under a route prefix (whose route hooks only see paths below it) ask it.
 - `reset()` is for a forgotten passcode: there's no recovery, so it clears every storage group
-  marked `sensitive` (`sensitiveGroups()` lists them) along with the passcode.
+  marked `sensitive` (`sensitiveGroups()` lists them) along with the passcode, including the
+  group's files (`app.blobs` collections), which go in the background.
 
 Only a verifier is saved (`app:lock:verifier`: PBKDF2-SHA-256, 600,000 iterations, a random
 16-byte salt), never the passcode, and unlocking lives in memory, so every start is locked. The

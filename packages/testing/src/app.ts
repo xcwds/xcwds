@@ -4,7 +4,14 @@
  * (`@xcwds/sveltekit/routes`), on in-memory storage shared by simulated tabs and an optional
  * fake clock.
  */
-import type { App, LogLevel, Route, StorageAdapter } from '@xcwds/core';
+import {
+	memoryBlobs,
+	type App,
+	type BlobBackend,
+	type LogLevel,
+	type Route,
+	type StorageAdapter
+} from '@xcwds/core';
 import { askGuards, decide, routeOf, setupApp } from '@xcwds/sveltekit/routes';
 import { fakeClock, type FakeClock } from './clock.js';
 import { closeAfterTest, ErrorTrap } from './errors.js';
@@ -69,6 +76,8 @@ const ORIGIN = 'http://localhost';
 type Group = {
 	prepared: Prepared;
 	shared: SharedStorage;
+	/** The blobs every tab sees (`app.blobs`), in memory. */
+	blobs: BlobBackend;
 	clock: FakeClock | undefined;
 	base: string;
 	logLevel: LogLevel;
@@ -90,6 +99,7 @@ async function openTab(group: Group, initial: string): Promise<TestApp> {
 		routes: prepared.routes,
 		plugins: prepared.plugins,
 		storage: adapter,
+		blobs: group.blobs,
 		logLevel: group.logLevel
 	});
 	trap.watch(app);
@@ -221,6 +231,7 @@ export async function buildTestApp(
 	const group: Group = {
 		prepared,
 		shared: isSharedStorage(options.storage) ? options.storage : sharedStorage(options.storage),
+		blobs: memoryBlobs(),
 		clock,
 		base: options.base ?? '',
 		logLevel,
