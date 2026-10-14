@@ -41,19 +41,19 @@
 		})
 	);
 
+	/** What each of the group's collections holds, named when the group has more than one. */
 	const groupFiles = (group: Group) => {
-		let count = 0;
-		let bytes = 0;
-		for (const c of collectionsOf(group)) {
+		const collections = collectionsOf(group);
+		return collections.flatMap((c) => {
 			const usage = files.get(c.key);
-			count += usage?.count ?? 0;
-			bytes += usage?.bytes ?? 0;
-		}
-		return { count, bytes };
+			const note = usage && filesNote(usage.count, usage.bytes);
+			if (!note) return [];
+			return [{ key: c.key, note: collections.length > 1 ? `${c.label}: ${note}` : note }];
+		});
 	};
 	const hasData = (group: Group) => {
 		void version;
-		return group.entries.some((e) => storage.read(e) !== undefined) || groupFiles(group).count > 0;
+		return group.entries.some((e) => storage.read(e) !== undefined) || groupFiles(group).length > 0;
 	};
 
 	/** Counts the files again; the latest call wins if several overlap. */
@@ -141,21 +141,34 @@
 		);
 	}
 
-	function clearGroup(group: Group) {
+	/** Clears files; false if some couldn't be (IndexedDB blocked, or locked). */
+	async function clearFiles(collections?: Group['collections']) {
+		if (!blobs || collections?.length === 0) return true;
+		const ok = await blobs.clear(collections);
+		await countFiles();
+		return ok;
+	}
+
+	async function clearGroup(group: Group) {
 		if (!confirm(`Clear saved data for ${group.label}?`)) return;
 		storage.clear(group.entries);
 		version++;
-		const collections = collectionsOf(group);
-		if (blobs && collections.length) void blobs.clear(collections).then(countFiles);
-		toast(`Cleared ${group.label}.`);
+		const ok = await clearFiles(collectionsOf(group));
+		toast(
+			ok
+				? `Cleared ${group.label}.`
+				: `Cleared ${group.label}, but some files couldn't be cleared. Try again.`
+		);
 	}
 
-	function clearAll() {
+	async function clearAll() {
 		if (!confirm('Clear all data saved by this app on this device? This cannot be undone.')) return;
 		storage.clear();
 		version++;
-		if (blobs) void blobs.clear().then(countFiles);
-		toast('All data cleared.');
+		const ok = await clearFiles();
+		toast(
+			ok ? 'All data cleared.' : "Data cleared, but some files couldn't be cleared. Try again."
+		);
 	}
 
 	const button =
@@ -254,13 +267,12 @@
 	<ul class="flex flex-col gap-2">
 		{#each groups as group (group.id)}
 			{@const note = backupNote([...group.entries, ...collectionsOf(group)])}
-			{@const used = groupFiles(group)}
 			<li class="flex items-center justify-between gap-3">
 				<span class="flex flex-col">
 					{group.label}
-					{#if used.count}<span class={muted} data-testid="files-note"
-							>{filesNote(used.count, used.bytes)}</span
-						>{/if}
+					{#each groupFiles(group) as used (used.key)}
+						<span class={muted} data-testid="files-note">{used.note}</span>
+					{/each}
 					{#if note}<span class={muted} data-testid="backup-note">{note}</span>{/if}
 				</span>
 				<button

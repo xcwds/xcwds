@@ -160,7 +160,21 @@ for (const { name, dir, base } of targets) {
 			await expect(page.getByTestId('backup-note')).toContainText(['Hello files']);
 			const clear = page.getByRole('button', { name: /^Clear Hello/ });
 			await expect(clear).toBeEnabled();
+			// Files that can't be cleared (IndexedDB failing) are reported, not called cleared.
+			await page.evaluate(() => {
+				IDBObjectStore.prototype.delete = () => {
+					throw new DOMException('Not now', 'InvalidStateError');
+				};
+			});
 			await clear.click();
+			await expect(page.getByTestId('toast').last()).toContainText(
+				"some files couldn't be cleared"
+			);
+			await expect(page.getByTestId('files-note')).toHaveText('1 file, 2.5 KB');
+			await page.reload();
+			await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+			await clear.click();
+			await expect(page.getByTestId('toast').last()).toHaveText(/^Cleared Hello/);
 			await expect(page.getByTestId('files-note')).toHaveCount(0);
 			await expect(clear).toBeDisabled();
 

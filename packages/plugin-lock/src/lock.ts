@@ -158,7 +158,8 @@ export function createLock(
 		// Files go too, in the background: blob storage is asynchronous. A core before #144 has no
 		// collections.
 		const collections = groups.flatMap((g) => g.collections ?? []);
-		if (collections.length) void options.blobs?.clear(collections);
+		// Nothing to do on failure: the reset has happened, and Your data still shows the files.
+		if (collections.length) options.blobs?.clear(collections).catch(() => {});
 		return groups;
 	}
 
