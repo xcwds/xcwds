@@ -392,16 +392,18 @@ describe('prebundled', () => {
 		network: false
 	});
 
-	it('lists installed page entries, not linked plugins or ones without a page entry (#133)', () => {
-		expect(
-			prebundled([
-				info('@xcwds/plugin-shell', '/app/node_modules/.pnpm/x/node_modules/@xcwds/plugin-shell'),
-				info('app-plugin', '/app/src/plugins/app'),
-				info('worker-only', '/app/node_modules/worker-only', false)
-			])
-		).toEqual(['@xcwds/core', '@xcwds/plugin-shell/client']);
-		expect(prebundled([info('app-plugin', '/app/src/plugins/app')])).toEqual([]);
-		expect(prebundled([info('win', 'C:\\app\\node_modules\\win')])).toEqual([
+	it('lists installed page entries, not linked plugins or ones without a page entry (#133)', async () => {
+		const plugins = [
+			info('@xcwds/plugin-shell', '/app/node_modules/.pnpm/x/node_modules/@xcwds/plugin-shell'),
+			info('app-plugin', '/app/src/plugins/app'),
+			info('worker-only', '/app/node_modules/worker-only', false)
+		];
+		// @xcwds/core only when the app can resolve it (pnpm doesn't hoist peers).
+		expect(prebundled(plugins, root)).toEqual(['@xcwds/plugin-shell/client']);
+		await write('node_modules/@xcwds/core/package.json', '{}');
+		expect(prebundled(plugins, root)).toEqual(['@xcwds/core', '@xcwds/plugin-shell/client']);
+		expect(prebundled([info('app-plugin', '/app/src/plugins/app')], root)).toEqual([]);
+		expect(prebundled([info('win', 'C:\\app\\node_modules\\win')], root)).toEqual([
 			'@xcwds/core',
 			'win/client'
 		]);
@@ -419,7 +421,7 @@ describe('the Vite plugin', () => {
 			// Installed plugins' page entries, which Vite's scan can't see (#133); not `plain`.
 			optimizeDeps: {
 				exclude: ['@xcwds/sveltekit'],
-				include: ['@xcwds/core', 'xcwds-plugin-timers/client']
+				include: ['xcwds-plugin-timers/client']
 			}
 		});
 		const resolved = (ssr: boolean) =>

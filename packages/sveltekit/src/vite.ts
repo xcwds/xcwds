@@ -36,7 +36,7 @@ export function xcwds(): Plugin {
 				optimizeDeps: {
 					exclude: [PACKAGE],
 					// The plugins' page entries, which its dependency scan can't see (see `prebundled`).
-					...(found ? { include: prebundled(found.plugins) } : {})
+					...(found ? { include: prebundled(found.plugins, found.root) } : {})
 				}
 			};
 		},

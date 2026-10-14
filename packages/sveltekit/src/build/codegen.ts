@@ -109,9 +109,13 @@ export function typesModule(plugins: PluginInfo[]): string {
  * Page entries for Vite to pre-bundle up front (`optimizeDeps.include`): only the generated
  * `virtual:xcwds/client` imports them, so its dependency scan misses them and the page reloads
  * when it finds them. Only installed packages: a plugin linked from the app's source (outside
- * `node_modules`) is compiled with the app, like any of its files.
+ * `node_modules`) is compiled with the app, like any of its files. `@xcwds/core` too, when the app
+ * has it (pnpm doesn't hoist it as the plugins' peer, and Vite warns about an include it can't
+ * resolve).
  */
-export function prebundled(plugins: PluginInfo[]): string[] {
+export function prebundled(plugins: PluginInfo[], root: string): string[] {
 	const installed = plugins.filter((p) => p.client && /[\\/]node_modules[\\/]/.test(p.dir));
-	return installed.length ? ['@xcwds/core', ...installed.map((p) => `${p.name}/client`)] : [];
+	if (!installed.length) return [];
+	const core = existsSync(join(root, 'node_modules', '@xcwds', 'core')) ? ['@xcwds/core'] : [];
+	return [...core, ...installed.map((p) => `${p.name}/client`)];
 }
