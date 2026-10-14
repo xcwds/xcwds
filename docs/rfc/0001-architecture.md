@@ -221,6 +221,25 @@ the declarations. See [docs/privacy.md](../privacy.md).
 The scan runs in the adapter because it is the first point where the worker (built in its own
 Vite build, decision 3) and the prerendered pages both exist.
 
+### 11. Encryption is a storage layer a plugin installs
+
+**Decision.** `StorageAdapter` stays synchronous, and a plugin that changes how some keys are
+kept wraps it: `app.storage.layer((inner) => adapter)` stacks a layer over the current adapter,
+so entries, migrations, backups and sync work unchanged on top (#79). For a key it can't serve
+right now, a layer throws (`XCWDS_ERR_LOCKED` while locked): reads return `undefined`, writes
+return false, and a namespace's migrations wait. When its view of the data changes (unlocked,
+locked, another tab re-sealed), the layer calls `app.storage.reload()`, which forgets what the
+registry learned, so waiting migrations run, and tells change listeners (`null`, as after an
+import).
+
+`@xcwds/plugin-vault` is the first layer: with `@xcwds/plugin-lock`, it keeps each sensitive
+group sealed below as one AES-GCM blob, decrypts it into memory on unlock, serves the group's
+keys from there, and re-seals asynchronously after writes. WebCrypto is asynchronous, which is
+why the layer serves a decrypted copy rather than decrypting on read. Backups get `format: 3`
+with the sealed groups in an encrypted section, made with the passcode, so a backup made while
+locked still carries them; format 2 still imports. That format lands with the vault, after this
+extension point.
+
 ## Hook families
 
 Defined in #5; listed here so the decisions above have names to point at.

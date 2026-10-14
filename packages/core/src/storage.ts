@@ -25,6 +25,15 @@ export type StorageAdapter = {
 	keys(): string[];
 };
 
+/**
+ * Wraps the adapter beneath it, so a plugin can change how some keys are kept without the
+ * registry knowing (#79: `@xcwds/plugin-vault` keeps sensitive groups sealed and serves them from
+ * memory while unlocked). It stays synchronous. For a key it can't serve right now (locked), it
+ * throws, ideally an `XcwdsError` with `codes.LOCKED`: reads then return `undefined`, writes
+ * return false and migrations wait until `reload()`.
+ */
+export type StorageLayer = (inner: StorageAdapter) => StorageAdapter;
+
 /** `localStorage`, looked up on every call so a blocked or missing one just fails that call. */
 export function localStorageAdapter(): StorageAdapter {
 	const store = () => {
@@ -226,6 +235,18 @@ export type StorageRegistry = {
 	/** Deletes unclaimed keys (claimed keys are refused). */
 	removeUnclaimed(keys: string[]): void;
 
+	/**
+	 * Puts a layer over the current adapter (layers stack, the last one on top), then `reload()`s.
+	 * Values already saved stay where they are: converting them is the layer's job.
+	 */
+	layer(wrap: StorageLayer): void;
+	/**
+	 * Forgets what this tab knows about saved data, for when a layer's view of it changed (unlocked,
+	 * locked, or another tab re-sealed): migrations run again where needed and change listeners
+	 * hear `null`. A migrated copy that storage couldn't save yet is kept.
+	 */
+	reload(): void;
+
 	/** Asks the browser not to evict this site's data under storage pressure. */
 	requestPersistence(): Promise<'granted' | 'denied' | 'unsupported'>;
 	persisted(): Promise<boolean | 'unsupported'>;
@@ -255,7 +276,7 @@ const NAME = /^[^\s]+$/;
 
 export function createStorage(options: StorageOptions = {}): StorageRegistry {
 	const prefix = options.prefix ?? 'app:';
-	const adapter = options.adapter ?? localStorageAdapter();
+	let adapter = options.adapter ?? localStorageAdapter();
 	const appName = options.appName ?? 'xcwds';
 	const onError = options.onError ?? ((error) => console.error(error));
 
@@ -897,6 +918,27 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 			return stop;
 		},
 		stopSync: () => stop?.(),
+		layer(wrap) {
+			if (typeof wrap !== 'function')
+				throw new XcwdsError(codes.STORAGE_KEY, 'A storage layer must be a function.');
+			const next = wrap(adapter);
+			for (const method of ['get', 'set', 'remove', 'keys'] as const)
+				if (typeof next?.[method] !== 'function')
+					throw new XcwdsError(
+						codes.STORAGE_KEY,
+						`A storage layer must return an adapter with \`${method}\`.`
+					);
+			adapter = next;
+			registry.reload();
+		},
+		reload() {
+			for (const n of namespaces.values()) {
+				if (n.pending) continue;
+				n.migrated = null;
+				n.failed = false;
+			}
+			emit(null, undefined);
+		},
 		exportData,
 		parseBackup,
 		importData(backup, mode) {
