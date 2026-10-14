@@ -64,6 +64,7 @@ export {
 	type ChangeListener,
 	type Entry,
 	type EntryOptions,
+	type PrefixEntry,
 	type Group,
 	type Migration,
 	type ParsedBackup,

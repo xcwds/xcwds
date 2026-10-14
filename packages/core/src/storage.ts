@@ -89,6 +89,22 @@ export type Entry<T> = {
 	readonly backup: boolean;
 	/** Personal data a lock's reset clears (`@xcwds/plugin-lock`); see `EntryOptions`. */
 	readonly sensitive: boolean;
+	/**
+	 * A prefixed entry (`prefix: true`): `key` ends with `:` and the entry claims every key that
+	 * starts with it. It is never read or written itself: use `at(id)`.
+	 */
+	readonly prefix: boolean;
+};
+
+/**
+ * An entry for keys made at runtime (#157), such as one per app a person builds: it claims every
+ * key under `key` (`app:<namespace>:<name>:<id>`), each checked by the same `parse`. Backups,
+ * groups, clearing, a lock's reset and migrations cover all of them.
+ */
+export type PrefixEntry<T> = Entry<T> & {
+	readonly prefix: true;
+	/** The exact entry for one id, for `read`, `write`, `remove`, `update` and `persist()`. */
+	at(id: string): Entry<T>;
 };
 
 export type EntryOptions<T> = {
@@ -112,6 +128,11 @@ export type EntryOptions<T> = {
 	 * forgotten passcode (`@xcwds/plugin-lock`) clears exactly the sensitive groups.
 	 */
 	sensitive?: boolean;
+	/**
+	 * `true` claims every key under `app:<namespace>:<name>:` (see `PrefixEntry`); `key`, if
+	 * given, must then end with `:`. An exact entry and a prefixed one can't overlap.
+	 */
+	prefix?: boolean;
 };
 
 /**
@@ -173,7 +194,8 @@ export type SaveFailureListener = (entry: Entry<unknown>, options: { explicit: b
 /** The storage API every plugin gets as `app.storage`, bound to its namespace. */
 export type StorageScope = Omit<StorageRegistry, 'scope'> & {
 	readonly namespace: string;
-	/** Registers an entry under this namespace. */
+	/** Registers an entry under this namespace (a `PrefixEntry` with `prefix: true`). */
+	entry<T>(name: string, options: EntryOptions<T> & { prefix: true }): PrefixEntry<T>;
 	entry<T>(name: string, options: EntryOptions<T>): Entry<T>;
 	/** Registers a migration for this namespace. Register before reading. */
 	migration(migration: Migration): void;
@@ -187,6 +209,8 @@ export type StorageRegistry = {
 	groups(): Group[];
 
 	read<T>(entry: Entry<T>): T | undefined;
+	/** The ids saved under a prefixed entry, sorted (`[]` when storage can't be read). */
+	keys(entry: PrefixEntry<unknown>): string[];
 	/** Saves a value; false if it couldn't be stored (unavailable, full). */
 	write<T>(entry: Entry<T>, value: T): boolean;
 	remove(entry: Entry<unknown>): boolean;
@@ -308,6 +332,8 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 	const onError = options.onError ?? ((error) => console.error(error));
 
 	const entries = new Map<string, Entry<unknown>>();
+	/** The prefixed entries among `entries`. */
+	const prefixed = new Set<PrefixEntry<unknown>>();
 	/**
 	 * A namespace's migrated data that couldn't be saved (storage full): `before` is what storage
 	 * holds, `data` the migrated values (plus any changes since), saved together with the version.
@@ -341,10 +367,23 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 	const latestVersion = (ns: string) =>
 		Math.max(0, ...(namespaces.get(ns)?.migrations.map((m) => m.to) ?? []));
 
+	/**
+	 * The entry for a full key, exact or one id of a prefixed entry (`of` is that prefixed
+	 * entry), or undefined when no entry claims it.
+	 */
+	function claim(key: string): { entry: Entry<unknown>; of: Entry<unknown> } | undefined {
+		const e = entries.get(key);
+		if (e && !e.prefix) return { entry: e, of: e };
+		for (const p of prefixed)
+			if (key.length > p.key.length && key.startsWith(p.key))
+				return { entry: p.at(key.slice(p.key.length)), of: p };
+		return undefined;
+	}
+
 	/** The namespace that owns `key`: its entry's, or the registered namespace it's under. */
 	function owner(key: string): string | undefined {
-		const e = entries.get(key);
-		if (e) return e.namespace;
+		const e = claim(key);
+		if (e) return e.entry.namespace;
 		let best: string | undefined;
 		for (const ns of namespaces.keys()) {
 			if (ns && key.startsWith(nsPrefix(ns)) && (!best || ns.length > best.length)) best = ns;
@@ -354,9 +393,11 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 
 	function keysOf(ns: string, available: Iterable<string>, extra: string[] = []): string[] {
 		const out = new Set<string>();
-		for (const e of entries.values()) if (e.namespace === ns) out.add(e.key);
+		for (const e of entries.values()) if (e.namespace === ns && !e.prefix) out.add(e.key);
+		const mine = [...prefixed].filter((p) => p.namespace === ns);
 		for (const key of available) {
 			if (ns && key.startsWith(nsPrefix(ns)) && !isVersionKey(key)) out.add(key);
+			if (mine.some((p) => key.length > p.key.length && key.startsWith(p.key))) out.add(key);
 			if (extra.includes(key)) out.add(key);
 		}
 		return [...out];
@@ -486,7 +527,36 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		return flush(e.namespace, n);
 	}
 
+	/** A prefixed entry holds no value of its own (its ids do), so writing to it is a mistake. */
+	function exact(e: Entry<unknown>) {
+		if (e.prefix)
+			throw new XcwdsError(
+				codes.STORAGE_KEY,
+				`"${e.key}" is a prefixed entry: read and write one id with \`at(id)\`.`
+			);
+	}
+
+	/** The ids saved under `p`, including a migration's that isn't saved yet. */
+	function idsOf(p: Entry<unknown>): string[] {
+		ensure(p.namespace);
+		const pending = namespaces.get(p.namespace)?.pending;
+		const keys = pending ? Object.keys(pending.data) : safeKeys();
+		return keys
+			.filter((key) => key.length > p.key.length && key.startsWith(p.key))
+			.map((key) => key.slice(p.key.length))
+			.sort();
+	}
+
+	/** The exact entries `list` covers: each saved id of a prefixed entry, the rest as they are. */
+	function expand(list: Iterable<Entry<unknown>>): Entry<unknown>[] {
+		return [...list].flatMap((e) =>
+			e.prefix ? idsOf(e).map((id) => (e as PrefixEntry<unknown>).at(id)) : [e]
+		);
+	}
+
 	function read<T>(e: Entry<T>): T | undefined {
+		// Reads never throw: a prefixed entry has no value of its own (`keys()` lists its ids).
+		if (e.prefix) return undefined;
 		ensure(e.namespace);
 		const pending = namespaces.get(e.namespace)?.pending;
 		if (pending) {
@@ -506,6 +576,7 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 	}
 
 	function write<T>(e: Entry<T>, value: T): boolean {
+		exact(e);
 		ensure(e.namespace);
 		if (namespaces.get(e.namespace)?.pending) {
 			let copy: unknown;
@@ -525,6 +596,7 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 	}
 
 	function remove(e: Entry<unknown>): boolean {
+		exact(e);
 		ensure(e.namespace);
 		if (namespaces.get(e.namespace)?.pending) return writePending(e, undefined);
 		try {
@@ -558,8 +630,11 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		return read(e);
 	}
 
-	function clear(list: Entry<unknown>[] = [...entries.values()]) {
-		for (const e of list) remove(e);
+	/** Removes `list` (every id of a prefixed entry); returns the keys it covered. */
+	function clear(list: Entry<unknown>[] = [...entries.values()]): string[] {
+		const all = expand(list);
+		for (const e of all) remove(e);
+		return all.map((e) => e.key);
 	}
 
 	function safeKeys(): string[] {
@@ -595,7 +670,7 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 
 	function exportData(now = new Date()): Backup {
 		const data: Record<string, unknown> = {};
-		for (const e of entries.values()) {
+		for (const e of expand(entries.values())) {
 			if (!e.backup) continue;
 			const value = read(e);
 			if (value !== undefined) data[e.key] = value;
@@ -674,7 +749,7 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 			byNs.get(ns)![key] = value;
 		}
 		const data: Record<string, unknown> = {};
-		const found: Entry<unknown>[] = [];
+		const found = new Set<Entry<unknown>>();
 		const skipped: string[] = [];
 		const unclaimedData: Record<string, unknown> = isRecord(raw.unclaimed)
 			? { ...raw.unclaimed }
@@ -686,12 +761,13 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 				return { ok: false, error: "This backup's data couldn't be upgraded." };
 			}
 			for (const [key, value] of Object.entries(subset)) {
-				const e = entries.get(key);
+				const c = claim(key);
 				// An entry kept out of backups is never imported, whatever a file carries.
-				const parsed = e?.backup ? e.parse(value) : undefined;
-				if (e && parsed !== undefined) {
+				const parsed = c?.entry.backup ? c.entry.parse(value) : undefined;
+				if (c && parsed !== undefined) {
 					data[key] = parsed;
-					found.push(e);
+					// A prefixed entry is listed once, however many ids the backup has.
+					found.add(c.of);
 				} else skipped.push(key);
 			}
 		}
@@ -717,14 +793,18 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 				)
 			)
 		};
-		return { ok: true, backup, found, skipped };
+		return { ok: true, backup, found: [...found], skipped };
 	}
 
 	function importData(backup: Backup, mode: 'replace' | 'merge'): boolean {
 		if (mode === 'merge') return applyBackup(backup, mode);
 		// Replace clears everything first, so a write that doesn't fit would leave neither the old
 		// data nor the whole backup (#52): remember what's there and put it back if one fails.
-		const keys = new Set([...entries.keys(), ...Object.keys(backup.unclaimed ?? {})]);
+		const keys = new Set([
+			...expand(entries.values()).map((e) => e.key),
+			...Object.keys(backup.data),
+			...Object.keys(backup.unclaimed ?? {})
+		]);
 		for (const key of Object.keys(backup.unclaimed ?? {}))
 			if (key.startsWith(prefix)) keys.add(versionKey(unclaimedNamespace(key)));
 		for (const { key } of unclaimed()) keys.add(key);
@@ -769,11 +849,11 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 	}
 
 	function applyBackup(backup: Backup, mode: 'replace' | 'merge'): boolean {
-		const kept = [...entries.values()].filter((e) => e.backup);
-		if (mode === 'replace') clear(kept);
+		if (mode === 'replace') clear([...entries.values()].filter((e) => e.backup));
 		let ok = true;
-		for (const e of kept) {
-			if (e.key in backup.data) ok = write(e, backup.data[e.key]) && ok;
+		for (const [key, value] of Object.entries(backup.data)) {
+			const e = claim(key)?.entry;
+			if (e?.backup) ok = write(e, value) && ok;
 		}
 		// Unclaimed data goes in per namespace, with its schema version, so a plugin that comes
 		// back migrates it from the right version (#51).
@@ -820,10 +900,11 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 			return {
 				...rest,
 				namespace: ns,
-				entry<T>(name: string, opts: EntryOptions<T>): Entry<T> {
+				entry<T>(name: string, opts: EntryOptions<T>): PrefixEntry<T> & Entry<T> {
 					if (!NAME.test(name))
 						throw new XcwdsError(codes.STORAGE_KEY, `"${name}" isn't a valid entry name.`);
-					const key = opts.key ?? `${nsPrefix(ns)}${name}`;
+					const isPrefix = opts.prefix === true;
+					const key = opts.key ?? `${nsPrefix(ns)}${name}${isPrefix ? ':' : ''}`;
 					if (
 						!key.startsWith(prefix) ||
 						key === prefix ||
@@ -838,7 +919,24 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 						);
 					if (typeof opts.parse !== 'function')
 						throw new XcwdsError(codes.STORAGE_KEY, `The entry "${key}" needs a parse function.`);
-					for (const flag of ['backup', 'sensitive'] as const)
+					if (isPrefix && !key.endsWith(':'))
+						throw new XcwdsError(
+							codes.STORAGE_KEY,
+							`The prefixed entry "${key}" needs a key that ends with ":".`
+						);
+					// An exact key under a prefix, or two prefixes inside each other, would let two
+					// entries claim the same key.
+					const clash = [...entries.values()].find((e) =>
+						isPrefix
+							? e.key.startsWith(key) || (e.prefix && key.startsWith(e.key))
+							: e.prefix && key.startsWith(e.key)
+					);
+					if (clash)
+						throw new XcwdsError(
+							codes.STORAGE_DUPLICATE_KEY,
+							`The storage key "${key}" overlaps "${clash.key}", which is already registered.`
+						);
+					for (const flag of ['backup', 'sensitive', 'prefix'] as const)
 						if (opts[flag] !== undefined && typeof opts[flag] !== 'boolean')
 							throw new XcwdsError(
 								codes.STORAGE_KEY,
@@ -851,10 +949,26 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 						group: opts.group ?? (ns || name.split(':')[0]!),
 						namespace: ns,
 						backup: opts.backup ?? true,
-						sensitive: opts.sensitive ?? false
+						sensitive: opts.sensitive ?? false,
+						prefix: false
 					};
-					entries.set(key, e as Entry<unknown>);
-					return e;
+					if (!isPrefix) {
+						entries.set(key, e as Entry<unknown>);
+						// The overloads give callers `Entry<T>` here: only `prefix: true` gets a PrefixEntry.
+						return e as PrefixEntry<T>;
+					}
+					const p: PrefixEntry<T> = {
+						...e,
+						prefix: true,
+						at(id) {
+							if (typeof id !== 'string' || !NAME.test(id))
+								throw new XcwdsError(codes.STORAGE_KEY, `"${id}" isn't a valid id for "${key}".`);
+							return { ...e, key: `${key}${id}` };
+						}
+					};
+					entries.set(key, p as Entry<unknown>);
+					prefixed.add(p as PrefixEntry<unknown>);
+					return p;
 				},
 				migration(m: Migration) {
 					if (!Number.isInteger(m.to) || m.to < 1)
@@ -896,6 +1010,10 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 			return [...out.values()];
 		},
 		read,
+		keys(e) {
+			if (!e?.prefix) throw new XcwdsError(codes.STORAGE_KEY, 'keys() takes a prefixed entry.');
+			return idsOf(e);
+		},
 		write,
 		remove,
 		latest,
@@ -906,9 +1024,9 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		},
 		writable,
 		clear(list) {
-			clear(list);
+			const keys = clear(list);
 			// This tab's own clears reach its listeners too, so what's showing follows.
-			if (list) for (const e of list) emit(e.key, undefined);
+			if (list) for (const key of keys) emit(key, undefined);
 			else emit(null, undefined);
 		},
 		saveResult(e, saved, { explicit = false } = {}) {
@@ -942,7 +1060,7 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 					(!key.startsWith(prefix) || isVersionKey(key) || key === `${prefix}probe`)
 				)
 					return;
-				const e = key === null ? undefined : entries.get(key);
+				const e = key === null ? undefined : claim(key)?.entry;
 				const value = e ? read(e) : undefined;
 				for (const l of changeListeners) l(key, value);
 			};

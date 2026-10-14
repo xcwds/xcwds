@@ -183,6 +183,36 @@ for (const { name, dir, base } of targets) {
 			await expect(page.getByTestId('files').getByRole('listitem')).toHaveCount(0);
 		});
 
+		test('notes saved one key per id follow other tabs, back up and clear with their group (#157)', async ({
+			context
+		}) => {
+			const first = await context.newPage();
+			const second = await context.newPage();
+			first.on('dialog', (dialog) => dialog.accept());
+			await gotoHydrated(first, url('/hello'));
+			await gotoHydrated(second, url('/hello'));
+			await first.getByLabel('Note 1').fill('milk');
+			await first.getByLabel('Note 2').fill('eggs');
+			await expect(second.getByLabel('Note 1')).toHaveValue('milk');
+			await expect(second.getByLabel('Note 2')).toHaveValue('eggs');
+			expect(
+				await first.evaluate(() => [
+					localStorage.getItem('app:hello:note:1'),
+					localStorage.getItem('app:hello:note:2')
+				])
+			).toEqual(['"milk"', '"eggs"']);
+
+			await gotoHydrated(first, url('/settings'));
+			const download = first.waitForEvent('download');
+			await first.getByRole('button', { name: 'Download backup' }).click();
+			const backup = JSON.parse(await readFile((await (await download).path())!, 'utf8'));
+			expect(backup.data).toMatchObject({ 'app:hello:note:1': 'milk', 'app:hello:note:2': 'eggs' });
+
+			await first.getByRole('button', { name: /^Clear Hello/ }).click();
+			await expect(second.getByLabel('Note 1')).toHaveValue('');
+			await expect(second.getByLabel('Note 2')).toHaveValue('');
+		});
+
 		test('importing a file that is not a backup shows an error', async ({ page }) => {
 			await gotoHydrated(page, url('/settings'));
 			await page.getByLabel('Backup file').setInputFiles({

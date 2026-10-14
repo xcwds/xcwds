@@ -887,3 +887,189 @@ describe('storage layers (#79)', () => {
 		expect(() => storage.layer(() => ({}) as StorageAdapter)).toThrow(/`get`/);
 	});
 });
+
+describe('prefixed entries (#157)', () => {
+	const prefixedSetup = (initial: Record<string, string> = {}) => {
+		const s = setup(initial);
+		const data = s.storage
+			.scope('blocks')
+			.entry('data', { label: 'Your apps', parse: isNumber, prefix: true });
+		return { ...s, data };
+	};
+
+	it('reads, writes, removes and lists ids under the prefix', () => {
+		const { storage, adapter, data } = prefixedSetup();
+		expect(data.key).toBe('app:blocks:data:');
+		expect(data.prefix).toBe(true);
+		expect(storage.keys(data)).toEqual([]);
+		expect(storage.write(data.at('b'), 2)).toBe(true);
+		expect(storage.write(data.at('a'), 1)).toBe(true);
+		expect(adapter.data.get('app:blocks:data:a')).toBe('1');
+		expect(storage.read(data.at('a'))).toBe(1);
+		expect(storage.keys(data)).toEqual(['a', 'b']);
+		expect(storage.remove(data.at('a'))).toBe(true);
+		expect(storage.keys(data)).toEqual(['b']);
+		const { value, saved } = storage.update(data.at('b'), undefined, (n) => (n ?? 0) + 1);
+		expect([value, saved]).toEqual([3, true]);
+	});
+
+	it('drops invalid values on read, and the entry itself holds no value', () => {
+		const { storage, data } = prefixedSetup({ 'app:blocks:data:x': '"nope"' });
+		expect(storage.read(data.at('x'))).toBeUndefined();
+		expect(storage.read(data)).toBeUndefined();
+		expect(() => storage.write(data, 1)).toThrow(XcwdsError);
+		expect(() => storage.remove(data)).toThrow(XcwdsError);
+		expect(() => data.at('')).toThrow(XcwdsError);
+		expect(() => data.at('has space')).toThrow(XcwdsError);
+		const exact = storage.scope('n').entry('x', { label: 'x', parse: isNumber });
+		expect(() => storage.keys(exact as never)).toThrow(XcwdsError);
+	});
+
+	it('claims its keys, so they are not unclaimed', () => {
+		const { storage } = prefixedSetup({ 'app:blocks:data:a': '1', 'app:blocks:other': '2' });
+		expect(storage.unclaimed()).toEqual([]);
+		const { storage: bare } = setup({ 'app:blocks:data:a': '1' });
+		expect(bare.unclaimed()).toEqual([{ key: 'app:blocks:data:a', namespace: 'blocks' }]);
+	});
+
+	it('claims keys under the app’s own root namespace too', () => {
+		const { storage } = setup({ 'app:notes:a': '1' });
+		const notes = storage
+			.scope('')
+			.entry('notes', { label: 'Notes', parse: isNumber, prefix: true });
+		expect(notes.key).toBe('app:notes:');
+		expect(storage.unclaimed()).toEqual([]);
+		expect(storage.keys(notes)).toEqual(['a']);
+	});
+
+	it('round-trips through a backup, listed once', () => {
+		const { storage, data } = prefixedSetup();
+		storage.write(data.at('a'), 1);
+		storage.write(data.at('b'), 2);
+		const backup = storage.exportData();
+		expect(backup.data).toEqual({ 'app:blocks:data:a': 1, 'app:blocks:data:b': 2 });
+		expect(backup.unclaimed).toEqual({});
+
+		const other = prefixedSetup();
+		other.storage.write(other.data.at('c'), 3);
+		const parsed = other.storage.parseBackup(
+			JSON.stringify({ ...backup, data: { ...backup.data, 'app:blocks:data:bad': 'x' } })
+		);
+		if (!parsed.ok) throw new Error(parsed.error);
+		expect(parsed.found).toEqual([other.data]);
+		expect(parsed.skipped).toEqual(['app:blocks:data:bad']);
+		expect(other.storage.importData(parsed.backup, 'merge')).toBe(true);
+		expect(other.storage.keys(other.data)).toEqual(['a', 'b', 'c']);
+		expect(other.storage.importData(parsed.backup, 'replace')).toBe(true);
+		expect(other.storage.keys(other.data)).toEqual(['a', 'b']);
+	});
+
+	it('puts every id back when a replace import doesn’t fit', () => {
+		const initial = { 'app:blocks:data:a': '1' };
+		const { storage, mem } = quota(initial, 40);
+		const data = storage
+			.scope('blocks')
+			.entry('data', { label: 'Your apps', parse: isNumber, prefix: true });
+		const backup = storage.exportData();
+		backup.data = { 'app:blocks:data:b': 100000, 'app:blocks:data:c': 200000 };
+		expect(storage.importData(backup, 'replace')).toBe(false);
+		expect(storage.keys(data)).toEqual(['a']);
+		expect([...mem.data.keys()]).toEqual(['app:blocks:data:a']);
+	});
+
+	it('is one item in its group, and clearing the group removes every id', () => {
+		const { storage, data } = prefixedSetup();
+		const prefs = storage.scope('blocks').entry('prefs', { label: 'Prefs', parse: isNumber });
+		storage.write(data.at('a'), 1);
+		storage.write(data.at('b'), 2);
+		storage.write(prefs, 3);
+		const group = storage.groups().find((g) => g.id === 'blocks')!;
+		expect(group.entries).toEqual([data, prefs]);
+		expect(group.label).toBe('Your apps, Prefs');
+		const heard: unknown[] = [];
+		storage.onChange((key) => void heard.push(key));
+		storage.clear([data]);
+		expect(storage.keys(data)).toEqual([]);
+		expect(storage.read(prefs)).toBe(3);
+		expect(heard).toEqual(['app:blocks:data:a', 'app:blocks:data:b']);
+		storage.write(data.at('c'), 4);
+		storage.clear();
+		expect(storage.keys(data)).toEqual([]);
+	});
+
+	it('makes its group sensitive, so a lock’s reset clears its ids', () => {
+		const { storage } = setup();
+		const diary = storage
+			.scope('diary')
+			.entry('day', { label: 'Days', parse: isNumber, prefix: true, sensitive: true });
+		storage.write(diary.at('2026-10-14'), 1);
+		const sensitive = storage.groups().filter((g) => g.sensitive);
+		expect(sensitive.map((g) => g.id)).toEqual(['diary']);
+		storage.clear(sensitive.flatMap((g) => g.entries));
+		expect(storage.keys(diary)).toEqual([]);
+	});
+
+	it('hands migrations every key under the prefix, here and in older backups', () => {
+		const initial = { 'app:blocks:data:a': '1', 'app:blocks:data:b': '2' };
+		const { storage, data } = prefixedSetup(initial);
+		storage.scope('blocks').migration({
+			to: 1,
+			run(d) {
+				for (const key of Object.keys(d))
+					if (typeof d[key] === 'number') d[key] = (d[key] as number) * 10;
+			}
+		});
+		expect(storage.keys(data)).toEqual(['a', 'b']);
+		expect(storage.read(data.at('a'))).toBe(10);
+		expect(storage.read(data.at('b'))).toBe(20);
+		const parsed = storage.parseBackup(
+			JSON.stringify({
+				app: 'xcwds',
+				format: 2,
+				versions: { blocks: 0 },
+				data: { 'app:blocks:data:c': 3 },
+				unclaimed: {}
+			})
+		);
+		if (!parsed.ok) throw new Error(parsed.error);
+		expect(parsed.backup.data).toEqual({ 'app:blocks:data:c': 30 });
+	});
+
+	it('follows other tabs’ changes to one id', () => {
+		const { storage, adapter, data } = prefixedSetup();
+		const target = new EventTarget();
+		const seen: unknown[] = [];
+		storage.onChange((key, value) => void seen.push([key, value]));
+		storage.startSync(target);
+		adapter.set('app:blocks:data:a', '5');
+		const event = new Event('storage') as Event & { key: string | null };
+		Object.defineProperty(event, 'key', { value: 'app:blocks:data:a' });
+		target.dispatchEvent(event);
+		expect(seen).toEqual([['app:blocks:data:a', 5]]);
+		expect(storage.read(data.at('a'))).toBe(5);
+	});
+
+	it('refuses an exact entry and a prefixed one that overlap', () => {
+		const { storage } = setup();
+		const x = storage.scope('x');
+		x.entry('data', { label: 'Data', parse: isNumber });
+		// `app:x:data` and `app:x:data:` don't overlap.
+		x.entry('data', { label: 'Each', parse: isNumber, prefix: true });
+		expect(() => x.entry('data:one', { label: 'One', parse: isNumber })).toThrow(
+			expect.objectContaining({ code: codes.STORAGE_DUPLICATE_KEY })
+		);
+		x.entry('foo', { label: 'Foo', parse: isNumber });
+		expect(() =>
+			x.entry('all', { label: 'All', parse: isNumber, prefix: true, key: 'app:x:' })
+		).toThrow(expect.objectContaining({ code: codes.STORAGE_DUPLICATE_KEY }));
+		expect(() =>
+			x.entry('sub', { label: 'Sub', parse: isNumber, prefix: true, key: 'app:x:data:sub:' })
+		).toThrow(expect.objectContaining({ code: codes.STORAGE_DUPLICATE_KEY }));
+		expect(() =>
+			x.entry('bad', { label: 'Bad', parse: isNumber, prefix: true, key: 'app:x:bad' })
+		).toThrow(expect.objectContaining({ code: codes.STORAGE_KEY }));
+		expect(() =>
+			x.entry('flag', { label: 'Flag', parse: isNumber, prefix: 'yes' as never })
+		).toThrow(expect.objectContaining({ code: codes.STORAGE_KEY }));
+	});
+});

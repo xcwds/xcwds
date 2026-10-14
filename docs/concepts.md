@@ -169,6 +169,20 @@ An entry registered with `sensitive: true` is personal data (a journal, a log of
 group is marked sensitive in `storage.groups()`, and resetting a forgotten passcode in
 `@xcwds/plugin-lock` clears exactly the sensitive groups.
 
+Some keys only exist at runtime, such as one per app a person builds. A **prefixed entry**
+(`prefix: true`) claims every key under `app:<namespace>:<name>:`, each checked by the same
+`parse`; `at(id)` gives the exact entry for one id, which works everywhere an entry does
+(`read`, `write`, `update`, `persist()`), and `storage.keys(entry)` lists the ids saved:
+
+```ts
+const notes = app.storage.entry('note', { label: 'Notes', parse: parseNote, prefix: true });
+app.storage.write(notes.at('groceries'), 'milk, eggs');
+app.storage.keys(notes); // ['groceries']
+```
+
+Backups, clearing its group, a lock's reset, `@xcwds/plugin-vault` and migrations cover every id,
+and the settings page lists it once. An exact entry and a prefixed one can't overlap.
+
 Files and images don't fit in that storage (a phone photo is several megabytes), so they go in
 **blob collections**, kept in IndexedDB. A collection is registered like an entry, with a key, a
 label, a group and optionally `sensitive`, and each blob can carry a little JSON (`meta`) that

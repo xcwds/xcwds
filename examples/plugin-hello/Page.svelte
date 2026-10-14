@@ -27,6 +27,17 @@
 		() => count,
 		(v) => (count = v)
 	);
+	/** Two notes, each its own key under `app:hello:note:` (a prefixed entry). */
+	const ids = ['1', '2'];
+	let notes = $state(ids.map(() => ''));
+	ids.forEach((id, i) =>
+		persist(
+			app.hello.notes.at(id),
+			() => notes[i] || undefined,
+			(v) => (notes[i] = v),
+			{ cleared: () => (notes[i] = '') }
+		)
+	);
 </script>
 
 <p data-testid="plugin-page">
@@ -41,6 +52,15 @@
 		<input type="file" class="block min-h-11 max-w-full" data-testid="attach" onchange={attach} />
 	</label>
 </p>
+{#each ids as id, i (id)}
+	<p>
+		<label>
+			Note {id}
+			<textarea class="block min-h-11 w-full rounded-xl border p-2" bind:value={notes[i]}
+			></textarea>
+		</label>
+	</p>
+{/each}
 <ul data-testid="files">
 	{#each files as name, i (i)}
 		<li>{name}</li>

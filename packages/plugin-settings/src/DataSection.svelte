@@ -6,7 +6,7 @@
 	 * it and cleared with it; backups leave them out. While a passcode lock (`app.lock`, from `@xcwds/plugin-lock`)
 	 * is locked, none of it is offered: a backup would hand over what the lock keeps out.
 	 */
-	import type { Group, ParsedBackup } from '@xcwds/core';
+	import type { Group, ParsedBackup, PrefixEntry } from '@xcwds/core';
 	import { brand, useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
 	import type {} from '@xcwds/plugin-shell/client';
@@ -53,7 +53,14 @@
 	};
 	const hasData = (group: Group) => {
 		void version;
-		return group.entries.some((e) => storage.read(e) !== undefined) || groupFiles(group).length > 0;
+		return (
+			group.entries.some((e) =>
+				// A prefixed entry (#157) has data when any of its ids is saved.
+				e.prefix
+					? storage.keys(e as PrefixEntry<unknown>).length > 0
+					: storage.read(e) !== undefined
+			) || groupFiles(group).length > 0
+		);
 	};
 
 	/** Counts the files again; the latest call wins if several overlap. */

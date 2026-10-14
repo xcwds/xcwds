@@ -71,6 +71,10 @@ An entry registered with `backup: false` (secrets, re-downloadable caches) is le
 and imports neither write nor clear it; clearing its group still removes it.
 `sensitive: true` marks personal data: its group is `sensitive` in `groups()`, and a passcode
 lock's reset clears exactly those groups.
+`prefix: true` registers a prefixed entry for keys made at runtime (`app:<namespace>:<name>:<id>`,
+one per app a person builds, say): `entry.at(id)` is the exact entry for one id, `keys(entry)`
+lists the saved ids, and backups, groups, clearing, a lock's reset and migrations cover them all.
+An exact entry and a prefixed one can't overlap.
 `unclaimed()` lists data left by plugins that were removed. Backups keep that data with its schema
 version, so a backup still imports after a plugin is removed, and the plugin's migrations pick
 up where they left off if it comes back.
