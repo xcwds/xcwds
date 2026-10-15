@@ -34,7 +34,7 @@
 		"@resvg/resvg-js": "^2.6.2",
 		"fake-indexeddb": "^6.2.5",
 		"typescript": "^5.9.3",
-		"vitest": "^4.0.15"
+		"vitest": "^5.0.0"
 	},
 	"peerDependencies": {
 		"@resvg/resvg-js": "^2.6.0"

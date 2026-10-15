@@ -38,12 +38,12 @@
 		"@xcwds-example/plugin-hello": "workspace:*",
 		"@xcwds/core": "workspace:^",
 		"typescript": "^5.9.3",
-		"vitest": "^4.0.15"
+		"vitest": "^5.0.0"
 	},
 	"peerDependencies": {
 		"@playwright/test": "^1.50.0",
 		"@xcwds/core": "workspace:^",
-		"vitest": "^3.0.0 || ^4.0.0"
+		"vitest": "^3.0.0 || ^4.0.0 || ^5.0.0"
 	},
 	"peerDependenciesMeta": {
 		"@playwright/test": {
