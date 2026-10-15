@@ -69,6 +69,10 @@ page is a component it exports, and the app keeps a small route file that render
 **route registry** with `app.route({ path, title, emoji, parent })` from its build entry, so the
 header shows its title and back arrow and the build prerenders it.
 
+An app with many tools can group them into apps people turn on and off
+(`@xcwds/plugin-tools`' `apps`; RFC 0001, decision 13). Every app ships in every build: turning one
+off hides it, but its pages still open and its data stays.
+
 ## Encapsulation
 
 Each plugin sees its own view of the app. What it adds with `app.decorate()` stays inside it

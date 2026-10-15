@@ -13,7 +13,10 @@
 	let shortcuts = $state<HomeShortcuts>(emptyShortcuts());
 	$effect(() => tools?.shortcuts?.subscribe((s) => (shortcuts = s)));
 
-	const toolAt = (path: string) => tools?.get(path);
+	// Tools of apps that are off are hidden, not unpinned: they come back with the app.
+	let shown = $state.raw(new Set(tools?.list().map((t) => t.path)));
+	$effect(() => tools?.subscribe(() => (shown = new Set(tools.list().map((t) => t.path)))));
+	const toolAt = (path: string) => (shown.has(path) ? tools?.get(path) : undefined);
 	let pinned = $derived(shortcuts.pins.map(toolAt).filter((t): t is Tool => t !== undefined));
 	// Recently used tools that aren't already pinned.
 	let recent = $derived(

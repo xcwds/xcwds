@@ -1,7 +1,8 @@
 <script lang="ts">
 	/**
 	 * The index page: every tool with its blurb, and a ☆ button that pins it to Home. Render it
-	 * from the index page's route file, inside `<main class="page-wide">`.
+	 * from the index page's route file, inside `<main class="page-wide">`. With apps (#158), it
+	 * lists the tools of apps that are on, and links to the Apps page.
 	 */
 	import { useApp } from '@xcwds/sveltekit';
 	import { emptyShortcuts, type HomeShortcuts } from './home.js';
@@ -9,7 +10,9 @@
 	import type {} from './types.js';
 
 	const tools = useApp().tools;
-	const list = tools?.list() ?? [];
+	/** The tools of apps that are on (and those in no app). */
+	let list = $state.raw(tools?.list() ?? []);
+	$effect(() => tools?.subscribe(() => (list = tools.list())));
 	let shortcuts = $state<HomeShortcuts>(emptyShortcuts());
 	$effect(() => tools?.shortcuts?.subscribe((s) => (shortcuts = s)));
 </script>
@@ -45,3 +48,12 @@
 <p class="text-sm text-(--xcwds-shell-muted)">
 	Pin the tools you use most (☆) to reach them from Home in one tap.
 </p>
+{#if tools?.catalog}
+	<a
+		href={href(tools.catalog)}
+		class="flex min-h-11 items-center gap-3 self-start rounded-xl bg-(--xcwds-shell-card) px-4 py-2 font-medium hover:bg-(--xcwds-shell-hover-bg)"
+		data-testid="apps-link"
+	>
+		<span aria-hidden="true">🧩</span> Choose apps
+	</a>
+{/if}

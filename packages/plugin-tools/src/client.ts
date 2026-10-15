@@ -6,6 +6,15 @@
  * Imported at prerender too, so it only touches browser globals once the app boots.
  */
 import { definePlugin } from '@xcwds/core';
+import type { Component } from 'svelte';
+import {
+	appIsOn,
+	appOf,
+	parseAppsSetting,
+	toolShows,
+	withAppOn,
+	type AppsSetting
+} from './apps.js';
 import {
 	emptyShortcuts,
 	parseShortcuts,
@@ -15,18 +24,42 @@ import {
 	withVisit,
 	type HomeShortcuts
 } from './home.js';
-import { CORE, NAME, ToolList, checkTool, resolveOptions, type ToolsOptions } from './options.js';
+import {
+	CORE,
+	NAME,
+	ToolList,
+	checkTool,
+	resolveOptions,
+	type Tool,
+	type ToolsOptions
+} from './options.js';
 import type { AppTools, ToolShortcuts } from './types.js';
 import type {} from '@xcwds/plugin-shell/client';
 import type {} from '@xcwds/sveltekit/routes';
 
 export type { AppTools, ToolShortcuts } from './types.js';
 
+/** What this plugin uses of `app.settingsPage` (from `@xcwds/plugin-settings`, if present). */
+type SettingsPageLike = { control(name: string, component: Component): () => void };
+
 export default definePlugin(
 	(app, input: ToolsOptions) => {
 		const options = resolveOptions(input);
-		const list = new ToolList(options.path);
+		const { apps } = options;
+		const list = new ToolList(options.path, apps, options.catalog);
 		for (const tool of options.items) list.add(tool);
+
+		if (apps.length)
+			app.settings.field('apps', {
+				default: {},
+				parse: parseAppsSetting,
+				label: 'Apps',
+				hint: 'Choose the apps you use.',
+				section: 'general'
+			});
+		const setting = (): AppsSetting => (apps.length ? (app.settings.get().apps ?? {}) : {});
+		const isOn = (id: string) => appIsOn(apps, setting(), id);
+		const shows = (tool: Tool) => toolShows(tool, isOn);
 
 		const entry = app.storage.entry('shortcuts', {
 			label: 'Home shortcuts',
@@ -96,9 +129,29 @@ export default definePlugin(
 
 		app.decorate('tools', {
 			index: options.path,
-			list: () => list.all(),
+			catalog: apps.length ? options.catalog : undefined,
+			list: () => list.all().filter(shows),
+			all: () => list.all(),
 			get: (path) => list.all().find((t) => t.path === path),
 			add: (tool) => void list.add(checkTool(tool)),
+			apps: () => apps,
+			appOf: (path) => appOf(apps, list.all(), path),
+			isOn,
+			setOn(id, on) {
+				if (!apps.some((a) => a.id === id)) return false;
+				if (isOn(id) === on) return true;
+				app.settings.update((current) => ({
+					apps: withAppOn(apps, current.apps ?? {}, id, on)
+				}));
+				return app.settings.save();
+			},
+			subscribe(listener) {
+				listener();
+				if (!apps.length) return () => {};
+				return app.settings.subscribe((next, prev) => {
+					if (JSON.stringify(next.apps) !== JSON.stringify(prev.apps)) listener();
+				});
+			},
 			shortcuts
 		} satisfies AppTools);
 
@@ -119,6 +172,12 @@ export default definePlugin(
 			);
 			// Home's blocks, when the app has the shell. Loaded lazily: the component imports
 			// @xcwds/sveltekit, which imports this entry.
+			// With @xcwds/plugin-settings, the apps field shows as a link to the Apps page.
+			const page = (app as { settingsPage?: SettingsPageLike }).settingsPage;
+			if (page && apps.length)
+				void import('./AppsLink.svelte').then(({ default: AppsLink }) => {
+					if (!closed) stops.push(page.control('apps', AppsLink));
+				});
 			const home = app.shell?.home;
 			if (!home) return;
 			const { default: HomeShortcuts } = await import('./HomeShortcuts.svelte');
