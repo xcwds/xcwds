@@ -11,11 +11,19 @@ import {
 	withPinMoved,
 	withPinToggled,
 	withVisit,
+	withoutTool,
 	type ShortcutTool
 } from './home.js';
 import toolsFactory, { build } from './index.js';
 import { appIsOn, appOf, applyAppsScript, appsOff, parseAppsSetting, withAppOn } from './apps.js';
-import { resolveOptions, type AppGroup, type Tool } from './options.js';
+import {
+	checkTool,
+	isToolPath,
+	resolveOptions,
+	splitToolPath,
+	type AppGroup,
+	type Tool
+} from './options.js';
 
 // The block needs SvelteKit's runtime; e2e tests cover it.
 vi.mock('./HomeShortcuts.svelte', () => ({ default: function HomeShortcuts() {} }));
@@ -294,6 +302,57 @@ describe('the Home rules', () => {
 	});
 });
 
+describe('tools on a shared page (#160)', () => {
+	it('take a short #fragment after the page', () => {
+		for (const ok of ['/my-apps/app#k3f9', '/a#x', '/a/b#A-z_0.9~'])
+			expect(isToolPath(ok)).toBe(true);
+		for (const bad of ['/a#', '/#x', '/a/#x', '/a#b c', '/a#b#c', '/a?x#y', `/a#${'x'.repeat(65)}`])
+			expect(isToolPath(bad)).toBe(false);
+		expect(splitToolPath('/my-apps/app#k3f9')).toEqual({ page: '/my-apps/app', fragment: '#k3f9' });
+		expect(splitToolPath('/a')).toEqual({ page: '/a', fragment: '' });
+		expect(() => checkTool(tool('x', { path: '/a#b c' }))).toThrow(/short #fragment/);
+	});
+
+	it('keep saved shortcuts of tools that may not be there yet, and forget removed ones', () => {
+		const known: ShortcutTool[] = [{ path: '/utils/a' }];
+		expect(
+			parseShortcuts(
+				{
+					pins: ['/apps/app#x', '/utils/gone', '/utils/a'],
+					recent: ['/apps/app#y', '/utils/gone']
+				},
+				known
+			)
+		).toEqual({ pins: ['/apps/app#x', '/utils/a'], recent: ['/apps/app#y'] });
+		// Once there, a private one leaves Recently used like any private tool.
+		expect(
+			parseShortcuts({ pins: [], recent: ['/apps/p#y'] }, [{ path: '/apps/p#y', private: true }])
+		).toEqual({ pins: [], recent: [] });
+		expect(withoutTool({ pins: ['/a#x', '/b'], recent: ['/b', '/a#x'] }, '/a#x')).toEqual({
+			pins: ['/b'],
+			recent: ['/b']
+		});
+	});
+
+	it('adds no route in the build: the plugin that owns the page registers it', async () => {
+		const app = await buildTestApp(
+			{
+				plugins: [
+					toolsFactory(options),
+					definePlugin((a) => {
+						a.route({ path: '/my-apps/app', title: 'App' });
+						a.tools!.add(tool('w', { path: '/my-apps/app#water' }));
+					})
+				]
+			},
+			{ import: importer }
+		);
+		expect(app.routes.get('/my-apps/app')).toMatchObject({ title: 'App' });
+		expect(app.tools!.get('/my-apps/app#water')?.name).toBe('W');
+		expect(app.routes.get('/my-apps/app#water')).toBeUndefined();
+	});
+});
+
 describe('the build', () => {
 	it('adds the index page and each tool to the route registry, and shortcuts to the manifest', async () => {
 		const app = await buildTestApp(
@@ -444,6 +503,39 @@ describe('the page', () => {
 		expect(app.tools!.shortcuts!.state.recent).toEqual(['/utils/d', '/utils/c', '/utils/b']);
 		const saved = app.sharedStorage.backing.get('app:tools:shortcuts');
 		expect(JSON.parse(saved!)).toEqual({ pins: [], recent: ['/utils/d', '/utils/c', '/utils/b'] });
+	});
+
+	it('adds and removes tools at runtime, with their pins and recents', async () => {
+		const app = await buildTestApp({ plugins: [[client, options]] }, { path: '/hello' });
+		const tools = app.tools!;
+		let calls = 0;
+		tools.subscribe(() => calls++);
+		tools.add(tool('water', { path: '/utils/a#water', name: 'Water' }));
+		expect(calls).toBe(2);
+		expect(tools.list().map((t) => t.path)).toContain('/utils/a#water');
+
+		// The fragment tells the tool apart from its page; any other fragment is the page.
+		await app.navigate('/utils/a#water');
+		await app.navigate('/utils/a#other');
+		expect(tools.shortcuts!.state.recent).toEqual(['/utils/a', '/utils/a#water']);
+		expect(tools.shortcuts!.togglePin('/utils/a#water')).toBe(true);
+
+		// Saved while the tool isn't there yet (another tab, before it's added): kept.
+		const other = await app.openTab();
+		expect(other.tools!.shortcuts!.state).toEqual({
+			pins: ['/utils/a#water'],
+			recent: ['/utils/a', '/utils/a#water']
+		});
+
+		expect(tools.remove('/utils/a#water')).toBe(true);
+		expect(calls).toBe(3);
+		expect(tools.remove('/utils/a#water')).toBe(false);
+		expect(tools.shortcuts!.state).toEqual({ pins: [], recent: ['/utils/a'] });
+		expect(JSON.parse(app.sharedStorage.backing.get('app:tools:shortcuts')!)).toEqual({
+			pins: [],
+			recent: ['/utils/a']
+		});
+		expect(() => tools.add(tool('bad', { path: '/utils/a#no good' }))).toThrow();
 	});
 
 	it('only writes when something changes', async () => {

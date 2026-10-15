@@ -133,7 +133,7 @@ saved as `app:tools:shortcuts` (see `storageKey`); tools that no longer exist ar
 
 `app.tools` in the page has `list()` (the tools that show), `all()`, `get(path)`, `index`,
 `catalog`, `apps()`, `appOf(path)`, `isOn(id)`, `setOn(id, on)`, `subscribe(listener)` (apps
-turned on or off) and `shortcuts` (`state`, `subscribe`, `togglePin`, `movePin`, `visit`,
+turned on or off, and tools added or removed after boot), `add(tool)`, `remove(path)` and `shortcuts` (`state`, `subscribe`, `togglePin`, `movePin`, `visit`,
 `reload`); `HomeShortcuts.svelte` is the Home
 block, should you lay out Home yourself.
 
@@ -143,3 +143,15 @@ A plugin adds its own tool with `app.tools?.add(tool)` while plugins register, f
 build entry (which adds the tool's page to the route registry, so the plugin doesn't call
 `app.route()` for it) and its page entry. Register it after `tools()` in the config. A tool with
 no route (added from the page entry only) logs a warning when the app starts.
+
+### Tools on a shared page
+
+Some tools share one page and come and go with the person's data, like the apps of
+`@xcwds/plugin-blocks` at `/my-apps/app#<id>`. Their `path` ends with a `#fragment` (1-64
+letters, digits, `-`, `_`, `.` or `~`), which tells them apart in pins and Recently used:
+opening `/my-apps/app#k3f9` records that tool, and any other fragment records the page. The
+build adds no route for them (the plugin that owns the page registers it), and the page entry can
+`add()` them at any time; lists, Home and `subscribe` follow. `remove(path)` takes one away
+with its pin and its place under Recently used. Since such tools may be added after the saved
+shortcuts load (once the data is read, or after an unlock), pins and recents with a fragment
+are kept while their tool is missing, and Home shows only the ones that are there.
