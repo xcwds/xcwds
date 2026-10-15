@@ -274,6 +274,21 @@ share storage anyway, a page someone opens (a bookmark, a shared link) must stil
 and the manifest is written at build time, so it can't follow each person's choice (only apps
 that start on get shortcuts). Keeping apps that are off out of the offline cache is #163.
 
+### 14. Apps people make are data, not code
+
+**Decision.** The small apps people add themselves (a chore checklist, a water counter, a mood
+log; #160) are **definitions**: plain JSON listing building blocks (checklist, counter, log,
+notes in format 1) that `@xcwds/plugin-blocks` renders with its own trusted components. A
+definition can't run code, load anything from the network, render HTML or reach another app's
+data, so "never phone home" and the CSP (decisions 4 and 10) hold for apps nobody reviewed.
+Plugins are trusted code with access to all storage (decision 5), so letting people install
+plugins was ruled out, and a sandboxed-iframe runtime would need its own storage bridge, a looser
+CSP and a security review, for little gain over blocks. Every definition comes in through one
+validator that checks the format, block types and limits and rejects what it doesn't know with a
+message, rather than half-rendering it; the format is versioned, and a new format adds a
+migration. What this rules out: formulas, scripts, links between apps, remote content and custom
+layouts. New kinds of app grow by adding block types to the plugin.
+
 ## Hook families
 
 Defined in #5; listed here so the decisions above have names to point at.
