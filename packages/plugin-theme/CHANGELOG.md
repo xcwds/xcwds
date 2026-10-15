@@ -1,5 +1,16 @@
 # @xcwds/plugin-theme
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [7d0de97]
+- Updated dependencies [501c723]
+- Updated dependencies [2c0f5e2]
+- Updated dependencies [d5aa738]
+  - @xcwds/core@0.4.0
+  - @xcwds/sveltekit@1.0.0
+
 ## 0.3.0
 
 ### Patch Changes

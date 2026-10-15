@@ -1,5 +1,14 @@
 # @xcwds/core
 
+## 0.4.0
+
+### Minor Changes
+
+- 7d0de97: Blob collections join storage groups: `storage.groups()` lists each group's `collections`, and a sensitive collection makes its group sensitive. Settings → Your data shows each group's files and their size and clears them with the group (and with Clear all data); a passcode lock's reset clears sensitive collections. Collections are looked up by key, so a copy (a Svelte `$state` proxy) works. `setupApp` takes a `blobs` backend, and `@xcwds/testing` keeps blobs in memory, shared by an app's tabs.
+- 501c723: Blob store: `app.blobs` keeps files and images in IndexedDB. Plugins register collections like storage entries (`register({ key, label, group, sensitive, validate })`), then `put`, `get`, `list`, `delete`, `clear` and `usage()`; every call is async and never throws. `onChange` hears other tabs, `layer()` wraps the backend, and `persist()` asks the browser to keep the data. `createApp({ blobs })` takes another `BlobBackend`, such as `memoryBlobs()`.
+- 2c0f5e2: Prefixed storage entries for keys made at runtime (#157): `app.storage.entry(name, { prefix: true, … })` claims every key under `app:<namespace>:<name>:`, each checked by the same `parse`. `entry.at(id)` is the exact entry for one id (for `read`, `write`, `update` and `persist()`), and `storage.keys(entry)` lists the saved ids. Backups, groups, clearing, a lock's reset, migrations and other tabs' changes cover every id, and an exact entry can't overlap a prefixed one. Settings → Your data counts a prefixed entry's ids, and `@xcwds/plugin-vault` seals them when the group is sensitive.
+- d5aa738: Storage layers: `app.storage.layer((inner) => adapter)` lets a plugin wrap the storage adapter (to keep some keys encrypted, for example), and `app.storage.reload()` re-reads saved data after a layer's view of it changes. A layer throws `XCWDS_ERR_LOCKED` (the new `codes.LOCKED`) for keys it can't serve while locked.
+
 ## 0.3.0
 
 ### Minor Changes

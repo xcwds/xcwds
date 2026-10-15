@@ -1,5 +1,24 @@
 # @xcwds/plugin-settings
 
+## 1.0.0
+
+### Minor Changes
+
+- 7d0de97: Blob collections join storage groups: `storage.groups()` lists each group's `collections`, and a sensitive collection makes its group sensitive. Settings → Your data shows each group's files and their size and clears them with the group (and with Clear all data); a passcode lock's reset clears sensitive collections. Collections are looked up by key, so a copy (a Svelte `$state` proxy) works. `setupApp` takes a `blobs` backend, and `@xcwds/testing` keeps blobs in memory, shared by an app's tabs.
+
+### Patch Changes
+
+- 2c0f5e2: Prefixed storage entries for keys made at runtime (#157): `app.storage.entry(name, { prefix: true, … })` claims every key under `app:<namespace>:<name>:`, each checked by the same `parse`. `entry.at(id)` is the exact entry for one id (for `read`, `write`, `update` and `persist()`), and `storage.keys(entry)` lists the saved ids. Backups, groups, clearing, a lock's reset, migrations and other tabs' changes cover every id, and an exact entry can't overlap a prefixed one. Settings → Your data counts a prefixed entry's ids, and `@xcwds/plugin-vault` seals them when the group is sensitive.
+- Updated dependencies [7d0de97]
+- Updated dependencies [501c723]
+- Updated dependencies [2c0f5e2]
+- Updated dependencies [7a12c31]
+- Updated dependencies [0e9c638]
+- Updated dependencies [d5aa738]
+  - @xcwds/core@0.4.0
+  - @xcwds/sveltekit@1.0.0
+  - @xcwds/plugin-shell@1.0.0
+
 ## 0.3.0
 
 ### Patch Changes
