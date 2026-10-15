@@ -73,7 +73,7 @@ one, `./worker` for the service worker, plus any components. This one has no wor
 		"svelte-check": "^4.3.4",
 		"typescript": "^5.9.3",
 		"vite": "^7.2.6",
-		"vitest": "^4.0.15"
+		"vitest": "^5.0.0"
 	}
 }
 ```
