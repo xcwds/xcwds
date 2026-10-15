@@ -8,7 +8,7 @@ import { isDayKey } from './calendar.js';
 import type { ChecklistData } from './checklist.js';
 import { HISTORY, type CounterData } from './counter.js';
 import { FORMAT, LIMITS, type AppDefinition, type Block } from './format.js';
-import { isEntry, parseValues, type LogData } from './log.js';
+import { isEntry, keepValid, type LogData } from './log.js';
 
 export interface NotesData {
 	text: string;
@@ -60,8 +60,8 @@ function blockData(block: Block, raw: unknown): BlockData | undefined {
 			const entries: LogData['entries'] = [];
 			for (const e of raw.entries) {
 				if (!isEntry(e)) continue;
-				const values = parseValues(block, e.values as Record<string, unknown>);
-				if (values.ok) entries.push({ id: e.id, at: e.at, values: values.value });
+				const values = keepValid(block, e.values as Record<string, unknown>);
+				if (Object.keys(values).length > 0) entries.push({ id: e.id, at: e.at, values });
 			}
 			return { entries: entries.sort((a, b) => b.at - a.at) };
 		}

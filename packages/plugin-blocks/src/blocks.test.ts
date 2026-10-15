@@ -151,6 +151,9 @@ describe('counter', () => {
 		let data = emptyCounter(daily, at('2026-10-14T12:00:00'));
 		data = adjust(daily, data, -1, at('2026-10-14T12:00:00'));
 		expect(data.value).toBe(0);
+		data = adjust(daily, data, 0.6, at('2026-10-14T12:00:00'));
+		expect(data.value).toBe(1);
+		data = adjust(daily, data, -1, at('2026-10-14T12:00:00'));
 		data = current(daily, data, at('2026-10-15T12:00:00'));
 		expect(data.history).toEqual([]);
 	});
@@ -279,6 +282,7 @@ describe('parseData', () => {
 					entries: [
 						{ id: 'a', at: 2, values: { mood: 3, gone: 1 } },
 						{ id: 'b', at: 1, values: { mood: 9 } },
+						{ id: 'c', at: 4, values: { mood: 9, slept: 8 } },
 						{ id: 'bad id', at: 3, values: { mood: 1 } },
 						'junk'
 					]
@@ -290,7 +294,12 @@ describe('parseData', () => {
 		expect(parseData(mood, raw)).toEqual({
 			format: 1,
 			blocks: {
-				log: { entries: [{ id: 'a', at: 2, values: { mood: 3 } }] },
+				log: {
+					entries: [
+						{ id: 'c', at: 4, values: { slept: 8 } },
+						{ id: 'a', at: 2, values: { mood: 3 } }
+					]
+				},
 				notes: { text: 'hello <b>there</b>' }
 			}
 		});

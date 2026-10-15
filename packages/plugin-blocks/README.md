@@ -50,7 +50,8 @@ Block types:
 - **notes**: one plain-text area.
 
 Limits (`LIMITS`): 32 KB of JSON, 20 blocks, 12 fields per log, 200 checklist items, 12
-options per choice, names up to 60 characters and labels up to 80. Ids are 1-32 letters, digits,
+options per choice, names up to 60 characters and labels up to 80. A notes block holds up to
+20,000 characters (`LIMITS.notes`; longer saved notes are cut on load). Ids are 1-32 letters, digits,
 `-` or `_`; `newId()` makes random ones.
 
 "Today" is the local calendar day from the wall clock (`dayKey`), and day arithmetic runs on

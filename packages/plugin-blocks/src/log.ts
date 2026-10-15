@@ -80,6 +80,21 @@ function value(field: LogField, raw: unknown): Parsed<LogValue> {
 	}
 }
 
+/**
+ * The values of a saved entry that still fit the log's fields, for reading data back after its
+ * definition changed: a value that no longer fits is dropped, not the whole entry.
+ */
+export function keepValid(block: LogBlock, input: Record<string, unknown>): LogEntry['values'] {
+	const values: LogEntry['values'] = {};
+	for (const field of block.fields) {
+		const raw = input[field.id];
+		if (raw === undefined || raw === null || raw === '') continue;
+		const parsed = value(field, raw);
+		if (parsed.ok) values[field.id] = parsed.value;
+	}
+	return values;
+}
+
 /** Adds an entry, keeping the newest first. */
 export function addEntry(data: LogData, entry: LogEntry): LogData {
 	return { entries: sortEntries([entry, ...data.entries.filter((e) => e.id !== entry.id)]) };

@@ -43,7 +43,10 @@ export function current(block: CounterBlock, data: CounterData, now: Date | numb
 	return { period, value: 0, history };
 }
 
-/** Adds `delta` (+1 or −1 from the buttons) as of `now`; a count never goes below zero. */
+/**
+ * Adds `delta` (+1 or −1 from the buttons) as of `now`. Counts are whole numbers and never go
+ * below zero.
+ */
 export function adjust(
 	block: CounterBlock,
 	data: CounterData,
@@ -51,5 +54,5 @@ export function adjust(
 	now: Date | number
 ): CounterData {
 	const c = current(block, data, now);
-	return { ...c, value: Math.max(0, c.value + delta) };
+	return { ...c, value: Math.max(0, c.value + (Number.isFinite(delta) ? Math.round(delta) : 0)) };
 }
