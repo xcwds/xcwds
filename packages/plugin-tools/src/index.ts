@@ -19,19 +19,32 @@
  * The build entry adds the index page and every tool to the route registry (so they are
  * prerendered and the shell knows their titles) and the manifest's `shortcuts`.
  */
-import { definePlugin, descriptor } from '@xcwds/core';
+import { XcwdsError, codes, definePlugin, descriptor } from '@xcwds/core';
+import { appOf } from './apps.js';
 import {
 	CORE,
 	NAME,
 	ToolList,
 	checkTool,
 	resolveOptions,
+	splitToolPath,
 	type Tool,
 	type ToolsOptions
 } from './options.js';
 import type { AppTools } from './types.js';
 
-export type { ResolvedToolsOptions, Tool, ToolsOptions } from './options.js';
+export type { AppGroup, ResolvedToolsOptions, Tool, ToolsOptions } from './options.js';
+export { isToolPath, splitToolPath } from './options.js';
+export {
+	appIsOn,
+	appOf,
+	appsOff,
+	applyAppsScript,
+	parseAppsSetting,
+	toolShows,
+	withAppOn,
+	type AppsSetting
+} from './apps.js';
 export {
 	MAX_RECENT,
 	parseShortcuts,
@@ -48,15 +61,38 @@ export type { AppTools, ToolShortcuts } from './types.js';
 export const build = definePlugin(
 	(app, input: ToolsOptions) => {
 		const options = resolveOptions(input);
-		const list = new ToolList(options.path);
+		const { apps } = options;
+		// With @xcwds/plugin-shell registered first, its sections' apps must be ours (#159).
+		const sections = (app as { shellSections?: readonly { path: string; app?: string }[] })
+			.shellSections;
+		for (const s of sections ?? [])
+			if (s.app !== undefined && !apps.some((a) => a.id === s.app))
+				throw new XcwdsError(
+					codes.CONFIG_INVALID,
+					`@xcwds/plugin-shell: the section "${s.path}" is in the app "${s.app}", which isn't in ${NAME}'s \`apps\`.`,
+					{ plugin: NAME }
+				);
+		const list = new ToolList(options.path, apps, options.catalog);
 		app.route({
 			path: options.path,
 			title: options.title,
 			...(options.emoji ? { emoji: options.emoji } : {}),
 			width: 'wide'
 		});
-		const add = (tool: Tool) => {
-			list.add(tool);
+		// The Apps page, linked from the index page.
+		if (apps.length)
+			app.route({
+				path: options.catalog,
+				title: 'Apps',
+				emoji: '🧩',
+				parent: options.path,
+				width: 'wide'
+			});
+		const add = (input: Tool) => {
+			const tool = list.add(input);
+			// A tool on a shared page (`/my-apps/app#id`) has no route of its own: the plugin that
+			// owns the page registers it.
+			if (splitToolPath(tool.path).fragment) return;
 			app.route({
 				path: tool.path,
 				title: tool.name,
@@ -67,15 +103,30 @@ export const build = definePlugin(
 			});
 		};
 		for (const tool of options.items) add(tool);
+		const startsOn = (id: string) => apps.some((a) => a.id === id && a.default !== false);
 		app.decorate('tools', {
 			index: options.path,
+			catalog: apps.length ? options.catalog : undefined,
 			get: (path) => list.all().find((t) => t.path === path),
 			add: (tool) => add(checkTool(tool)),
-			list: () => list.all()
+			remove: () => false,
+			list: () => list.all(),
+			all: () => list.all(),
+			apps: () => apps,
+			appOf: (path) => appOf(apps, list.all(), path),
+			isOn: startsOn,
+			setOn: () => false,
+			subscribe(listener) {
+				listener();
+				return () => {};
+			}
 		} satisfies AppTools);
 
 		app.addHook('onManifest', (manifest) => {
-			const shortcuts = list.all().filter((t) => t.shortcut && !t.private);
+			// Written once for everyone, so only tools of apps that start on (or in no app).
+			const shortcuts = list
+				.all()
+				.filter((t) => t.shortcut && !t.private && (t.app === undefined || startsOn(t.app)));
 			if (!shortcuts.length) return manifest;
 			// The manifest's scope is the base path plus "/".
 			const scope = typeof manifest.scope === 'string' ? manifest.scope : '/';

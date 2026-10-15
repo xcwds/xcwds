@@ -24,7 +24,8 @@ export default defineConfig({
 		shell({
 			sections: [
 				{ path: '/', label: 'Home', emoji: '🏠' },
-				{ path: '/hello', label: 'Hello', emoji: '👋' },
+				// Hidden while the Hello app is off (#159).
+				{ path: '/hello', label: 'Hello', emoji: '👋', app: 'hello' },
 				{ path: '/utils', label: 'Utils', emoji: '🧰' },
 				{ path: '/settings', label: 'Settings', emoji: '⚙️' }
 			]
@@ -33,20 +34,34 @@ export default defineConfig({
 			path: '/utils',
 			title: 'Utils',
 			emoji: '🧰',
+			// Apps people turn on and off at /apps (#158). Hello also owns the plugin's page and data.
+			apps: [
+				{ id: 'kitchen', name: 'Kitchen', emoji: '🍳', blurb: 'Timers for cooking.' },
+				{
+					id: 'hello',
+					name: 'Hello',
+					emoji: '👋',
+					blurb: 'The example plugin.',
+					routes: ['/hello'],
+					groups: ['hello']
+				}
+			],
 			items: [
 				{
 					path: '/utils/coffee',
 					emoji: '☕',
 					name: 'Coffee Timer',
 					blurb: 'A 90-second countdown.',
-					shortcut: true
+					shortcut: true,
+					app: 'kitchen'
 				},
 				{ path: '/utils/notes', emoji: '📝', name: 'Notes', blurb: 'A scratch pad.' },
 				{
 					path: '/utils/timer',
 					emoji: '⏲️',
 					name: 'Timer',
-					blurb: 'Several labeled timers at once.'
+					blurb: 'Several labeled timers at once.',
+					app: 'kitchen'
 				},
 				{ path: '/utils/dice', emoji: '🎲', name: 'Dice', blurb: 'Roll a die.' },
 				{ path: '/utils/units', emoji: '📏', name: 'Units', blurb: 'Convert lengths.' },

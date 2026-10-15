@@ -262,6 +262,33 @@ stay out of backups (format unchanged): backing up collections is a later decisi
 since Firefox asks the user. "Clear data", a lock's reset and Settings' usage list count
 collections by group, as they do entries.
 
+### 13. Apps are groups of plugins people turn on and off
+
+**Decision.** An app built on @xcwds can hold many small apps (Kitchen, Gym, ...), and each
+person turns on the ones they use (#158). `@xcwds/plugin-tools` declares them (`apps`, with the
+tools, route prefixes and storage groups each owns) and keeps which are on in the `apps` setting.
+Every app ships in every build: one origin, one CSP, one service worker. Turning one off only
+hides it from Home, the tools index and (#159) the tab bar; its pages still open and its data
+stays until the person removes it. Separate builds per app were rejected: PWAs on one origin
+share storage anyway, a page someone opens (a bookmark, a shared link) must still work offline,
+and the manifest is written at build time, so it can't follow each person's choice (only apps
+that start on get shortcuts). Keeping apps that are off out of the offline cache is #163.
+
+### 14. Apps people make are data, not code
+
+**Decision.** The small apps people add themselves (a chore checklist, a water counter, a mood
+log; #160) are **definitions**: plain JSON listing building blocks (checklist, counter, log,
+notes in format 1) that `@xcwds/plugin-blocks` renders with its own trusted components. A
+definition can't run code, load anything from the network, render HTML or reach another app's
+data, so "never phone home" and the CSP (decisions 4 and 10) hold for apps nobody reviewed.
+Plugins are trusted code with access to all storage (decision 5), so letting people install
+plugins was ruled out, and a sandboxed-iframe runtime would need its own storage bridge, a looser
+CSP and a security review, for little gain over blocks. Every definition comes in through one
+validator that checks the format, block types and limits and rejects what it doesn't know with a
+message, rather than half-rendering it; the format is versioned, and a new format adds a
+migration. What this rules out: formulas, scripts, links between apps, remote content and custom
+layouts. New kinds of app grow by adding block types to the plugin.
+
 ## Hook families
 
 Defined in #5; listed here so the decisions above have names to point at.

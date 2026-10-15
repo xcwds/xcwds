@@ -1,9 +1,17 @@
+import { createApp, definePlugin } from '@xcwds/core';
 import { buildTestApp, type Importer } from '@xcwds/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import client from './client.js';
-import shell from './index.js';
+import client, { MAX_TITLE, type PageTitle } from './client.js';
+import shell, { build, checkSectionApps } from './index.js';
 import { activeSection, pageInfo } from './nav.js';
-import { APPLY_NAV, DEFAULT_NAV, applyNav, parseNav, resolveOptions } from './options.js';
+import {
+	APPLY_NAV,
+	DEFAULT_NAV,
+	applyNav,
+	hiddenSectionsCss,
+	parseNav,
+	resolveOptions
+} from './options.js';
 
 afterEach(() => void vi.unstubAllGlobals());
 
@@ -49,6 +57,44 @@ describe('options', () => {
 			/unknown key `icon`/
 		);
 		expect(() => resolveOptions({ tabs: [] })).toThrow(/unknown option `tabs`/);
+	});
+
+	it('puts sections in apps (#159), keeping one that is in none', async () => {
+		const inApps = [
+			{ path: '/', label: 'Home' },
+			{ path: '/recipes', label: 'Recipes', app: 'kitchen' },
+			{ path: '/guide', label: 'Guide', app: 'kitchen' },
+			{ path: '/gym', label: 'Gym', app: 'gym' }
+		];
+		expect(resolveOptions({ sections: inApps }).sections[1]).toEqual(inApps[1]);
+		expect(() => resolveOptions({ sections: [{ path: '/x', label: 'X', app: 'X Y' }] })).toThrow(
+			/\.app/
+		);
+		expect(() =>
+			resolveOptions({ sections: [{ path: '/', label: 'Home', app: 'kitchen' }] })
+		).toThrow(/at least one section/);
+		expect(hiddenSectionsCss(inApps)).toBe(
+			':root[data-apps-off~="kitchen"] [data-app="kitchen"]{display:none!important}' +
+				':root[data-apps-off~="gym"] [data-app="gym"]{display:none!important}'
+		);
+		expect(hiddenSectionsCss(sections)).toBe('');
+
+		// Each app must be one of @xcwds/plugin-tools' apps, whichever registers first.
+		const tools = (apps: string[]) =>
+			definePlugin((a) => void a.decorate('tools', { apps: () => apps.map((id) => ({ id })) }), {
+				name: 'tools',
+				encapsulate: false
+			});
+		const after = async (apps: string[]) => {
+			const app = createApp();
+			app.register(tools(apps));
+			app.register(build, { sections: inApps });
+			await app.ready();
+			return app.shellSections;
+		};
+		await expect(after(['kitchen'])).rejects.toThrow(/the app "gym"/);
+		await expect(after(['kitchen', 'gym'])).resolves.toEqual(inApps);
+		expect(() => checkSectionApps(inApps, undefined)).toThrow(/needs @xcwds\/plugin-tools/);
 	});
 
 	it('fails the build for bad options', async () => {
@@ -226,5 +272,34 @@ describe('app.shell and app.toast', () => {
 		await app.hooks.run('afterNavigate', [{ path: '/journal' }], { path: '/journal' });
 		app.toast!('on the journal');
 		expect(app.shell!.toasts.list().map((t) => t.path)).toEqual(['/', '/journal']);
+	});
+
+	it('titles the page that set a title, trimmed and cut, until it is put back', async () => {
+		stubDocument();
+		const app = await buildTestApp({ plugins: [[client, {}]] });
+		const seen: (PageTitle | undefined)[] = [];
+		app.shell!.title.subscribe((t) => seen.push(t));
+		// Prerendering has no page to title.
+		app.shell!.setTitle('Ignored');
+		expect(app.shell!.title.get()).toBeUndefined();
+
+		vi.stubGlobal('location', { pathname: '/my-apps/app' });
+		app.shell!.setTitle('  Water  ');
+		expect(app.shell!.title.get()).toEqual({ path: '/my-apps/app', text: 'Water' });
+		app.shell!.setTitle('Water');
+		app.shell!.setTitle(`${'x'.repeat(MAX_TITLE)}yz`);
+		expect(app.shell!.title.get()!.text).toBe('x'.repeat(MAX_TITLE));
+		app.shell!.setTitle('   ');
+		expect(app.shell!.title.get()).toBeUndefined();
+		app.shell!.setTitle('Mood');
+		app.shell!.setTitle(undefined);
+		expect(seen).toEqual([
+			undefined,
+			{ path: '/my-apps/app', text: 'Water' },
+			{ path: '/my-apps/app', text: 'x'.repeat(MAX_TITLE) },
+			undefined,
+			{ path: '/my-apps/app', text: 'Mood' },
+			undefined
+		]);
 	});
 });
