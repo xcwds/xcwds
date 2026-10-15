@@ -54,6 +54,18 @@ describe('appFiles', () => {
 		expect(JSON.parse(pinned.get('package.json')!).packageManager).toBe('pnpm@10.28.0');
 		const npm = appFiles({ name: 'A', plugins: [], packageManager: 'npm' });
 		expect(npm.get('.github/workflows/deploy.yml')).toContain('npm ci');
+		expect(npm.has('pnpm-workspace.yaml')).toBe(false);
+	});
+
+	it('lets esbuild run its install script under pnpm 10 and later', () => {
+		const files = appFiles({ name: 'A', plugins: [] });
+		expect(files.get('pnpm-workspace.yaml')).toContain('allowBuilds:\n  esbuild: true');
+		expect(files.get('pnpm-workspace.yaml')).toContain('onlyBuiltDependencies:\n  - esbuild');
+		expect(JSON.parse(files.get('package.json')!).pnpm).toBeUndefined();
+		// Inside the monorepo, the root's pnpm-workspace.yaml applies.
+		expect(appFiles({ name: 'A', plugins: [], workspace: true }).has('pnpm-workspace.yaml')).toBe(
+			false
+		);
 	});
 
 	it('wires up the picked plugins and their requirements', () => {
