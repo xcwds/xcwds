@@ -16,6 +16,11 @@ export type Section = {
 	emoji?: string;
 	/** Other paths this section owns (and everything under them), e.g. `/guide` for Recipes. */
 	also?: string[];
+	/**
+	 * The app (from `@xcwds/plugin-tools`' `apps`) the section belongs to: it's hidden while that
+	 * app is off (#159). At least one section must belong to no app.
+	 */
+	app?: string;
 };
 
 export type ShellOptions = {
@@ -47,7 +52,9 @@ export function resolveOptions(input: unknown = {}): ResolvedShellOptions {
 	const sections = input.sections.map((s: unknown, i): Section => {
 		const at = `\`sections[${i}]\``;
 		if (!isRecord(s)) fail(`${at} must be an object.`);
-		const extra = Object.keys(s).filter((k) => !['path', 'label', 'emoji', 'also'].includes(k));
+		const extra = Object.keys(s).filter(
+			(k) => !['path', 'label', 'emoji', 'also', 'app'].includes(k)
+		);
 		if (extra.length) fail(`${at} has unknown key \`${extra[0]}\`.`);
 		if (!isPath(s.path))
 			fail(`${at}.path must be an app path starting with "/" (no trailing slash, query or hash).`);
@@ -57,6 +64,11 @@ export function resolveOptions(input: unknown = {}): ResolvedShellOptions {
 		const also = s.also ?? [];
 		if (!Array.isArray(also) || !also.every((p) => isPath(p) && p !== '/'))
 			fail(`${at}.also must be a list of app paths other than "/".`);
+		if (
+			s.app !== undefined &&
+			(typeof s.app !== 'string' || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(s.app))
+		)
+			fail(`${at}.app must be an app's id (lower-case letters, digits and dashes).`);
 		for (const path of [s.path, ...also]) {
 			if (seen.has(path)) fail(`${at} claims "${path}", which another section already has.`);
 			seen.add(path);
@@ -65,9 +77,12 @@ export function resolveOptions(input: unknown = {}): ResolvedShellOptions {
 			path: s.path,
 			label: s.label,
 			...(s.emoji === undefined ? {} : { emoji: s.emoji }),
-			...(also.length ? { also: [...also] } : {})
+			...(also.length ? { also: [...also] } : {}),
+			...(s.app === undefined ? {} : { app: s.app as string })
 		};
 	});
+	if (sections.every((s) => s.app !== undefined))
+		fail('at least one section must belong to no app, so there is always a tab.');
 	return { sections };
 }
 
@@ -97,4 +112,16 @@ export const APPLY_NAV =
 export function applyNav(nav: NavSetting, root: HTMLElement): void {
 	root.setAttribute('data-nav-portrait', nav.portrait);
 	root.setAttribute('data-nav-landscape', nav.landscape);
+}
+
+/**
+ * CSS that hides each section of an app that's off: `@xcwds/plugin-tools` lists those apps in
+ * `data-apps-off` on `<html>` (before first paint too), and the shell marks sections `data-app`.
+ * Ids are `[a-z0-9-]`, checked with the options.
+ */
+export function hiddenSectionsCss(sections: readonly Section[]): string {
+	const ids = [...new Set(sections.flatMap((s) => (s.app ? [s.app] : [])))];
+	return ids
+		.map((id) => `:root[data-apps-off~="${id}"] [data-app="${id}"]{display:none!important}`)
+		.join('');
 }

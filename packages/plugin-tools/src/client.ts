@@ -10,6 +10,8 @@ import type { Component } from 'svelte';
 import {
 	appIsOn,
 	appOf,
+	appsOff,
+	applyAppsScript,
 	parseAppsSetting,
 	toolShows,
 	withAppOn,
@@ -55,7 +57,9 @@ export default definePlugin(
 				parse: parseAppsSetting,
 				label: 'Apps',
 				hint: 'Choose the apps you use.',
-				section: 'general'
+				section: 'general',
+				// Lets the shell hide the tabs of apps that are off before first paint (#159).
+				prePaint: applyAppsScript(apps)
 			});
 		const setting = (): AppsSetting => (apps.length ? (app.settings.get().apps ?? {}) : {});
 		const isOn = (id: string) => appIsOn(apps, setting(), id);
@@ -158,6 +162,12 @@ export default definePlugin(
 		let stops: (() => void)[] = [];
 		let closed = false;
 		app.addHook('onBoot', async () => {
+			if (apps.length) {
+				const root = document.documentElement;
+				const mark = () => root.setAttribute('data-apps-off', appsOff(apps, setting()).join(' '));
+				mark();
+				stops.push(app.settings.subscribe(mark));
+			}
 			// A tool added from a page entry only has no title in the header and isn't prerendered.
 			for (const tool of list.all())
 				if (!app.routes.get(tool.path))

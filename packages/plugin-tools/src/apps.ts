@@ -62,3 +62,23 @@ export function appOf(
 /** Whether a tool shows (its app is on, or it's in no app). */
 export const toolShows = (tool: Tool, isOn: (id: string) => boolean) =>
 	tool.app === undefined || isOn(tool.app);
+
+/** The ids of the apps that are off, in order: `data-apps-off` on `<html>` (#159). */
+export const appsOff = (apps: readonly AppGroup[], setting: AppsSetting): string[] =>
+	apps.filter((a) => !appIsOn(apps, setting, a.id)).map((a) => a.id);
+
+/**
+ * Plain ES5 for the `apps` field's `prePaint`: what `appsOff` gives, set as `data-apps-off` on
+ * `<html>` before first paint, so the shell never flashes the tab of an app that's off. Ids are
+ * `[a-z0-9-]`, so they're safe inside the string.
+ */
+export function applyAppsScript(apps: readonly AppGroup[]): string {
+	const list = apps.map((a) => `['${a.id}',${a.default === false ? 'false' : 'true'}]`).join(',');
+	return (
+		"var o=v&&typeof v==='object'?v:{},off=[],l=[" +
+		list +
+		'];' +
+		"for(var i=0;i<l.length;i++){var x=o[l[i][0]];if(typeof x==='boolean'?!x:!l[i][1])off.push(l[i][0])}" +
+		"root.setAttribute('data-apps-off',off.join(' '));"
+	);
+}

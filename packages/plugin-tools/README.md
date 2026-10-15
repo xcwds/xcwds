@@ -117,6 +117,9 @@ tools({
 - Which apps are on is the `apps` setting (`{ [id]: boolean }`; a missing id means the app's
   `default`, and choosing the default removes the id), so it's in backups and follows other tabs.
   With `@xcwds/plugin-settings` it shows as a link to the Apps page.
+- A shell section can belong to an app (`sections[].app` in `@xcwds/plugin-shell`) and hides
+  while it's off. The `apps` field's pre-paint script sets `data-apps-off` on `<html>` (the ids
+  of the apps that are off) before first paint, and the page keeps it up to date.
 - The manifest's `shortcuts` are written at build time for everyone, so only tools of apps that
   start on (`default` not false) become shortcuts.
 

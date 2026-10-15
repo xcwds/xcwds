@@ -132,6 +132,57 @@ test.describe('at the root', () => {
 		expect(html.match(/role="switch" aria-checked="true"/g)).toHaveLength(2);
 	});
 
+	test("an app's tab hides while it's off, from first paint, and comes back from another tab", async ({
+		page,
+		context
+	}) => {
+		const tab = (where: string) =>
+			page.locator(`[data-shell-nav="${where}"]`).getByRole('link', { name: /Hello/ });
+		await gotoHydrated(page, url('/apps'));
+		await expect(tab('tabs')).toBeVisible();
+		await toggle(page, 'Hello').click();
+		await expect(tab('tabs')).toBeHidden();
+		await expect(page.locator('html')).toHaveAttribute('data-apps-off', 'hello');
+		// The other tabs share the bar between them.
+		const settings = page
+			.locator('[data-shell-nav="tabs"]')
+			.getByRole('link', { name: /Settings/ });
+		expect((await settings.boundingBox())!.width).toBeGreaterThan(390 / 3 - 2);
+
+		// Header links (tablet portrait) and the sidebar (landscape).
+		for (const viewport of [
+			{ width: 820, height: 1180, where: 'header' },
+			{ width: 1180, height: 820, where: 'sidebar' }
+		]) {
+			await page.setViewportSize(viewport);
+			await expect(page.locator(`[data-shell-nav="${viewport.where}"]`)).toBeVisible();
+			await expect(tab(viewport.where)).toBeHidden();
+			await expect(
+				page.locator(`[data-shell-nav="${viewport.where}"]`).getByRole('link', { name: /Utils/ })
+			).toBeVisible();
+		}
+		await page.setViewportSize({ width: 390, height: 844 });
+
+		// Before any app code runs (scripts blocked), the pre-paint script already hides it.
+		const cold = await context.newPage();
+		await cold.route('**/*.js', (route) => route.abort());
+		await cold.goto(url('/utils'));
+		await expect(cold.locator('html')).toHaveAttribute('data-apps-off', 'hello');
+		await expect(
+			cold.locator('[data-shell-nav="tabs"]').getByRole('link', { name: /Hello/ })
+		).toBeHidden();
+		await expect(
+			cold.locator('[data-shell-nav="tabs"]').getByRole('link', { name: /Utils/ })
+		).toBeVisible();
+		await cold.close();
+
+		const other = await context.newPage();
+		await gotoHydrated(other, url('/apps'));
+		await toggle(other, 'Hello').click();
+		await expect(tab('tabs')).toBeVisible();
+		await expect(page.locator('html')).toHaveAttribute('data-apps-off', '');
+	});
+
 	test('every control on the Apps page is a 44px tap target', async ({ page }) => {
 		await gotoHydrated(page, url('/apps'));
 		await toggle(page, 'Hello').click();
