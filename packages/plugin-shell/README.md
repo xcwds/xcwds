@@ -96,6 +96,13 @@ The header's title, emoji and back arrow come from the route registry; a section
 uses its label, Home uses `brand.name`, and other pages lead back home. A section's `also`
 paths (and everything under them) highlight it too.
 
+A section can belong to an app from `@xcwds/plugin-tools`' `apps` (`app: 'kitchen'`): it's
+hidden while that app is off, in the tab bar, header links and sidebar, and comes back when it's
+on, in this tab or another. plugin-tools' pre-paint script lists the apps that are off as
+`data-apps-off` on `<html>`, and the shell's CSS hides their sections, so a hidden tab never
+flashes. Pages under a hidden section still open. The build fails when an `app` isn't one of
+plugin-tools' apps, or when every section has one: one must always show.
+
 ## For plugins
 
 - **`app.toast(message, { action?, durationMs? })`** shows a short confirmation in the stack

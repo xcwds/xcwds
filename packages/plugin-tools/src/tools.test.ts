@@ -14,7 +14,7 @@ import {
 	type ShortcutTool
 } from './home.js';
 import toolsFactory, { build } from './index.js';
-import { appIsOn, appOf, parseAppsSetting, withAppOn } from './apps.js';
+import { appIsOn, appOf, applyAppsScript, appsOff, parseAppsSetting, withAppOn } from './apps.js';
 import { resolveOptions, type AppGroup, type Tool } from './options.js';
 
 // The block needs SvelteKit's runtime; e2e tests cover it.
@@ -172,6 +172,26 @@ describe('apps (#158)', () => {
 		});
 	});
 
+	it('mark the apps that are off on <html>, before first paint as on the page (#159)', () => {
+		const apps = [kitchen, games, secret];
+		const run = new Function('v', 'root', applyAppsScript(apps));
+		for (const saved of [
+			undefined,
+			null,
+			'junk',
+			{},
+			{ kitchen: false },
+			{ games: true, secret: false },
+			{ kitchen: 'no', games: 1 }
+		]) {
+			const attributes = new Map<string, string>();
+			run(saved, { setAttribute: (k: string, v: string) => void attributes.set(k, v) });
+			const page = appsOff(apps, parseAppsSetting(saved) ?? {}).join(' ');
+			expect(attributes.get('data-apps-off'), JSON.stringify(saved)).toBe(page);
+		}
+		expect(appsOff(apps, {})).toEqual(['games']);
+	});
+
 	it('find the app a page belongs to', () => {
 		const deeper: AppGroup = { ...games, routes: ['/recipes/games'] };
 		const tools = resolveOptions(withApps).items;
@@ -198,6 +218,21 @@ describe('apps (#158)', () => {
 		expect(manifest.shortcuts).toEqual([
 			{ name: 'A', description: 'The a tool.', url: '/utils/a' }
 		]);
+
+		// The shell registered first: its sections' apps must be ours (#159).
+		const withShell = (app: string) => {
+			const a = createApp();
+			decorateRoutes(a);
+			a.register(
+				definePlugin((p) => void p.decorate('shellSections', [{ path: '/k', label: 'K', app }]), {
+					encapsulate: false
+				})
+			);
+			a.register(build, withApps);
+			return a.ready();
+		};
+		await expect(withShell('garden')).rejects.toThrow(/section "\/k" is in the app "garden"/);
+		await expect(withShell('kitchen')).resolves.toBeDefined();
 
 		const plain = createApp();
 		decorateRoutes(plain);

@@ -24,7 +24,8 @@ export default defineConfig({
 		shell({
 			sections: [
 				{ path: '/', label: 'Home', emoji: '🏠' },
-				{ path: '/hello', label: 'Hello', emoji: '👋' },
+				// Hidden while the Hello app is off (#159).
+				{ path: '/hello', label: 'Hello', emoji: '👋', app: 'hello' },
 				{ path: '/utils', label: 'Utils', emoji: '🧰' },
 				{ path: '/settings', label: 'Settings', emoji: '⚙️' }
 			]

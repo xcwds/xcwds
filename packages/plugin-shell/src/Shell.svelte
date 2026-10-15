@@ -14,6 +14,7 @@
 	import type { Snippet } from 'svelte';
 	import type { Slot } from './client.js';
 	import { activeSection, pageInfo } from './nav.js';
+	import { hiddenSectionsCss } from './options.js';
 	import { href } from './paths.js';
 	import Toaster from './Toaster.svelte';
 
@@ -43,6 +44,8 @@
 	);
 	const active = $derived(activeSection(sections, path));
 	const nav = sections.length > 1;
+	// Sections of apps that are off are hidden by CSS, before first paint too (#159).
+	const hideCss = hiddenSectionsCss(sections);
 	/**
 	 * The header lines up with the page's container: wide pages always, narrow ones beside the
 	 * sidebar (header links need more room than a narrow page has), and split ones like narrow
@@ -66,6 +69,10 @@
 
 <svelte:head>
 	<title>{pageTitle}</title>
+	{#if hideCss}
+		<!-- eslint-disable-next-line svelte/no-at-html-tags -- built from checked app ids -->
+		{@html `<style>${hideCss}</style>`}
+	{/if}
 </svelte:head>
 
 <div class="xcwds-shell min-h-svh bg-(--xcwds-shell-bg) text-(--xcwds-shell-text)">
@@ -79,7 +86,7 @@
 			<p class="px-3 py-2 text-lg font-semibold">{brand.name}</p>
 			<ul class="flex flex-col gap-1">
 				{#each sections as section (section.path)}
-					<li>
+					<li data-app={section.app}>
 						<a
 							href={href(section.path)}
 							aria-current={active === section.path ? 'page' : undefined}
@@ -130,6 +137,7 @@
 				<nav aria-label="Main" data-shell-nav="header" class="hidden gap-1 md:flex sidebar:hidden">
 					{#each sections as section (section.path)}
 						<a
+							data-app={section.app}
 							href={href(section.path)}
 							aria-current={active === section.path ? 'page' : undefined}
 							class="flex min-h-11 items-center rounded-full px-3 text-sm font-medium {linkClass(
@@ -170,12 +178,10 @@
 			data-shell-nav="tabs"
 			class="fixed inset-x-0 bottom-0 z-10 border-t border-(--xcwds-shell-border) bg-(--xcwds-shell-bar) pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
 		>
-			<ul
-				class="mx-auto grid max-w-md"
-				style="grid-template-columns: repeat({sections.length}, 1fr)"
-			>
+			<!-- One column per tab that shows: hidden ones (#159) take none. -->
+			<ul class="mx-auto grid max-w-md auto-cols-fr grid-flow-col">
 				{#each sections as section (section.path)}
-					<li>
+					<li data-app={section.app}>
 						<a
 							href={href(section.path)}
 							aria-current={active === section.path ? 'page' : undefined}

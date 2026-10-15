@@ -19,7 +19,7 @@
  * The build entry adds the index page and every tool to the route registry (so they are
  * prerendered and the shell knows their titles) and the manifest's `shortcuts`.
  */
-import { definePlugin, descriptor } from '@xcwds/core';
+import { XcwdsError, codes, definePlugin, descriptor } from '@xcwds/core';
 import { appOf } from './apps.js';
 import {
 	CORE,
@@ -36,6 +36,8 @@ export type { AppGroup, ResolvedToolsOptions, Tool, ToolsOptions } from './optio
 export {
 	appIsOn,
 	appOf,
+	appsOff,
+	applyAppsScript,
 	parseAppsSetting,
 	toolShows,
 	withAppOn,
@@ -58,6 +60,16 @@ export const build = definePlugin(
 	(app, input: ToolsOptions) => {
 		const options = resolveOptions(input);
 		const { apps } = options;
+		// With @xcwds/plugin-shell registered first, its sections' apps must be ours (#159).
+		const sections = (app as { shellSections?: readonly { path: string; app?: string }[] })
+			.shellSections;
+		for (const s of sections ?? [])
+			if (s.app !== undefined && !apps.some((a) => a.id === s.app))
+				throw new XcwdsError(
+					codes.CONFIG_INVALID,
+					`@xcwds/plugin-shell: the section "${s.path}" is in the app "${s.app}", which isn't in ${NAME}'s \`apps\`.`,
+					{ plugin: NAME }
+				);
 		const list = new ToolList(options.path, apps, options.catalog);
 		app.route({
 			path: options.path,

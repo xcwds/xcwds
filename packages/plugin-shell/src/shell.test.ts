@@ -1,9 +1,17 @@
+import { createApp, definePlugin } from '@xcwds/core';
 import { buildTestApp, type Importer } from '@xcwds/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import client from './client.js';
-import shell from './index.js';
+import shell, { build, checkSectionApps } from './index.js';
 import { activeSection, pageInfo } from './nav.js';
-import { APPLY_NAV, DEFAULT_NAV, applyNav, parseNav, resolveOptions } from './options.js';
+import {
+	APPLY_NAV,
+	DEFAULT_NAV,
+	applyNav,
+	hiddenSectionsCss,
+	parseNav,
+	resolveOptions
+} from './options.js';
 
 afterEach(() => void vi.unstubAllGlobals());
 
@@ -49,6 +57,44 @@ describe('options', () => {
 			/unknown key `icon`/
 		);
 		expect(() => resolveOptions({ tabs: [] })).toThrow(/unknown option `tabs`/);
+	});
+
+	it('puts sections in apps (#159), keeping one that is in none', async () => {
+		const inApps = [
+			{ path: '/', label: 'Home' },
+			{ path: '/recipes', label: 'Recipes', app: 'kitchen' },
+			{ path: '/guide', label: 'Guide', app: 'kitchen' },
+			{ path: '/gym', label: 'Gym', app: 'gym' }
+		];
+		expect(resolveOptions({ sections: inApps }).sections[1]).toEqual(inApps[1]);
+		expect(() => resolveOptions({ sections: [{ path: '/x', label: 'X', app: 'X Y' }] })).toThrow(
+			/\.app/
+		);
+		expect(() =>
+			resolveOptions({ sections: [{ path: '/', label: 'Home', app: 'kitchen' }] })
+		).toThrow(/at least one section/);
+		expect(hiddenSectionsCss(inApps)).toBe(
+			':root[data-apps-off~="kitchen"] [data-app="kitchen"]{display:none!important}' +
+				':root[data-apps-off~="gym"] [data-app="gym"]{display:none!important}'
+		);
+		expect(hiddenSectionsCss(sections)).toBe('');
+
+		// Each app must be one of @xcwds/plugin-tools' apps, whichever registers first.
+		const tools = (apps: string[]) =>
+			definePlugin((a) => void a.decorate('tools', { apps: () => apps.map((id) => ({ id })) }), {
+				name: 'tools',
+				encapsulate: false
+			});
+		const after = async (apps: string[]) => {
+			const app = createApp();
+			app.register(tools(apps));
+			app.register(build, { sections: inApps });
+			await app.ready();
+			return app.shellSections;
+		};
+		await expect(after(['kitchen'])).rejects.toThrow(/the app "gym"/);
+		await expect(after(['kitchen', 'gym'])).resolves.toEqual(inApps);
+		expect(() => checkSectionApps(inApps, undefined)).toThrow(/needs @xcwds\/plugin-tools/);
 	});
 
 	it('fails the build for bad options', async () => {
