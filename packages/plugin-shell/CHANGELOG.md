@@ -1,6 +1,6 @@
 # @xcwds/plugin-shell
 
-## 1.0.0
+## 0.4.0
 
 ### Minor Changes
 
@@ -14,7 +14,7 @@
 - Updated dependencies [2c0f5e2]
 - Updated dependencies [d5aa738]
   - @xcwds/core@0.4.0
-  - @xcwds/sveltekit@1.0.0
+  - @xcwds/sveltekit@0.4.0
 
 ## 0.3.0
 
