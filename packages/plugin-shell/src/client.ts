@@ -50,9 +50,25 @@ type SlotList = {
 	subscribe(listener: (slots: readonly Slot[]) => void): () => void;
 };
 
+/** A title a page gave itself with `app.shell.setTitle`, for the page at `path` (`location.pathname`). */
+export type PageTitle = { path: string; text: string };
+
 /** `app.shell`. */
 export type AppShell = {
 	readonly sections: readonly Section[];
+	/**
+	 * Titles the page showing now, for pages whose title isn't known at build time (an app made
+	 * of blocks, at `/my-apps/app#<id>`): the header shows `text`, and so does `<title>` unless
+	 * the route is private, whose `<title>` keeps the route's title so it stays out of the
+	 * browser's history and app switcher. It holds for this path only, so the next page shows its
+	 * own title; a fragment change keeps it. `undefined` puts the route's title back.
+	 */
+	setTitle(text: string | undefined): void;
+	/** The title set with `setTitle`; `subscribe` to follow it. */
+	readonly title: {
+		get(): PageTitle | undefined;
+		subscribe(listener: (title: PageTitle | undefined) => void): () => void;
+	};
 	/** Blocks on the Home page (`/`), e.g. pinned and recent tools. */
 	readonly home: SlotList;
 	/** Buttons in the header beside the title, e.g. Share. */
@@ -87,6 +103,9 @@ type SettingsPageLike = { control(name: string, component: Component): () => voi
 
 /** At most this many toasts show at once; older ones go first. */
 const MAX_TOASTS = 3;
+
+/** A title longer than this is cut, so a long name can't push the header off the screen. */
+export const MAX_TITLE = 120;
 
 function slotList(): SlotList {
 	let slots: Slot[] = [];
@@ -139,8 +158,29 @@ export default definePlugin(
 			if (toasts.some((t) => t.id === id)) setToasts(toasts.filter((t) => t.id !== id));
 		};
 
+		let title: PageTitle | undefined;
+		const titleListeners = new Set<(title: PageTitle | undefined) => void>();
+		const setTitle = (text: string | undefined) => {
+			// Only a page in a browser has a title to set; prerendering keeps the route's.
+			if (typeof location === 'undefined') return;
+			const trimmed = typeof text === 'string' ? text.trim().slice(0, MAX_TITLE).trim() : '';
+			const next = trimmed ? { path: location.pathname, text: trimmed } : undefined;
+			if (next?.path === title?.path && next?.text === title?.text) return;
+			title = next;
+			for (const listener of titleListeners) listener(title);
+		};
+
 		app.decorate('shell', {
 			sections: options.sections,
+			setTitle,
+			title: {
+				get: () => title,
+				subscribe(listener) {
+					titleListeners.add(listener);
+					listener(title);
+					return () => void titleListeners.delete(listener);
+				}
+			},
 			home: slotList(),
 			header: slotList(),
 			toasts: {
@@ -158,7 +198,13 @@ export default definePlugin(
 		 * with this plugin under a route prefix (whose route hooks only see paths below it).
 		 */
 		let seen: string | undefined;
-		app.addHook('afterNavigate', (to) => void (seen = to.path));
+		app.addHook('afterNavigate', (to) => {
+			seen = to.path;
+			// A title is the page's that set it: coming back later shows the route's title until the
+			// page sets one again. The page arriving now has mounted, so a title it set stays.
+			if (title && typeof location !== 'undefined' && title.path !== location.pathname)
+				setTitle(undefined);
+		});
 		const lock = () => (app as { lock?: { here(): string | undefined } }).lock;
 		const here = () => lock()?.here() ?? seen;
 		const toast = (message: string, { action, durationMs }: ToastOptions = {}) => {
@@ -214,6 +260,7 @@ export default definePlugin(
 			stops = [];
 			for (const timer of timers.values()) clearTimeout(timer);
 			timers.clear();
+			titleListeners.clear();
 		});
 	},
 	{ name: NAME, core: CORE, encapsulate: false, network: false }

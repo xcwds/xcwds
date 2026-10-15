@@ -1,7 +1,7 @@
 import { createApp, definePlugin } from '@xcwds/core';
 import { buildTestApp, type Importer } from '@xcwds/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import client from './client.js';
+import client, { MAX_TITLE, type PageTitle } from './client.js';
 import shell, { build, checkSectionApps } from './index.js';
 import { activeSection, pageInfo } from './nav.js';
 import {
@@ -272,5 +272,34 @@ describe('app.shell and app.toast', () => {
 		await app.hooks.run('afterNavigate', [{ path: '/journal' }], { path: '/journal' });
 		app.toast!('on the journal');
 		expect(app.shell!.toasts.list().map((t) => t.path)).toEqual(['/', '/journal']);
+	});
+
+	it('titles the page that set a title, trimmed and cut, until it is put back', async () => {
+		stubDocument();
+		const app = await buildTestApp({ plugins: [[client, {}]] });
+		const seen: (PageTitle | undefined)[] = [];
+		app.shell!.title.subscribe((t) => seen.push(t));
+		// Prerendering has no page to title.
+		app.shell!.setTitle('Ignored');
+		expect(app.shell!.title.get()).toBeUndefined();
+
+		vi.stubGlobal('location', { pathname: '/my-apps/app' });
+		app.shell!.setTitle('  Water  ');
+		expect(app.shell!.title.get()).toEqual({ path: '/my-apps/app', text: 'Water' });
+		app.shell!.setTitle('Water');
+		app.shell!.setTitle(`${'x'.repeat(MAX_TITLE)}yz`);
+		expect(app.shell!.title.get()!.text).toBe('x'.repeat(MAX_TITLE));
+		app.shell!.setTitle('   ');
+		expect(app.shell!.title.get()).toBeUndefined();
+		app.shell!.setTitle('Mood');
+		app.shell!.setTitle(undefined);
+		expect(seen).toEqual([
+			undefined,
+			{ path: '/my-apps/app', text: 'Water' },
+			{ path: '/my-apps/app', text: 'x'.repeat(MAX_TITLE) },
+			undefined,
+			{ path: '/my-apps/app', text: 'Mood' },
+			undefined
+		]);
 	});
 });

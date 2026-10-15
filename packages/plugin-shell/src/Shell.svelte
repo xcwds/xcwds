@@ -12,7 +12,7 @@
 	import { page } from '$app/state';
 	import { appPath, brand, useApp } from '@xcwds/sveltekit';
 	import type { Snippet } from 'svelte';
-	import type { Slot } from './client.js';
+	import type { PageTitle, Slot } from './client.js';
 	import { activeSection, pageInfo } from './nav.js';
 	import { hiddenSectionsCss } from './options.js';
 	import { href } from './paths.js';
@@ -32,6 +32,8 @@
 	const sections = shell?.sections ?? [];
 	let actions = $state.raw<readonly Slot[]>(shell?.header.list() ?? []);
 	$effect(() => shell?.header.subscribe((list) => (actions = list)));
+	let custom = $state.raw<PageTitle | undefined>(shell?.title.get());
+	$effect(() => shell?.title.subscribe((t) => (custom = t)));
 
 	const path = $derived(appPath(page.url.pathname) ?? page.url.pathname);
 	const info = $derived(
@@ -58,9 +60,14 @@
 			split: 'page-wide sidebar:page-narrow xl:sidebar:page-wide'
 		}[info.width]
 	);
-	const pageTitle = $derived(
-		info.title === brand.name ? brand.name : `${info.title} · ${brand.name}`
+	/** A title the page set for itself (`app.shell.setTitle`), only on the page that set it. */
+	const own = $derived(
+		custom && !page.error && custom.path === page.url.pathname ? custom.text : undefined
 	);
+	const title = $derived(own ?? info.title);
+	// A private page's <title> keeps its route's title, out of the history and app switcher.
+	const tabTitle = $derived(app.routes.get(path)?.private ? info.title : title);
+	const pageTitle = $derived(tabTitle === brand.name ? brand.name : `${tabTitle} · ${brand.name}`);
 	const linkClass = (current: boolean) =>
 		current
 			? 'bg-(--xcwds-shell-active-bg) text-(--xcwds-shell-text)'
@@ -128,7 +135,7 @@
 			{/if}
 			<h1 class="min-w-0 flex-1 text-xl font-semibold text-balance">
 				{#if info.emoji}<span aria-hidden="true">{info.emoji}</span>{/if}
-				{info.title}
+				{title}
 			</h1>
 			{#each actions as action (action)}
 				<action.component {...action.props} />
