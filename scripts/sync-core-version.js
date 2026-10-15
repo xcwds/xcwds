@@ -3,7 +3,7 @@
 // plugins' `CORE` range along when core leaves it (a new minor on 0.x, a new major after), so it
 // matches the `^` peer range they publish with (and the guide's copy of the example plugin, which a
 // site test compares with it). Runs in `pnpm version-packages`.
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 
 const { version } = JSON.parse(readFileSync('packages/core/package.json', 'utf8'));
 
@@ -20,7 +20,9 @@ const [major, minor] = version.split('.');
 const range = major === '0' ? `^0.${minor}.0` : `^${major}.0.0`;
 const plugins = readdirSync('packages')
 	.filter((name) => name.startsWith('plugin-'))
-	.map((name) => `packages/${name}/src/options.ts`);
+	.map((name) => `packages/${name}/src/options.ts`)
+	// A plugin without an options module (unpublished work in progress) has no `CORE` to move yet.
+	.filter((file) => existsSync(file));
 for (const file of [...plugins, 'examples/plugin-tally/src/options.ts', 'docs/plugin-guide.md']) {
 	sync(file, /CORE = '[^']*'/, `CORE = '${range}'`);
 }
