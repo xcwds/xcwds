@@ -114,6 +114,13 @@ plugin-tools' apps, or when every section has one: one must always show.
 - **`app.shell.home.add(Component, { props?, order? })`** adds a block to Home (lowest `order`
   first), below `brand.name` and `brand.tagline`.
 - **`app.shell.header.add(Component, { props?, order? })`** adds a button beside the title.
+- **`app.shell.setTitle(text)`** titles the page showing now, for a page whose title isn't known
+  at build time (an app made of blocks at `/my-apps/app#<id>`). The header shows it, and so does
+  `<title>`, except on a private route, whose `<title>` keeps the route's title so the name stays
+  out of the browser's history and app switcher. It holds for that path only (a fragment change
+  keeps it; the next page shows its own title), is trimmed and cut at 120 characters, and
+  `setTitle(undefined)` puts the route's title back. `app.shell.title` (`get()`, `subscribe()`)
+  follows it.
 - `app.shell.sections` and `app.shell.toasts` (`list()`, `subscribe()`, `dismiss(id)`).
 
 Register a client plugin that uses these after the shell in the config's `plugins`, so
