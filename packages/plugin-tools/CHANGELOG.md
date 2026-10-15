@@ -1,5 +1,25 @@
 # @xcwds/plugin-tools
 
+## 0.4.0
+
+### Minor Changes
+
+- 7a12c31: A shell section can belong to an app (`sections[].app`, #159): it's hidden in the tab bar, header links and sidebar while that app is off, from first paint, and comes back when it's turned on in any tab. `@xcwds/plugin-tools` sets `data-apps-off` on `<html>` (before first paint too) and checks that each section's app is one of its `apps`.
+- 04875cf: Apps people turn on and off (#158): group tools into `apps`, each with its own pages (`routes`) and data (`groups`). The new Apps page (`AppCatalog.svelte`) has a switch per app and Remove data for an app that's off. Tools of apps that are off leave Home and the index page (pins are kept), and their pages show `AppOffNotice.svelte` with a Turn on button. `app.tools` gains `all()`, `apps()`, `appOf()`, `isOn()`, `setOn()`, `subscribe()` and `catalog`, and the `apps` setting holds which apps are on.
+- aeffd6d: Tools on a shared page (part of #160): a tool's `path` can end with a `#fragment` (`/my-apps/app#k3f9`), which pins and Recently used tell apart. The page entry can `app.tools.add()` such tools at any time and `app.tools.remove(path)` them with their pin, `subscribe` follows both, and their saved pins are kept while the tool isn't there yet.
+
+### Patch Changes
+
+- Updated dependencies [7d0de97]
+- Updated dependencies [501c723]
+- Updated dependencies [2c0f5e2]
+- Updated dependencies [7a12c31]
+- Updated dependencies [0e9c638]
+- Updated dependencies [d5aa738]
+  - @xcwds/core@0.4.0
+  - @xcwds/sveltekit@0.4.0
+  - @xcwds/plugin-shell@0.4.0
+
 ## 0.3.0
 
 ### Patch Changes

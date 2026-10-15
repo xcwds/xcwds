@@ -1,5 +1,12 @@
 # @xcwds/create
 
+## 0.2.2
+
+### Patch Changes
+
+- d41d673: New apps allow esbuild's install script in `pnpm-workspace.yaml`, so `pnpm install` works with pnpm 11 and 12 (which ignore package.json's `pnpm` field) as well as pnpm 10.
+- 16833fe: New apps lint with ESLint 10 (`eslint` and `@eslint/js` `^10.0.0`).
+
 ## 0.2.1
 
 ### Patch Changes

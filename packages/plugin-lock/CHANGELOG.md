@@ -1,5 +1,20 @@
 # @xcwds/plugin-lock
 
+## 0.3.0
+
+### Minor Changes
+
+- 7d0de97: Blob collections join storage groups: `storage.groups()` lists each group's `collections`, and a sensitive collection makes its group sensitive. Settings → Your data shows each group's files and their size and clears them with the group (and with Clear all data); a passcode lock's reset clears sensitive collections. Collections are looked up by key, so a copy (a Svelte `$state` proxy) works. `setupApp` takes a `blobs` backend, and `@xcwds/testing` keeps blobs in memory, shared by an app's tabs.
+
+### Patch Changes
+
+- Updated dependencies [7d0de97]
+- Updated dependencies [501c723]
+- Updated dependencies [2c0f5e2]
+- Updated dependencies [d5aa738]
+  - @xcwds/core@0.4.0
+  - @xcwds/sveltekit@0.4.0
+
 ## 0.2.0
 
 ### Minor Changes

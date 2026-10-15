@@ -7,4 +7,4 @@ export const NAME = '@xcwds/plugin-vault';
  * The same range as the peer dependency (`scripts/sync-core-version.js` moves it along with
  * core's minor versions).
  */
-export const CORE = '^0.3.0';
+export const CORE = '^0.4.0';
