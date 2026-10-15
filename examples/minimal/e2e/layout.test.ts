@@ -194,6 +194,56 @@ for (const { name, dir, base } of targets) {
 			);
 		});
 
+		test('a page can title itself, until another page opens', async ({ page }) => {
+			await gotoHydrated(page, url('/utils/notes'));
+			const h1 = page.locator('h1');
+			await expect(h1).toContainText('Notes');
+			await page.getByLabel('Title').fill('Groceries');
+			await expect(h1).toContainText('Groceries');
+			await expect(page).toHaveTitle('Groceries · Minimal');
+			// A fragment change is the same page (an app made of blocks keeps its id there).
+			await page.evaluate(() => (location.hash = 'list'));
+			await expect(page).toHaveURL(/#list$/);
+			await expect(page).toHaveTitle('Groceries · Minimal');
+			await page.locator('header [data-shell-back]').click();
+			await expect(page).toHaveURL(url('/utils'));
+			await expect(h1).not.toContainText('Groceries');
+			await expect(page).not.toHaveTitle(/Groceries/);
+			// Coming back, the page shows its route's title until it sets one again.
+			await page.getByRole('link', { name: /Notes/ }).first().click();
+			await expect(page).toHaveURL(url('/utils/notes'));
+			await expect(h1).toContainText('Notes');
+			await expect(page).toHaveTitle('Notes · Minimal');
+			await page.locator('header [data-shell-back]').click();
+			await expect(page).toHaveTitle('Utils · Minimal');
+
+			// A page that titles itself as it mounts, reached by a link inside the app.
+			await page.evaluate((href) => {
+				const a = document.createElement('a');
+				a.href = href;
+				a.textContent = 'Open the list';
+				document.querySelector('main')!.append(a);
+			}, url('/utils/notes#To%20do'));
+			await page.getByRole('link', { name: 'Open the list' }).click();
+			await expect(page).toHaveURL(/\/utils\/notes#To%20do$/);
+			await expect(h1).toContainText('To do');
+			await expect(page).toHaveTitle('To do · Minimal');
+			// A malformed fragment is no title, not a broken page.
+			await page.goto('about:blank');
+			await gotoHydrated(page, url('/utils/notes#%E0'));
+			await expect(h1).toContainText('Notes');
+			await page.getByLabel('Title').fill('Still works');
+			await expect(h1).toContainText('Still works');
+
+			// A private page shows it in the header, but its tab keeps the route's title.
+			await gotoHydrated(page, url('/utils/journal'));
+			await page.getByLabel('Title').fill('Dear diary');
+			await expect(h1).toContainText('Dear diary');
+			await expect(page).toHaveTitle('Journal · Minimal');
+			await page.getByLabel('Title').fill('');
+			await expect(h1).toContainText('Journal');
+		});
+
 		test('the error page leads home and to each section', async ({ page }) => {
 			await gotoHydrated(page, url('/no-such-page'));
 			await expect(page.getByRole('heading', { level: 1 })).toHaveText('Page not found');

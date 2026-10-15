@@ -24,9 +24,15 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 const paths = (v: unknown): string[] =>
 	Array.isArray(v) ? [...new Set(v.filter((p): p is string => typeof p === 'string'))] : [];
 
+/** Whether a path ends with a `#fragment`: a tool added at runtime, which may not be there yet. */
+const isRuntime = (path: string) => path.includes('#');
+
 /**
  * Validates saved shortcuts. Paths of tools that no longer exist are dropped, and so are recents
  * of private tools: a removed tool never shows on Home, nor a private one under Recently used.
+ * Paths with a `#fragment` are kept while their tool is missing, since such tools are added at
+ * runtime (after the person's data loads, or an unlock) and removed with `app.tools.remove`;
+ * Home only shows the ones that are there.
  */
 export function parseShortcuts(
 	v: unknown,
@@ -36,10 +42,18 @@ export function parseShortcuts(
 	const known = new Set(tools.map((t) => t.path));
 	const recentOk = new Set(tools.filter((t) => !t.private).map((t) => t.path));
 	return {
-		pins: paths(v.pins).filter((p) => known.has(p)),
+		pins: paths(v.pins).filter((p) => known.has(p) || isRuntime(p)),
 		recent: paths(v.recent)
-			.filter((p) => recentOk.has(p))
+			.filter((p) => recentOk.has(p) || (!known.has(p) && isRuntime(p)))
 			.slice(0, MAX_RECENT)
+	};
+}
+
+/** Forgets a tool that was removed: its pin and its place under Recently used. */
+export function withoutTool(state: HomeShortcuts, path: string): HomeShortcuts {
+	return {
+		pins: state.pins.filter((p) => p !== path),
+		recent: state.recent.filter((p) => p !== path)
 	};
 }
 
@@ -62,12 +76,23 @@ export function withPinToggled(state: HomeShortcuts, path: string): HomeShortcut
 	return { ...state, pins };
 }
 
-/** Moves a pin one place up (-1) or down (1); no change at either end. */
-export function withPinMoved(state: HomeShortcuts, path: string, by: -1 | 1): HomeShortcuts {
+/**
+ * Moves a pin past the next one up (-1) or down (1) that `shows` (Home lists only those: pins of
+ * an app that's off, or of a tool not added yet, are hidden); no change at either end.
+ */
+export function withPinMoved(
+	state: HomeShortcuts,
+	path: string,
+	by: -1 | 1,
+	shows: (path: string) => boolean = () => true
+): HomeShortcuts {
 	const i = state.pins.indexOf(path);
-	const j = i + by;
-	if (i < 0 || j < 0 || j >= state.pins.length) return state;
+	if (i < 0) return state;
+	let j = i + by;
+	while (j >= 0 && j < state.pins.length && !shows(state.pins[j]!)) j += by;
+	if (j < 0 || j >= state.pins.length) return state;
 	const pins = [...state.pins];
+	// Removing `path` first shifts a later target back one, so this lands just past it either way.
 	pins.splice(j, 0, ...pins.splice(i, 1));
 	return { ...state, pins };
 }

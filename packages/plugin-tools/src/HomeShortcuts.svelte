@@ -18,12 +18,13 @@
 	$effect(() => tools?.subscribe(() => (shown = new Set(tools.list().map((t) => t.path)))));
 	const toolAt = (path: string) => (shown.has(path) ? tools?.get(path) : undefined);
 	let pinned = $derived(shortcuts.pins.map(toolAt).filter((t): t is Tool => t !== undefined));
-	// Recently used tools that aren't already pinned.
+	// Recently used tools that aren't already pinned, nor private (a tool added at runtime can
+	// arrive private after a recent of it was saved).
 	let recent = $derived(
 		shortcuts.recent
 			.filter((p) => !shortcuts.pins.includes(p))
 			.map(toolAt)
-			.filter((t): t is Tool => t !== undefined)
+			.filter((t): t is Tool => t !== undefined && !t.private)
 	);
 	let editing = $state(false);
 	// Leave edit mode once nothing is pinned, so a new pin doesn't open in it.

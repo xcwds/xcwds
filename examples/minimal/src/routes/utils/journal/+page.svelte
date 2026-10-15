@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type {} from '@xcwds-example/plugin-hello/client';
+	import type {} from '@xcwds/plugin-shell/client';
 	import type {} from '@xcwds/plugin-timers/client';
 	import { persist, useApp } from '@xcwds/sveltekit';
 
@@ -26,9 +27,14 @@
 		class="min-h-11 self-start rounded-xl border px-3"
 		onclick={() => app.timers?.create('Journal reminder', 60_000)}>Remind me in a minute</button
 	>
-	<!-- Sets its own spellcheck, which @xcwds/plugin-lock keeps. -->
+	<!-- Sets its own spellcheck, which @xcwds/plugin-lock keeps. Titles the header, but not the
+	     tab: a private page's <title> stays "Journal". -->
 	<label class="flex flex-col gap-1">
 		Title
-		<input class="min-h-11 rounded-xl border p-2" spellcheck="true" />
+		<input
+			class="min-h-11 rounded-xl border p-2"
+			spellcheck="true"
+			oninput={(e) => app.shell?.setTitle(e.currentTarget.value)}
+		/>
 	</label>
 </main>

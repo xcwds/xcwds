@@ -12,7 +12,10 @@ export type ToolShortcuts = {
 	togglePin(path: string): boolean;
 	/** Moves a pin one place up (-1) or down (1). */
 	movePin(path: string, by: -1 | 1): boolean;
-	/** Records opening a page; only tools that aren't private become Recently used. */
+	/**
+	 * Records opening a page (an app path, with its `#fragment` if any); only tools that aren't
+	 * private become Recently used.
+	 */
 	visit(path: string): void;
 	/** Re-reads what's saved (after this tab cleared or imported data). */
 	reload(): void;
@@ -37,13 +40,24 @@ export type AppTools = {
 	isOn(id: string): boolean;
 	/** Turns an app on or off and saves it; false if it couldn't be saved (always, in the build). */
 	setOn(id: string, on: boolean): boolean;
-	/** Calls `listener` now and whenever an app is turned on or off; returns a function that stops it. */
+	/**
+	 * Calls `listener` now, whenever an app is turned on or off, and when a tool is added or
+	 * removed after boot; returns a function that stops it.
+	 */
 	subscribe(listener: () => void): () => void;
 	/**
 	 * Adds a tool. Call it while plugins register, from both your build entry (which adds its
-	 * page to the route registry, so don't also `app.route()` it) and your page entry.
+	 * page to the route registry, so don't also `app.route()` it) and your page entry. A tool
+	 * whose path has a `#fragment` shares a page another plugin registers; the page entry can add
+	 * one at any time (an app made of blocks), and lists, Home and `subscribe` follow.
 	 */
 	add(tool: Tool): void;
+	/**
+	 * Removes a tool added at runtime, with its pin and its place under Recently used (page only;
+	 * false in the build or when there's no such tool). For tools whose page is shared and that
+	 * come and go with the person's data, like the apps of `@xcwds/plugin-blocks`.
+	 */
+	remove(path: string): boolean;
 	/** Only in the page. */
 	readonly shortcuts?: ToolShortcuts;
 };
