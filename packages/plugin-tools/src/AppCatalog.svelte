@@ -6,17 +6,17 @@
 	 * route file, inside `<main class="page-wide">`.
 	 */
 	import type { Group, PrefixEntry } from '@xcwds/core';
-	import { useApp } from '@xcwds/sveltekit';
+	import { settings, useApp } from '@xcwds/sveltekit';
 	import type { AppGroup } from './options.js';
 	import type {} from './types.js';
 
 	const app = useApp();
 	const tools = app.tools;
 	const apps = tools?.apps() ?? [];
-	let on = $state<Record<string, boolean>>({});
-	$effect(() =>
-		tools?.subscribe(() => (on = Object.fromEntries(apps.map((a) => [a.id, tools.isOn(a.id)]))))
-	);
+	// Seeded with the defaults, so the prerendered page shows them rather than every app off.
+	const read = () => Object.fromEntries(apps.map((a) => [a.id, tools?.isOn(a.id) ?? false]));
+	let on = $state<Record<string, boolean>>(read());
+	$effect(() => tools?.subscribe(() => (on = read())));
 
 	/** What this page uses of `app.lock` (from `@xcwds/plugin-lock`, if present). */
 	type LockLike = { subscribe(listener: (state: { locked: boolean }) => void): () => void };
@@ -116,7 +116,8 @@
 						a.id
 					]
 						? 'bg-(--xcwds-shell-accent) text-white'
-						: 'bg-(--xcwds-shell-hover-bg)'}"
+						: 'bg-(--xcwds-shell-hover-bg)'} disabled:opacity-40"
+					disabled={!settings.ready}
 					onclick={() => toggle(a)}
 				>
 					{on[a.id] ? 'On' : 'Off'}

@@ -127,6 +127,11 @@ test.describe('at the root', () => {
 		await expect(other).toHaveURL(url('/apps'));
 	});
 
+	test('the prerendered Apps page shows the apps that start on as on', async ({ page }) => {
+		const html = await (await page.request.get(url('/apps'))).text();
+		expect(html.match(/role="switch" aria-checked="true"/g)).toHaveLength(2);
+	});
+
 	test('every control on the Apps page is a 44px tap target', async ({ page }) => {
 		await gotoHydrated(page, url('/apps'));
 		await toggle(page, 'Hello').click();
