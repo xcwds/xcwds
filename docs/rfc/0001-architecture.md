@@ -262,6 +262,18 @@ stay out of backups (format unchanged): backing up collections is a later decisi
 since Firefox asks the user. "Clear data", a lock's reset and Settings' usage list count
 collections by group, as they do entries.
 
+### 13. Apps are groups of plugins people turn on and off
+
+**Decision.** An app built on @xcwds can hold many small apps (Kitchen, Gym, ...), and each
+person turns on the ones they use (#158). `@xcwds/plugin-tools` declares them (`apps`, with the
+tools, route prefixes and storage groups each owns) and keeps which are on in the `apps` setting.
+Every app ships in every build: one origin, one CSP, one service worker. Turning one off only
+hides it from Home, the tools index and (#159) the tab bar; its pages still open and its data
+stays until the person removes it. Separate builds per app were rejected: PWAs on one origin
+share storage anyway, a page someone opens (a bookmark, a shared link) must still work offline,
+and the manifest is written at build time, so it can't follow each person's choice (only apps
+that start on get shortcuts). Keeping apps that are off out of the offline cache is #163.
+
 ## Hook families
 
 Defined in #5; listed here so the decisions above have names to point at.

@@ -14,7 +14,8 @@ import {
 	type ShortcutTool
 } from './home.js';
 import toolsFactory, { build } from './index.js';
-import { resolveOptions, type Tool } from './options.js';
+import { appIsOn, appOf, parseAppsSetting, withAppOn } from './apps.js';
+import { resolveOptions, type AppGroup, type Tool } from './options.js';
 
 // The block needs SvelteKit's runtime; e2e tests cover it.
 vi.mock('./HomeShortcuts.svelte', () => ({ default: function HomeShortcuts() {} }));
@@ -52,7 +53,9 @@ describe('options', () => {
 			path: '/tools',
 			title: 'Tools',
 			emoji: undefined,
-			items: []
+			items: [],
+			apps: [],
+			catalog: '/apps'
 		});
 		expect(resolveOptions(options).items).toEqual(items);
 		expect(() => resolveOptions({ path: '/' })).toThrow(/`path`/);
@@ -95,6 +98,116 @@ describe('options', () => {
 });
 
 // Ported from xcwds.github.io's home.spec.ts.
+const kitchen: AppGroup = {
+	id: 'kitchen',
+	name: 'Kitchen',
+	emoji: '🍳',
+	blurb: 'Cooking.',
+	routes: ['/recipes'],
+	groups: ['recipes']
+};
+const games: AppGroup = { id: 'games', name: 'Games', emoji: '🎲', blurb: 'Play.', default: false };
+const secret: AppGroup = {
+	id: 'secret',
+	name: 'Notes',
+	emoji: '📓',
+	blurb: 'Mine.',
+	private: true
+};
+const withApps = {
+	path: '/utils',
+	title: 'Utils',
+	apps: [kitchen, games, secret],
+	items: [
+		tool('a', { app: 'kitchen', shortcut: true }),
+		tool('b', { app: 'games', shortcut: true }),
+		tool('c'),
+		tool('s', { app: 'secret' })
+	]
+};
+
+describe('apps (#158)', () => {
+	it('checks apps and the tools in them', () => {
+		const resolved = resolveOptions(withApps);
+		expect(resolved.apps).toEqual([kitchen, games, secret]);
+		// A tool in a private app is private.
+		expect(resolved.items.find((t) => t.path === '/utils/s')?.private).toBe(true);
+		const bad =
+			(apps: unknown, items: unknown[] = []) =>
+			() =>
+				resolveOptions({ path: '/utils', apps, items });
+		expect(bad([{ ...kitchen, colour: 'red' }])).toThrow(/unknown key `colour`/);
+		expect(bad([{ ...kitchen, id: 'Kitchen' }])).toThrow(/`id`/);
+		expect(bad([{ ...kitchen, blurb: '' }])).toThrow(/needs a `blurb`/);
+		expect(bad([{ ...kitchen, default: 'yes' }])).toThrow(/`default`/);
+		expect(bad([{ ...kitchen, routes: ['recipes'] }])).toThrow(/`routes`/);
+		expect(bad([{ ...kitchen, groups: [''] }])).toThrow(/`groups`/);
+		expect(bad([kitchen, kitchen])).toThrow(/two apps with the id "kitchen"/);
+		expect(bad([kitchen], [tool('x', { app: 'garden' })])).toThrow(/app "garden"/);
+		expect(bad([secret], [tool('x', { app: 'secret', shortcut: true })])).toThrow(/private app/);
+		expect(bad([kitchen], [{ ...tool('x'), path: '/apps' }])).toThrow(/Apps page/);
+		expect(() => resolveOptions({ path: '/utils', catalog: '/utils' })).toThrow(/`catalog`/);
+		// Without apps, a tool may use the path; there's no Apps page.
+		expect(() => resolveOptions({ items: [{ ...tool('x'), path: '/apps' }] })).not.toThrow();
+	});
+
+	it('read the setting: what the person chose, else the default', () => {
+		expect(parseAppsSetting('on')).toBeUndefined();
+		expect(parseAppsSetting({ kitchen: false, games: 'yes', gone: true })).toEqual({
+			kitchen: false,
+			gone: true
+		});
+		const apps = [kitchen, games];
+		expect(appIsOn(apps, {}, 'kitchen')).toBe(true);
+		expect(appIsOn(apps, {}, 'games')).toBe(false);
+		expect(appIsOn(apps, { kitchen: false, games: true }, 'kitchen')).toBe(false);
+		expect(appIsOn(apps, { games: true }, 'games')).toBe(true);
+		expect(appIsOn(apps, { nope: true }, 'nope')).toBe(false);
+		// Choosing the default forgets the choice, so a new default still applies.
+		expect(withAppOn(apps, {}, 'kitchen', false)).toEqual({ kitchen: false });
+		expect(withAppOn(apps, { kitchen: false }, 'kitchen', true)).toEqual({});
+		expect(withAppOn(apps, { kitchen: false }, 'games', true)).toEqual({
+			kitchen: false,
+			games: true
+		});
+	});
+
+	it('find the app a page belongs to', () => {
+		const deeper: AppGroup = { ...games, routes: ['/recipes/games'] };
+		const tools = resolveOptions(withApps).items;
+		expect(appOf([kitchen, deeper], tools, '/utils/a')?.id).toBe('kitchen');
+		expect(appOf([kitchen, deeper], tools, '/utils/c')).toBeUndefined();
+		expect(appOf([kitchen, deeper], tools, '/recipes')?.id).toBe('kitchen');
+		expect(appOf([kitchen, deeper], tools, '/recipes/pie/')?.id).toBe('kitchen');
+		expect(appOf([kitchen, deeper], tools, '/recipes/games/chess')?.id).toBe('games');
+		expect(appOf([kitchen, deeper], tools, '/recipesbook')).toBeUndefined();
+		expect(appOf([kitchen, deeper], tools, '/')).toBeUndefined();
+	});
+
+	it('adds the Apps page, and only shortcuts of apps that start on', async () => {
+		const builder = createApp();
+		decorateRoutes(builder);
+		builder.register(build, withApps);
+		await builder.ready();
+		expect(builder.routes.get('/apps')).toMatchObject({ title: 'Apps', parent: '/utils' });
+		expect(builder.routes.get('/utils/s')?.private).toBe(true);
+		expect(builder.tools!.catalog).toBe('/apps');
+		expect(builder.tools!.isOn('games')).toBe(false);
+		expect(builder.tools!.appOf('/recipes/x')?.id).toBe('kitchen');
+		const manifest = await builder.hooks.reduce('onManifest', { name: 'A' });
+		expect(manifest.shortcuts).toEqual([
+			{ name: 'A', description: 'The a tool.', url: '/utils/a' }
+		]);
+
+		const plain = createApp();
+		decorateRoutes(plain);
+		plain.register(build, options);
+		await plain.ready();
+		expect(plain.routes.get('/apps')).toBeUndefined();
+		expect(plain.tools!.catalog).toBeUndefined();
+	});
+});
+
 describe('the Home rules', () => {
 	const rules: ShortcutTool[] = [
 		{ path: '/utils/a' },
@@ -236,6 +349,57 @@ describe('the page', () => {
 		// Not a tool: nothing happens.
 		expect(shortcuts.togglePin('/hello')).toBe(false);
 		expect(shortcuts.state.pins).toEqual(['/utils/c']);
+	});
+
+	it('turns apps on and off, hides their tools but keeps their pins, and syncs tabs', async () => {
+		const app = await buildTestApp({ plugins: [[client, withApps]] });
+		const tools = app.tools!;
+		const paths = () => tools.list().map((t) => t.path);
+		expect(paths()).toEqual(['/utils/a', '/utils/c', '/utils/s']);
+		expect(tools.all()).toHaveLength(4);
+		expect(tools.shortcuts!.togglePin('/utils/a')).toBe(true);
+
+		let calls = 0;
+		const stop = tools.subscribe(() => calls++);
+		expect(calls).toBe(1);
+		expect(tools.setOn('kitchen', false)).toBe(true);
+		expect(calls).toBe(2);
+		expect(tools.isOn('kitchen')).toBe(false);
+		expect(paths()).toEqual(['/utils/c', '/utils/s']);
+		// Hidden, not unpinned.
+		expect(tools.shortcuts!.state.pins).toEqual(['/utils/a']);
+		expect(JSON.parse(app.sharedStorage.backing.get('app:settings')!).apps).toEqual({
+			kitchen: false
+		});
+		// Nothing to change: no call, no write.
+		expect(tools.setOn('kitchen', false)).toBe(true);
+		expect(calls).toBe(2);
+		expect(tools.setOn('nope', true)).toBe(false);
+
+		const other = await app.openTab();
+		expect(other.tools!.isOn('kitchen')).toBe(false);
+		other.tools!.setOn('games', true);
+		await app.settle();
+		expect(calls).toBe(3);
+		expect(paths()).toEqual(['/utils/b', '/utils/c', '/utils/s']);
+		// Turned back on: choosing the default forgets the choice.
+		other.tools!.setOn('kitchen', true);
+		await app.settle();
+		expect(paths()).toEqual(['/utils/a', '/utils/b', '/utils/c', '/utils/s']);
+		expect(JSON.parse(app.sharedStorage.backing.get('app:settings')!).apps).toEqual({
+			games: true
+		});
+		stop();
+		other.tools!.setOn('games', false);
+		await app.settle();
+		expect(calls).toBe(4);
+	});
+
+	it('without apps, adds no setting and shows every tool', async () => {
+		const app = await buildTestApp({ plugins: [[client, options]] });
+		expect(app.settings.fields().some((f) => f.name === 'apps')).toBe(false);
+		expect(app.tools!.list()).toHaveLength(items.length);
+		expect(app.tools!.apps()).toEqual([]);
 	});
 
 	it('records recently used tools on navigation, never private ones', async () => {

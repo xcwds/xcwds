@@ -33,6 +33,16 @@
 			"svelte": "./dist/HomeShortcuts.svelte",
 			"default": "./dist/HomeShortcuts.svelte"
 		},
+		"./AppCatalog.svelte": {
+			"types": "./dist/AppCatalog.svelte.d.ts",
+			"svelte": "./dist/AppCatalog.svelte",
+			"default": "./dist/AppCatalog.svelte"
+		},
+		"./AppOffNotice.svelte": {
+			"types": "./dist/AppOffNotice.svelte.d.ts",
+			"svelte": "./dist/AppOffNotice.svelte",
+			"default": "./dist/AppOffNotice.svelte"
+		},
 		"./styles.css": "./dist/styles.css",
 		"./package.json": "./package.json"
 	},

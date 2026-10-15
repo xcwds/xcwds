@@ -159,6 +159,7 @@ for (const { name, dir, base } of targets) {
 					'/',
 					'/hello',
 					'/utils',
+					'/apps',
 					'/utils/dice',
 					'/utils/timer',
 					'/no-such-page'

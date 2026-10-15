@@ -1,5 +1,6 @@
+import type { AppsSetting } from './apps.js';
 import type { HomeShortcuts } from './home.js';
-import type { Tool } from './options.js';
+import type { AppGroup, Tool } from './options.js';
 
 /** Home's pinned and recently used tools (`app.tools.shortcuts`, page only). */
 export type ToolShortcuts = {
@@ -21,9 +22,23 @@ export type ToolShortcuts = {
 export type AppTools = {
 	/** The index page's path. */
 	readonly index: string;
-	/** Every tool, in order. */
+	/** The tools that show, in order: in no app, or in an app that's on (every tool in the build). */
 	list(): readonly Tool[];
+	/** Every tool, in order, including those of apps that are off. */
+	all(): readonly Tool[];
 	get(path: string): Tool | undefined;
+	/** The apps from the options, in order. */
+	apps(): readonly AppGroup[];
+	/** The Apps page's path, when there are apps. */
+	readonly catalog: string | undefined;
+	/** The app a page belongs to (its tool's app, or one whose `routes` cover it). */
+	appOf(path: string): AppGroup | undefined;
+	/** Whether an app is on (in the build, whether it starts on). */
+	isOn(id: string): boolean;
+	/** Turns an app on or off and saves it; false if it couldn't be saved (always, in the build). */
+	setOn(id: string, on: boolean): boolean;
+	/** Calls `listener` now and whenever an app is turned on or off; returns a function that stops it. */
+	subscribe(listener: () => void): () => void;
 	/**
 	 * Adds a tool. Call it while plugins register, from both your build entry (which adds its
 	 * page to the route registry, so don't also `app.route()` it) and your page entry.
@@ -34,6 +49,10 @@ export type AppTools = {
 };
 
 declare module '@xcwds/core' {
+	interface Settings {
+		/** From `@xcwds/plugin-tools`: which apps are on, by id (a missing id: the app's default). */
+		apps: AppsSetting;
+	}
 	interface App {
 		/** From `@xcwds/plugin-tools`. */
 		readonly tools?: AppTools;

@@ -17,6 +17,7 @@ const PAGES = [
 	'/',
 	'/hello',
 	'/utils',
+	'/apps',
 	'/utils/coffee',
 	'/utils/notes',
 	'/utils/timer',

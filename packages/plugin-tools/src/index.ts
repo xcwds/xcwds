@@ -20,6 +20,7 @@
  * prerendered and the shell knows their titles) and the manifest's `shortcuts`.
  */
 import { definePlugin, descriptor } from '@xcwds/core';
+import { appOf } from './apps.js';
 import {
 	CORE,
 	NAME,
@@ -31,7 +32,15 @@ import {
 } from './options.js';
 import type { AppTools } from './types.js';
 
-export type { ResolvedToolsOptions, Tool, ToolsOptions } from './options.js';
+export type { AppGroup, ResolvedToolsOptions, Tool, ToolsOptions } from './options.js';
+export {
+	appIsOn,
+	appOf,
+	parseAppsSetting,
+	toolShows,
+	withAppOn,
+	type AppsSetting
+} from './apps.js';
 export {
 	MAX_RECENT,
 	parseShortcuts,
@@ -48,15 +57,25 @@ export type { AppTools, ToolShortcuts } from './types.js';
 export const build = definePlugin(
 	(app, input: ToolsOptions) => {
 		const options = resolveOptions(input);
-		const list = new ToolList(options.path);
+		const { apps } = options;
+		const list = new ToolList(options.path, apps, options.catalog);
 		app.route({
 			path: options.path,
 			title: options.title,
 			...(options.emoji ? { emoji: options.emoji } : {}),
 			width: 'wide'
 		});
-		const add = (tool: Tool) => {
-			list.add(tool);
+		// The Apps page, linked from the index page.
+		if (apps.length)
+			app.route({
+				path: options.catalog,
+				title: 'Apps',
+				emoji: '🧩',
+				parent: options.path,
+				width: 'wide'
+			});
+		const add = (input: Tool) => {
+			const tool = list.add(input);
 			app.route({
 				path: tool.path,
 				title: tool.name,
@@ -67,15 +86,29 @@ export const build = definePlugin(
 			});
 		};
 		for (const tool of options.items) add(tool);
+		const startsOn = (id: string) => apps.some((a) => a.id === id && a.default !== false);
 		app.decorate('tools', {
 			index: options.path,
+			catalog: apps.length ? options.catalog : undefined,
 			get: (path) => list.all().find((t) => t.path === path),
 			add: (tool) => add(checkTool(tool)),
-			list: () => list.all()
+			list: () => list.all(),
+			all: () => list.all(),
+			apps: () => apps,
+			appOf: (path) => appOf(apps, list.all(), path),
+			isOn: startsOn,
+			setOn: () => false,
+			subscribe(listener) {
+				listener();
+				return () => {};
+			}
 		} satisfies AppTools);
 
 		app.addHook('onManifest', (manifest) => {
-			const shortcuts = list.all().filter((t) => t.shortcut && !t.private);
+			// Written once for everyone, so only tools of apps that start on (or in no app).
+			const shortcuts = list
+				.all()
+				.filter((t) => t.shortcut && !t.private && (t.app === undefined || startsOn(t.app)));
 			if (!shortcuts.length) return manifest;
 			// The manifest's scope is the base path plus "/".
 			const scope = typeof manifest.scope === 'string' ? manifest.scope : '/';
