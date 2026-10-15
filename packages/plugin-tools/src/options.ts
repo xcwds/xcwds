@@ -10,7 +10,11 @@ export const CORE = '^0.3.0';
 
 /** One small tool: a page of its own, listed on the index page and pinnable to Home. */
 export type Tool = {
-	/** The tool's page, an app path such as `/utils/coffee-timer`. */
+	/**
+	 * The tool's page, an app path such as `/utils/coffee-timer`, optionally with a `#fragment`
+	 * for tools that share one page (`/my-apps/app#k3f9`, an app made of blocks). Pins and Recently
+	 * used tell such tools apart by their fragment.
+	 */
 	path: string;
 	name: string;
 	emoji: string;
@@ -93,6 +97,22 @@ const isPath = (v: unknown): v is string =>
 
 const text = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
 
+/** A fragment a tool's path can end with: 1-64 URL-safe characters. */
+const FRAGMENT = /^#[A-Za-z0-9._~-]{1,64}$/;
+
+/** A tool's path: an app path other than "/", optionally followed by a `#fragment`. */
+export function isToolPath(v: unknown): v is string {
+	if (typeof v !== 'string') return false;
+	const { page, fragment } = splitToolPath(v);
+	return isPath(page) && page !== '/' && (fragment === '' || FRAGMENT.test(fragment));
+}
+
+/** A tool's path as its page (an app path) and its fragment (`#…`, or empty). */
+export function splitToolPath(path: string): { page: string; fragment: string } {
+	const i = path.indexOf('#');
+	return i < 0 ? { page: path, fragment: '' } : { page: path.slice(0, i), fragment: path.slice(i) };
+}
+
 const TOOL_KEYS = ['path', 'name', 'emoji', 'blurb', 'private', 'shortcut', 'width', 'app'];
 const APP_KEYS = ['id', 'name', 'emoji', 'blurb', 'private', 'default', 'routes', 'groups'];
 
@@ -104,9 +124,9 @@ export function checkTool(input: unknown, where = 'a tool'): Tool {
 	const unknown = Object.keys(tool).filter((k) => !TOOL_KEYS.includes(k));
 	if (unknown.length)
 		fail(`${where} has unknown key ${unknown.map((k) => `\`${k}\``).join(', ')}.`);
-	if (!isPath(tool.path) || tool.path === '/')
+	if (!isToolPath(tool.path))
 		fail(
-			`${where} needs a \`path\` (an app path other than "/", no trailing slash, query or hash).`
+			`${where} needs a \`path\` (an app path other than "/", no trailing slash or query, and at most a short #fragment).`
 		);
 	const at = `the tool "${tool.path}"`;
 	for (const key of ['name', 'emoji', 'blurb'])
@@ -248,6 +268,13 @@ export class ToolList {
 		}
 		this.#tools.push(tool);
 		return tool;
+	}
+
+	/** Removes a tool; false if there's none at `path`. */
+	remove(path: string): boolean {
+		const before = this.#tools.length;
+		this.#tools = this.#tools.filter((t) => t.path !== path);
+		return this.#tools.length !== before;
 	}
 
 	all(): Tool[] {

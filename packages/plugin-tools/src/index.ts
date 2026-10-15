@@ -27,12 +27,14 @@ import {
 	ToolList,
 	checkTool,
 	resolveOptions,
+	splitToolPath,
 	type Tool,
 	type ToolsOptions
 } from './options.js';
 import type { AppTools } from './types.js';
 
 export type { AppGroup, ResolvedToolsOptions, Tool, ToolsOptions } from './options.js';
+export { isToolPath, splitToolPath } from './options.js';
 export {
 	appIsOn,
 	appOf,
@@ -88,6 +90,9 @@ export const build = definePlugin(
 			});
 		const add = (input: Tool) => {
 			const tool = list.add(input);
+			// A tool on a shared page (`/my-apps/app#id`) has no route of its own: the plugin that
+			// owns the page registers it.
+			if (splitToolPath(tool.path).fragment) return;
 			app.route({
 				path: tool.path,
 				title: tool.name,
@@ -104,6 +109,7 @@ export const build = definePlugin(
 			catalog: apps.length ? options.catalog : undefined,
 			get: (path) => list.all().find((t) => t.path === path),
 			add: (tool) => add(checkTool(tool)),
+			remove: () => false,
 			list: () => list.all(),
 			all: () => list.all(),
 			apps: () => apps,

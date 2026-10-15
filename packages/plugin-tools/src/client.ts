@@ -24,6 +24,7 @@ import {
 	withPinMoved,
 	withPinToggled,
 	withVisit,
+	withoutTool,
 	type HomeShortcuts
 } from './home.js';
 import {
@@ -32,6 +33,7 @@ import {
 	ToolList,
 	checkTool,
 	resolveOptions,
+	splitToolPath,
 	type Tool,
 	type ToolsOptions
 } from './options.js';
@@ -63,6 +65,11 @@ export default definePlugin(
 			});
 		const setting = (): AppsSetting => (apps.length ? (app.settings.get().apps ?? {}) : {});
 		const isOn = (id: string) => appIsOn(apps, setting(), id);
+		/** Follows tools added or removed after boot (`app.tools.subscribe`). */
+		const toolListeners = new Set<() => void>();
+		const toolsChanged = () => {
+			for (const listener of toolListeners) listener();
+		};
 		const shows = (tool: Tool) => toolShows(tool, isOn);
 
 		const entry = app.storage.entry('shortcuts', {
@@ -120,9 +127,22 @@ export default definePlugin(
 				if (saved) app.toast?.(pinned ? 'Removed from Home.' : 'Pinned to Home.');
 				return saved;
 			},
-			movePin: (path, by) => apply((s) => withPinMoved(s, path, by)),
+			movePin(path, by) {
+				const listed = new Set(
+					list
+						.all()
+						.filter(shows)
+						.map((t) => t.path)
+				);
+				return apply((s) => withPinMoved(s, path, by, (p) => listed.has(p)));
+			},
 			visit(pathname) {
-				const path = pathname.replace(/\/+$/, '') || '/';
+				const { page, fragment } = splitToolPath(pathname);
+				const trimmed = page.replace(/\/+$/, '') || '/';
+				// A tool on a shared page is told apart by its fragment; any other fragment is the page.
+				const path = list.all().some((t) => t.path === trimmed + fragment)
+					? trimmed + fragment
+					: trimmed;
 				// Quiet: if storage is blocked, opening a tool shouldn't warn about a save the user
 				// never made.
 				if (list.all().some((t) => t.path === path))
@@ -137,7 +157,17 @@ export default definePlugin(
 			list: () => list.all().filter(shows),
 			all: () => list.all(),
 			get: (path) => list.all().find((t) => t.path === path),
-			add: (tool) => void list.add(checkTool(tool)),
+			add(tool) {
+				list.add(checkTool(tool));
+				toolsChanged();
+			},
+			remove(path) {
+				if (!list.remove(path)) return false;
+				toolsChanged();
+				// Quiet: removing the tool is what the person did; its pin goes with it.
+				apply((s) => withoutTool(s, path), { quiet: true });
+				return true;
+			},
 			apps: () => apps,
 			appOf: (path) => appOf(apps, list.all(), path),
 			isOn,
@@ -151,10 +181,16 @@ export default definePlugin(
 			},
 			subscribe(listener) {
 				listener();
-				if (!apps.length) return () => {};
-				return app.settings.subscribe((next, prev) => {
-					if (JSON.stringify(next.apps) !== JSON.stringify(prev.apps)) listener();
-				});
+				toolListeners.add(listener);
+				const stopSettings = apps.length
+					? app.settings.subscribe((next, prev) => {
+							if (JSON.stringify(next.apps) !== JSON.stringify(prev.apps)) listener();
+						})
+					: () => {};
+				return () => {
+					toolListeners.delete(listener);
+					stopSettings();
+				};
 			},
 			shortcuts
 		} satisfies AppTools);
@@ -170,7 +206,7 @@ export default definePlugin(
 			}
 			// A tool added from a page entry only has no title in the header and isn't prerendered.
 			for (const tool of list.all())
-				if (!app.routes.get(tool.path))
+				if (!app.routes.get(splitToolPath(tool.path).page))
 					app.log.warn(
 						`${NAME}: the tool "${tool.path}" has no route. Add it with app.tools.add() from your build entry too.`
 					);
@@ -194,11 +230,12 @@ export default definePlugin(
 			if (closed) return;
 			stops.push(home.add(HomeShortcuts, { order: 0 }));
 		});
-		app.addHook('afterNavigate', (to) => shortcuts.visit(to.path));
+		app.addHook('afterNavigate', (to) => shortcuts.visit(to.path + (to.url?.hash ?? '')));
 		app.addHook('onClose', () => {
 			closed = true;
 			for (const stop of stops) stop();
 			stops = [];
+			toolListeners.clear();
 		});
 	},
 	{ name: NAME, core: CORE, encapsulate: false, network: false }

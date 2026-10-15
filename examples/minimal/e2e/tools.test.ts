@@ -81,6 +81,41 @@ for (const { name, dir, base } of targets) {
 			await expect(page).toHaveURL(url('/utils/dice'));
 		});
 
+		test('a tool added at runtime on a shared page can be pinned, kept and removed (#160)', async ({
+			page
+		}) => {
+			const saved = () => page.evaluate(() => localStorage.getItem('app:tools:shortcuts') ?? '');
+			await gotoHydrated(page, url('/utils/notes'));
+			await page.getByRole('button', { name: 'Add Groceries to tools' }).click();
+			await page.locator('header [data-shell-back]').click();
+			await expect(page).toHaveURL(url('/utils'));
+			await page.getByRole('button', { name: 'Pin Groceries to Home' }).click();
+			await page.getByRole('link', { name: /Groceries/ }).click();
+			await expect(page).toHaveURL(url('/utils/notes#groceries'));
+			// Recently used tells it apart from its page, Notes.
+			await expect.poll(saved).toContain('"recent":["/utils/notes#groceries","/utils/notes"]');
+			await page.getByRole('link', { name: 'Home' }).first().click();
+			await expect(pinned(page)).toHaveText([/Groceries$/]);
+			// Pinned, so not listed twice.
+			await expect(recent(page)).toHaveText([/Notes$/]);
+
+			// Reloaded, the tool isn't there until something adds it again, but its pin is kept.
+			await page.reload();
+			await expect(page.getByTestId('pinned')).toHaveCount(0);
+			expect(await saved()).toContain('/utils/notes#groceries');
+			await gotoHydrated(page, url('/utils/notes'));
+			await page.getByRole('button', { name: 'Add Groceries to tools' }).click();
+			await page.getByRole('link', { name: 'Home' }).first().click();
+			await expect(pinned(page)).toHaveText([/Groceries$/]);
+
+			// Removing the tool takes its pin and its place under Recently used with it.
+			await pinned(page).first().click();
+			await expect(page).toHaveURL(url('/utils/notes#groceries'));
+			await page.getByRole('button', { name: 'Remove Groceries from tools' }).click();
+			await expect(page.getByRole('button', { name: 'Add Groceries to tools' })).toBeVisible();
+			await expect.poll(saved).not.toContain('groceries');
+		});
+
 		test('recently used shows the last three tools opened, newest first', async ({ page }) => {
 			for (const path of [
 				'/utils/coffee',
