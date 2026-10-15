@@ -15,7 +15,7 @@ export type GenerateOptions = {
 	/** Plugin ids; their requirements are added. */
 	plugins: readonly string[];
 	packageManager?: PackageManager;
-	/** `pnpm@10.x`, for package.json's `packageManager`. */
+	/** `pnpm@<version>`, for package.json's `packageManager`. */
 	packageManagerVersion?: string;
 	/**
 	 * Depend on the @xcwds packages with `workspace:*`, for an app generated inside this
@@ -130,11 +130,8 @@ function packageJson(plan: AppPlan, options: GenerateOptions): string {
 			'@xcwds/testing': version('@xcwds/testing', workspace)
 		})
 	};
-	if (pm === 'pnpm') {
-		if (options.packageManagerVersion) pkg.packageManager = options.packageManagerVersion;
-		// pnpm 10 only runs the install scripts you allow; Vite needs esbuild's.
-		pkg.pnpm = { onlyBuiltDependencies: ['esbuild'] };
-	}
+	if (pm === 'pnpm' && options.packageManagerVersion)
+		pkg.packageManager = options.packageManagerVersion;
 	return `${JSON.stringify(pkg, null, '\t')}\n`;
 }
 
@@ -610,6 +607,16 @@ ${setup}
 `;
 };
 
+/**
+ * pnpm only runs the install scripts you allow, and Vite needs esbuild's. pnpm 11 and later read
+ * `allowBuilds` (and ignore package.json's `pnpm` field); pnpm 10 reads `onlyBuiltDependencies`.
+ */
+const PNPM_WORKSPACE = `allowBuilds:
+  esbuild: true
+onlyBuiltDependencies:
+  - esbuild
+`;
+
 /** Every file of a new app, by path relative to its root. */
 export function appFiles(options: GenerateOptions): Map<string, string> {
 	// One line each: they go into string literals and headings.
@@ -664,6 +671,8 @@ export function appFiles(options: GenerateOptions): Map<string, string> {
 		['e2e/app.test.ts', E2E(plan)],
 		['.github/workflows/deploy.yml', workflow(pm, Boolean(options.packageManagerVersion))]
 	]);
+	// Inside this monorepo the root's pnpm-workspace.yaml applies; a nested one would split it off.
+	if (pm === 'pnpm' && !options.workspace) files.set('pnpm-workspace.yaml', PNPM_WORKSPACE);
 	for (const id of plan.plugins)
 		for (const file of CATALOG[id].files?.(plan) ?? []) files.set(file.path, file.content);
 	return files;

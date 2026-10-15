@@ -3,5 +3,8 @@ packages:
   - examples/*
   - site
   - site/plugin-pages
-onlyBuiltDependencies:
-  - esbuild
+# Only these dependencies may run install scripts; Vite needs esbuild's.
+allowBuilds:
+  esbuild: true
+engineStrict: true
+dedupePeerDependents: false
