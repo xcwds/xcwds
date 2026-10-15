@@ -1,0 +1,45 @@
+{
+	"name": "@xcwds/plugin-blocks",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Small apps people add to an @xcwds app (checklists, counters, logs, notes), defined as data rather than code. Work in progress (#160), not published yet.",
+	"license": "MIT",
+	"type": "module",
+	"sideEffects": false,
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/xcwds/xcwds.git",
+		"directory": "packages/plugin-blocks"
+	},
+	"exports": {
+		"./model": {
+			"types": "./dist/model.d.ts",
+			"default": "./dist/model.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"!dist/**/*.test.*"
+	],
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"check": "tsc -p tsconfig.json --noEmit",
+		"publint": "publint"
+	},
+	"devDependencies": {
+		"typescript": "^5.9.3",
+		"vitest": "^4.0.15"
+	},
+	"keywords": [
+		"pwa",
+		"offline-first",
+		"xcwds",
+		"xcwds-plugin",
+		"tracker",
+		"checklist"
+	],
+	"engines": {
+		"node": ">=22.18"
+	}
+}
