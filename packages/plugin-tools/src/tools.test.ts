@@ -328,6 +328,16 @@ describe('tools on a shared page (#160)', () => {
 		expect(
 			parseShortcuts({ pins: [], recent: ['/apps/p#y'] }, [{ path: '/apps/p#y', private: true }])
 		).toEqual({ pins: [], recent: [] });
+		// Moving skips pins Home doesn't show.
+		const shows = (p: string) => p !== '/a#hidden';
+		const pins = { pins: ['/b', '/a#hidden', '/c'], recent: [] };
+		expect(withPinMoved(pins, '/c', -1, shows).pins).toEqual(['/c', '/b', '/a#hidden']);
+		expect(withPinMoved(pins, '/b', 1, shows).pins).toEqual(['/a#hidden', '/c', '/b']);
+		expect(withPinMoved(pins, '/b', -1, shows)).toBe(pins);
+		expect(withPinMoved({ pins: ['/a#hidden', '/b'], recent: [] }, '/b', -1, shows).pins).toEqual([
+			'/a#hidden',
+			'/b'
+		]);
 		expect(withoutTool({ pins: ['/a#x', '/b'], recent: ['/b', '/a#x'] }, '/a#x')).toEqual({
 			pins: ['/b'],
 			recent: ['/b']

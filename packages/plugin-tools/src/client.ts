@@ -127,7 +127,15 @@ export default definePlugin(
 				if (saved) app.toast?.(pinned ? 'Removed from Home.' : 'Pinned to Home.');
 				return saved;
 			},
-			movePin: (path, by) => apply((s) => withPinMoved(s, path, by)),
+			movePin(path, by) {
+				const listed = new Set(
+					list
+						.all()
+						.filter(shows)
+						.map((t) => t.path)
+				);
+				return apply((s) => withPinMoved(s, path, by, (p) => listed.has(p)));
+			},
 			visit(pathname) {
 				const { page, fragment } = splitToolPath(pathname);
 				const trimmed = page.replace(/\/+$/, '') || '/';

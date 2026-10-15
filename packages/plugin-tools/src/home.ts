@@ -76,12 +76,23 @@ export function withPinToggled(state: HomeShortcuts, path: string): HomeShortcut
 	return { ...state, pins };
 }
 
-/** Moves a pin one place up (-1) or down (1); no change at either end. */
-export function withPinMoved(state: HomeShortcuts, path: string, by: -1 | 1): HomeShortcuts {
+/**
+ * Moves a pin past the next one up (-1) or down (1) that `shows` (Home lists only those: pins of
+ * an app that's off, or of a tool not added yet, are hidden); no change at either end.
+ */
+export function withPinMoved(
+	state: HomeShortcuts,
+	path: string,
+	by: -1 | 1,
+	shows: (path: string) => boolean = () => true
+): HomeShortcuts {
 	const i = state.pins.indexOf(path);
-	const j = i + by;
-	if (i < 0 || j < 0 || j >= state.pins.length) return state;
+	if (i < 0) return state;
+	let j = i + by;
+	while (j >= 0 && j < state.pins.length && !shows(state.pins[j]!)) j += by;
+	if (j < 0 || j >= state.pins.length) return state;
 	const pins = [...state.pins];
+	// Removing `path` first shifts a later target back one, so this lands just past it either way.
 	pins.splice(j, 0, ...pins.splice(i, 1));
 	return { ...state, pins };
 }
