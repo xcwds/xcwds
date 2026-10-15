@@ -5,7 +5,12 @@
 	const app = useApp();
 	// Opened as /utils/notes#<title>, it titles itself on arrival, like an app made of blocks.
 	$effect(() => {
-		const title = decodeURIComponent(location.hash.slice(1));
+		let title = '';
+		try {
+			title = decodeURIComponent(location.hash.slice(1));
+		} catch {
+			// A malformed fragment (#%E0) is no title.
+		}
 		if (title) app.shell?.setTitle(title);
 	});
 </script>

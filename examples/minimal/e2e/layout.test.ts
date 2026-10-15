@@ -228,6 +228,12 @@ for (const { name, dir, base } of targets) {
 			await expect(page).toHaveURL(/\/utils\/notes#To%20do$/);
 			await expect(h1).toContainText('To do');
 			await expect(page).toHaveTitle('To do · Minimal');
+			// A malformed fragment is no title, not a broken page.
+			await page.goto('about:blank');
+			await gotoHydrated(page, url('/utils/notes#%E0'));
+			await expect(h1).toContainText('Notes');
+			await page.getByLabel('Title').fill('Still works');
+			await expect(h1).toContainText('Still works');
 
 			// A private page shows it in the header, but its tab keeps the route's title.
 			await gotoHydrated(page, url('/utils/journal'));
