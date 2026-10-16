@@ -6,6 +6,7 @@
 @import '@xcwds/plugin-settings/styles.css';
 @import '@xcwds/plugin-changelog/styles.css';
 @import '@xcwds/plugin-lock/styles.css';
+@import '@xcwds/plugin-camera/styles.css';
 
 /* What e2e/theme.test.ts checks paints before any app code runs. */
 html {

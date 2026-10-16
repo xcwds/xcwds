@@ -5,9 +5,9 @@ camera on only while it's being used. **Work in progress**
 ([#145](https://github.com/xcwds/xcwds/issues/145)): not published yet.
 
 So far it holds the plugin, which hands the app a camera controller as `app.camera`, the
-controller itself, from `@xcwds/plugin-camera/camera`, and the image cleaning, from
-`@xcwds/plugin-camera/image`. The `<Camera>` viewfinder component and the browser notes come next;
-keeping photos in the app is #146.
+`<Camera>` viewfinder, the controller itself, from `@xcwds/plugin-camera/camera`, and the image
+cleaning, from `@xcwds/plugin-camera/image`. The browser notes come next; keeping photos in the
+app is #146.
 
 ## The plugin
 
@@ -31,8 +31,37 @@ plugin keeps it off whenever nobody can be using it:
   that moment waits for the photo before turning the camera off (stopping the track mid-capture
   would lose it), so the camera light can stay on for that long.
 
-Leaving the page that shows the viewfinder should stop the camera too; the `<Camera>` component
-will, when it's destroyed. The plugin declares `network: false`.
+Leaving the page that shows the viewfinder stops the camera too (`<Camera>` does, when it's
+destroyed, after any photo being taken). The plugin declares `network: false`.
+
+## The viewfinder
+
+```svelte
+<script>
+	import Camera from '@xcwds/plugin-camera/Camera.svelte';
+</script>
+
+<Camera onCapture={(photo) => save(photo.blob)} />
+```
+
+```css
+/* app.css, after Tailwind and @xcwds/plugin-shell/styles.css */
+@import '@xcwds/plugin-camera/styles.css';
+```
+
+- Nothing asks for the camera until **Turn on camera** is tapped (browsers ask for permission
+  then). A blocked or missing camera shows its sentence under the picture.
+- **Take photo** is a button, so Space and Enter work, enabled once the picture has its first
+  frame. `onCapture` gets each photo (a JPEG with no
+  metadata, see below); while it runs, the shutter waits and app updates are held back
+  (`app.update.markBusy` from [`@xcwds/plugin-update`](../plugin-update/README.md), if the app
+  has it).
+- **Switch camera** shows when there are two or more cameras; the front camera's picture is
+  mirrored, like a mirror, but its photos aren't.
+- A **Zoom** slider for the camera's own zoom, or a **Digital zoom** slider without one, with a
+  line saying it crops the picture and adds no detail. The picture scales to show the crop the
+  photo will be. **Light** shows when the camera has one.
+- `camera` takes another controller instead of `app.camera`; `text` replaces any of the labels.
 
 ## The camera controller
 
