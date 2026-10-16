@@ -45,10 +45,10 @@ issue records the owner's answer.
 
 ## Set by people
 
-`human requested`, `refinement requested`, `branding`, `good first issue`, `help wanted`, `question`,
-`duplicate`, `invalid` and `wontfix` are applied by people. Agents never add them and never remove
-them, except `refinement requested` as below. Read `human requested` as a sign the owner cares about
-the issue.
+`human requested`, `refinement requested`, `answered in comments`, `branding`, `good first issue`,
+`help wanted`, `question`, `duplicate`, `invalid` and `wontfix` are applied by people. Agents never
+add them and never remove them, except `refinement requested` and `answered in comments` as below.
+Read `human requested` as a sign the owner cares about the issue.
 
 ## Refinement
 
@@ -66,3 +66,11 @@ routine refines at most 2 per run, oldest first. Refining means:
   each, and the issue gets `needs decision`.
 - Then remove `refinement requested`, set the type and priority, and leave one comment summarising
   what changed. The owner adds the label again to ask for another pass.
+
+## Answered in comments
+
+`answered in comments` means the owner answered an issue's open questions in a comment. The labeling
+routine handles it alongside refinement (the 2-per-run limit covers both): move the answers into
+the body's "Decisions" section (quoting the owner's choice, dated), drop answered questions from
+"Open questions", remove `needs decision` when none are left, then remove `answered in comments`.
+If the body already records the answers, only remove the label.
