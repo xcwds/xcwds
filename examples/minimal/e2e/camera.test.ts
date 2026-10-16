@@ -142,9 +142,54 @@ test('without hardware zoom, the slider says digital zoom and the photo is the c
 	await expect(slider).toBeVisible();
 	await expect(page.getByText('Crops the picture; it adds no detail.')).toBeVisible();
 	const max = Number(await slider.getAttribute('max'));
+
+	// Two fingers spreading on the picture zoom it like the slider; pinching in zooms back out.
+	const picture = page.locator('[data-zoom]');
+	const finger = (type: string, pointerId: number, clientX: number) =>
+		picture.dispatchEvent(type, {
+			pointerId,
+			pointerType: 'touch',
+			clientX,
+			clientY: 200,
+			isPrimary: pointerId === 1
+		});
+	await finger('pointerdown', 1, 100);
+	await finger('pointerdown', 2, 200);
+	await finger('pointermove', 2, 220);
+	await expect(slider).toHaveValue('1.2');
+	await finger('pointermove', 2, 400);
+	await expect(slider).toHaveValue(String(max));
+	await finger('pointermove', 2, 150);
+	await expect(slider).toHaveValue('1');
+	await finger('pointerup', 2, 150);
+	await finger('pointerup', 1, 100);
+	// A mouse doesn't pinch (and can't leave a stale finger behind).
+	await picture.dispatchEvent('pointerdown', { pointerId: 9, pointerType: 'mouse', clientX: 100 });
+	await finger('pointerdown', 2, 200);
+	await finger('pointermove', 2, 400);
+	await expect(slider).toHaveValue('1');
+	await finger('pointerup', 2, 400);
+
 	await slider.fill(String(max));
-	await expect(page.locator('[data-zoom]')).toHaveAttribute('data-zoom', 'digital');
+	await expect(picture).toHaveAttribute('data-zoom', 'digital');
 	await page.getByRole('button', { name: 'Take photo' }).click();
 	const width = Math.round(frame.width / max);
 	await expect(page.getByTestId('photo')).toContainText(`${width} ×`);
+});
+
+test('a blocked camera says where this browser unblocks it', async ({ page }) => {
+	await page.addInitScript(() => {
+		navigator.mediaDevices.getUserMedia = () =>
+			Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
+	});
+	await gotoHydrated(page, url('/utils/camera'));
+	await page.getByRole('button', { name: 'Turn on camera' }).click();
+	await expect(page.locator('[data-state]')).toHaveAttribute('data-state', 'denied');
+	await expect(page.getByText('Camera access is blocked.')).toBeVisible();
+	// Playwright's Chromium on a computer.
+	await expect(page.getByTestId('camera-help')).toHaveText(
+		/Click the icon to the left of the address, set Camera to Allow/
+	);
+	// It can be tried again once allowed.
+	await expect(page.getByRole('button', { name: 'Turn on camera' })).toBeVisible();
 });

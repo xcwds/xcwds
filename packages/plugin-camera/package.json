@@ -28,6 +28,10 @@
 			"types": "./dist/camera.d.ts",
 			"default": "./dist/camera.js"
 		},
+		"./help": {
+			"types": "./dist/help.d.ts",
+			"default": "./dist/help.js"
+		},
 		"./image": {
 			"types": "./dist/image.d.ts",
 			"default": "./dist/image.js"
