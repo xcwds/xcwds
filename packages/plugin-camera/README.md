@@ -5,8 +5,48 @@ camera on only while it's being used. **Work in progress**
 ([#145](https://github.com/xcwds/xcwds/issues/145)): not published yet, and not a plugin you can
 install yet.
 
-So far it holds the image cleaning, from `@xcwds/plugin-camera/image`. The viewfinder, capture and
-`app.camera` come next; keeping photos in the app is #146.
+So far it holds the camera controller, from `@xcwds/plugin-camera/camera`, and the image cleaning,
+from `@xcwds/plugin-camera/image`. The `<Camera>` viewfinder component, the plugin that hands the
+controller to the app as `app.camera` (and stops it when the page is hidden or the app locks)
+and the browser notes come next; keeping photos in the app is #146.
+
+## The camera controller
+
+```ts
+import { createCamera } from '@xcwds/plugin-camera/camera';
+
+const camera = createCamera({ facing: 'environment', maxSide: 2048 });
+button.onclick = async () => {
+	// Browsers ask for permission here, so call it from a tap, never on page load.
+	if ((await camera.start()) !== 'live') return showError(camera.error);
+	video.srcObject = camera.stream; // <video playsinline muted>
+};
+shutter.onclick = async () => {
+	const result = await camera.capture(video);
+	if (result.ok) save(result.photo.blob); // a JPEG with no metadata
+};
+// When done, or when the page is hidden: every track stops and the camera light goes off.
+camera.stop();
+```
+
+- **`state`**: `idle`, `asking`, `live`, `denied`, `unavailable` or `error`, with **`error`** a
+  sentence to show (blocked, no camera, in use by another app, not a secure page). `onChange`
+  follows it.
+- **`start(facing?)`**, **`stop()`**, **`switchFacing()`** and **`cameras()`** (how many there
+  are). A permission answer that arrives after `stop()` is dropped and its stream stopped.
+  **`suspend()`** turns a live camera off and **`resume()`** turns it back on, only if it was on.
+- **`capabilities()`** and **`setZoom(value)`**: the camera's own zoom where the browser reports
+  one, else a **digital zoom** (`kind: 'digital'`) that crops the centre of the frame. It adds no
+  detail, so label it as such; it stops where the crop would drop under 1 megapixel, or at
+  `maxDigitalZoom` (default 4). Firefox never reports camera zoom, so it always gets
+  digital zoom. **`setTorch(on)`** where the camera has a light.
+- **`capture(video)`** takes a full-resolution still with `ImageCapture.takePhoto()` where it
+  works (Chromium on Android), else the viewfinder's current frame, crops it to the digital zoom
+  and re-encodes it from pixels: `{ ok: true, photo: { blob, width, height, type, takenAt } }`,
+  or `{ ok: false, error }`. `capturing` is true until the photo is encoded.
+
+Options: `facing`, `type` (`image/jpeg` or `image/webp`), `quality`, `maxSide` and
+`maxDigitalZoom`, all JSON. Nothing here makes a network request.
 
 ## Cleaning an image
 

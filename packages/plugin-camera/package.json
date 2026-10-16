@@ -12,6 +12,10 @@
 		"directory": "packages/plugin-camera"
 	},
 	"exports": {
+		"./camera": {
+			"types": "./dist/camera.d.ts",
+			"default": "./dist/camera.js"
+		},
 		"./image": {
 			"types": "./dist/image.d.ts",
 			"default": "./dist/image.js"
