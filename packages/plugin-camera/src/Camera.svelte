@@ -175,7 +175,9 @@
 		return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
 	};
 	function pointerDown(event: PointerEvent) {
-		if (!live || !zoom) return;
+		// Touch only: a touch stays with the element it started on, so its `pointerup` comes here;
+		// a mouse released elsewhere would leave a stale finger. The slider covers mice and pens.
+		if (!live || !zoom || event.pointerType !== 'touch') return;
 		pointers[event.pointerId] = { x: event.clientX, y: event.clientY };
 		if (fingers() === 2) pinch = { from: spread(), start: zoom.value };
 	}

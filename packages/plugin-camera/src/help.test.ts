@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { blockedHelp, browserOf, pinchZoom } from './help.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { blockedHelp, browserOf, pinchZoom, thisDevice } from './help.js';
+
+afterEach(() => void vi.unstubAllGlobals());
 
 const UA = {
 	iphoneSafari:
@@ -69,5 +71,15 @@ describe('pinchZoom', () => {
 	it('keeps the zoom for a pinch with no spread', () => {
 		expect(pinchZoom(1, 0, 120, { ...zoom, value: 1.3 })).toBe(1.3);
 		expect(pinchZoom(1, 100, Number.NaN, { ...zoom, value: 1.3 })).toBe(1.3);
+	});
+});
+
+describe('thisDevice', () => {
+	it('reads the page, and works without matchMedia', () => {
+		vi.stubGlobal('navigator', { userAgent: 'UA', maxTouchPoints: 5, standalone: true });
+		expect(thisDevice()).toEqual({ userAgent: 'UA', touchPoints: 5, standalone: true });
+		vi.stubGlobal('navigator', { userAgent: 'UA' });
+		vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('standalone') }));
+		expect(thisDevice()).toEqual({ userAgent: 'UA', touchPoints: 0, standalone: true });
 	});
 });

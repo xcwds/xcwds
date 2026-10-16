@@ -146,7 +146,13 @@ test('without hardware zoom, the slider says digital zoom and the photo is the c
 	// Two fingers spreading on the picture zoom it like the slider; pinching in zooms back out.
 	const picture = page.locator('[data-zoom]');
 	const finger = (type: string, pointerId: number, clientX: number) =>
-		picture.dispatchEvent(type, { pointerId, clientX, clientY: 200, isPrimary: pointerId === 1 });
+		picture.dispatchEvent(type, {
+			pointerId,
+			pointerType: 'touch',
+			clientX,
+			clientY: 200,
+			isPrimary: pointerId === 1
+		});
 	await finger('pointerdown', 1, 100);
 	await finger('pointerdown', 2, 200);
 	await finger('pointermove', 2, 220);
@@ -157,6 +163,12 @@ test('without hardware zoom, the slider says digital zoom and the photo is the c
 	await expect(slider).toHaveValue('1');
 	await finger('pointerup', 2, 150);
 	await finger('pointerup', 1, 100);
+	// A mouse doesn't pinch (and can't leave a stale finger behind).
+	await picture.dispatchEvent('pointerdown', { pointerId: 9, pointerType: 'mouse', clientX: 100 });
+	await finger('pointerdown', 2, 200);
+	await finger('pointermove', 2, 400);
+	await expect(slider).toHaveValue('1');
+	await finger('pointerup', 2, 400);
 
 	await slider.fill(String(max));
 	await expect(picture).toHaveAttribute('data-zoom', 'digital');

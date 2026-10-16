@@ -78,7 +78,7 @@ export function thisDevice(): Device {
 		userAgent: navigator.userAgent,
 		touchPoints: navigator.maxTouchPoints ?? 0,
 		standalone:
-			matchMedia?.('(display-mode: standalone)').matches ||
+			(typeof matchMedia === 'function' && matchMedia('(display-mode: standalone)').matches) ||
 			(navigator as { standalone?: boolean }).standalone === true
 	};
 }
