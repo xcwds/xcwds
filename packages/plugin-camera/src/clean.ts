@@ -47,7 +47,27 @@ export function fitSize(
 	};
 }
 
-/** Draws `source` at `width`×`height` and encodes it, on an `OffscreenCanvas` where there is one. */
+type Context = Pick<CanvasRenderingContext2D, 'drawImage' | 'fillRect' | 'fillStyle'>;
+
+/**
+ * Draws `source` at `width`×`height`. JPEG has no transparency, so it gets a white background
+ * first: a transparent PNG would otherwise come out black.
+ */
+function draw(
+	context: Context,
+	source: CanvasImageSource,
+	width: number,
+	height: number,
+	type: string
+) {
+	if (type === 'image/jpeg') {
+		context.fillStyle = '#fff';
+		context.fillRect(0, 0, width, height);
+	}
+	context.drawImage(source, 0, 0, width, height);
+}
+
+/** Draws `source` and encodes it, on an `OffscreenCanvas` where there is one. */
 async function encode(
 	source: CanvasImageSource,
 	width: number,
@@ -59,7 +79,7 @@ async function encode(
 		const canvas = new OffscreenCanvas(width, height);
 		const context = canvas.getContext('2d');
 		if (!context) return null;
-		context.drawImage(source, 0, 0, width, height);
+		draw(context, source, width, height, type);
 		return canvas.convertToBlob({ type, quality });
 	}
 	if (typeof document === 'undefined') return null;
@@ -68,7 +88,7 @@ async function encode(
 	canvas.height = height;
 	const context = canvas.getContext('2d');
 	if (!context) return null;
-	context.drawImage(source, 0, 0, width, height);
+	draw(context, source, width, height, type);
 	return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
 }
 

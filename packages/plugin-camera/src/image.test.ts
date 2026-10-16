@@ -222,7 +222,13 @@ describe('cleanImage', () => {
 				public height: number
 			) {}
 			getContext() {
-				return { drawImage: (...args: unknown[]) => drawn.push(args) };
+				return {
+					fillStyle: '',
+					fillRect(...args: unknown[]) {
+						drawn.push(['fill', this.fillStyle, ...args]);
+					},
+					drawImage: (...args: unknown[]) => drawn.push(args)
+				};
 			}
 			async convertToBlob({ type }: { type: string }) {
 				return new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], {
@@ -247,14 +253,20 @@ describe('cleanImage', () => {
 			new Uint8Array([0xff, 0xd8, 0xff, 0xd9])
 		);
 		expect(decode).toHaveBeenCalledWith(expect.any(Blob), { imageOrientation: 'from-image' });
-		expect(drawn).toEqual([[expect.anything(), 0, 0, 2000, 1500]]);
+		// JPEG has no transparency: a white background goes under the image.
+		expect(drawn).toEqual([
+			['fill', '#fff', 0, 0, 2000, 1500],
+			[expect.anything(), 0, 0, 2000, 1500]
+		]);
 		expect(close).toHaveBeenCalled();
 	});
 
 	it('says which type the browser wrote when it can’t write WebP', async () => {
-		stubBrowser({ writes: 'image/png' });
+		const { drawn } = stubBrowser({ writes: 'image/png' });
 		const result = await cleanImage(photo(), { type: 'image/webp' });
 		expect(result).toMatchObject({ ok: true, type: 'image/png', width: 4000 });
+		// WebP and PNG keep transparency, so nothing is painted under the image.
+		expect(drawn).toEqual([[expect.anything(), 0, 0, 4000, 3000]]);
 	});
 
 	it('ignores options it can’t use', async () => {
