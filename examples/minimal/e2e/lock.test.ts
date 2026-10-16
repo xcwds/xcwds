@@ -287,7 +287,10 @@ test('forgot passcode clears only what the lock protects', async ({ page }) => {
 
 	const forgot = page.getByTestId('lock-forgot');
 	await forgot.getByRole('button', { name: 'Forgot passcode?' }).click();
-	await expect(page.getByTestId('lock-forgot-groups')).toHaveText('Journal');
+	// The camera's photos are personal too (#146).
+	await expect(page.getByTestId('lock-forgot-groups')).toHaveText(
+		'Journal, Photos, Photos (thumbnails)'
+	);
 	await forgot.getByRole('button', { name: 'Reset the lock' }).click();
 	await forgot.getByRole('button', { name: 'Clear and reset' }).click();
 	await expect(page).toHaveURL(/\/utils\/journal$/);

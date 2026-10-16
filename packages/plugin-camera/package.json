@@ -36,6 +36,10 @@
 			"types": "./dist/image.d.ts",
 			"default": "./dist/image.js"
 		},
+		"./photos": {
+			"types": "./dist/photos.d.ts",
+			"default": "./dist/photos.js"
+		},
 		"./Camera.svelte": {
 			"types": "./dist/Camera.svelte.d.ts",
 			"svelte": "./dist/Camera.svelte",

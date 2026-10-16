@@ -6,8 +6,8 @@ camera on only while it's being used. **Work in progress**
 
 So far it holds the plugin, which hands the app a camera controller as `app.camera`, the
 `<Camera>` viewfinder, the controller itself, from `@xcwds/plugin-camera/camera`, and the image
-cleaning, from `@xcwds/plugin-camera/image`. The browser notes come next; keeping photos in the
-app is #146.
+cleaning, from `@xcwds/plugin-camera/image`, and the start of keeping photos in the app
+([#146](https://github.com/xcwds/xcwds/issues/146)): `app.photos`. The photo grid comes next.
 
 ## The plugin
 
@@ -26,6 +26,7 @@ plugin keeps it off whenever nobody can be using it:
 - **The app locks** (with [`@xcwds/plugin-lock`](../plugin-lock/README.md), if the app has it):
   the camera stops for good, so unlocking never turns it back on; a tap does.
 - **The app closes**: it stops.
+- **Photos kept in the app** go in `app.photos` (below).
 - **A photo is being saved**: from the shutter until the photo is encoded, an `onBeforeReload`
   reason holds app updates back. Previewing holds nothing. Hiding the page or locking the app in
   that moment waits for the photo before turning the camera off (stopping the track mid-capture
@@ -63,6 +64,39 @@ destroyed, after any photo being taken). The plugin declares `network: false`.
   line saying it crops the picture and adds no detail. The picture scales to show the crop the
   photo will be. Pinching the picture with two fingers zooms too. **Light** shows when the camera has one.
 - `camera` takes another controller instead of `app.camera`; `text` replaces any of the labels.
+
+## Keeping photos
+
+```ts
+const saved = await app.photos.save(photo); // a Photo from <Camera>, or { blob, width, height }
+if (!saved.ok) showError(saved.error); // storage full or blocked: keep the photo on screen
+const photos = await app.photos.list(); // newest first, without their contents
+```
+
+`app.photos` keeps photos in the app's blob store (`app.blobs`), in the collection
+`app:camera:photos`: group `photos`, so **Clear data** for that group removes them; personal
+(`sensitive`), so a lock's reset does too; and never in backups. Each photo gets a small JPEG
+thumbnail (at most 320 px on a side) saved next to it, in `app:camera:photos-thumbs` (same
+group), so a list never decodes full photos.
+
+- **`save(photo)`**: `{ ok: true, id }`, or `{ ok: false, error }` with a sentence to show when
+  storage is full or blocked (no thumbnail is left behind). The first save in a session also
+  asks the browser not to evict the app's data (`app.blobs.persist()`); Firefox asks the person,
+  so it follows the shutter tap, and a refusal changes nothing.
+- **`list()`**: `{ id, width, height, takenAt, size, type, thumb }` for each photo.
+- **`get(id)`**, **`thumbnail(photo)`** (the photo itself when it has none): the `Blob`.
+- **`delete(id)`**: the photo and its thumbnail; false if it couldn't.
+- **`onChange(listener)`**: another tab changed them, or they were cleared.
+
+For photos that belong to one tool (a private one, say) in a group of their own, make a store over
+collections of your own:
+
+```ts
+import { createPhotos } from '@xcwds/plugin-camera/photos';
+
+// In your plugin's setup (it registers the collections, so once): app:<namespace>:photos
+const notes = createPhotos(app.blobs, { label: 'Note photos', group: 'notes' });
+```
 
 ## The camera controller
 
