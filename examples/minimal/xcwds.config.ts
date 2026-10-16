@@ -1,5 +1,6 @@
 import hello from '@xcwds-example/plugin-hello';
 import { defineConfig } from '@xcwds/core';
+import camera from '@xcwds/plugin-camera';
 import changelog from '@xcwds/plugin-changelog';
 import install from '@xcwds/plugin-install';
 import lock from '@xcwds/plugin-lock';
@@ -65,6 +66,7 @@ export default defineConfig({
 				},
 				{ path: '/utils/dice', emoji: '🎲', name: 'Dice', blurb: 'Roll a die.' },
 				{ path: '/utils/units', emoji: '📏', name: 'Units', blurb: 'Convert lengths.' },
+				{ path: '/utils/camera', emoji: '📷', name: 'Camera', blurb: 'Photos with no metadata.' },
 				// Private: never under Recently used, shared or a shortcut; named discreetly.
 				{
 					path: '/utils/journal',
@@ -96,6 +98,8 @@ export default defineConfig({
 		install(),
 		// A passcode lock for private pages (the Journal), with its unlock screen at /unlock; a cover
 		// in the app switcher and no spellcheck in their fields.
-		lock()
+		lock(),
+		// The camera as `app.camera`, off while hidden or locked; /utils/camera shows `<Camera>`.
+		camera({ maxSide: 2048 })
 	]
 });

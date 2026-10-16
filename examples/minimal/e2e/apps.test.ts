@@ -48,7 +48,7 @@ for (const { name, dir, base } of targets) {
 			await expect(card(page, 'Kitchen').getByRole('button', { name: /Remove/ })).toHaveCount(0);
 
 			await gotoHydrated(page, url('/utils'));
-			await expect(toolLinks(page)).toHaveText([/Notes/, /Dice/, /Units/, /Journal/]);
+			await expect(toolLinks(page)).toHaveText([/Notes/, /Dice/, /Units/, /Camera/, /Journal/]);
 			await gotoHydrated(page, url('/'));
 			await expect(page.getByTestId('pinned')).toHaveCount(0);
 
@@ -114,9 +114,9 @@ test.describe('at the root', () => {
 		await gotoHydrated(page, url('/apps'));
 		const other = await context.newPage();
 		await gotoHydrated(other, url('/utils'));
-		await expect(toolLinks(other)).toHaveCount(6);
+		await expect(toolLinks(other)).toHaveCount(7);
 		await toggle(page, 'Kitchen').click();
-		await expect(toolLinks(other)).toHaveCount(4);
+		await expect(toolLinks(other)).toHaveCount(5);
 
 		await gotoHydrated(other, url('/settings'));
 		const link = other.getByTestId('apps-link');

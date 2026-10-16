@@ -23,6 +23,7 @@ const PAGES = [
 	'/utils/timer',
 	'/utils/dice',
 	'/utils/units',
+	'/utils/camera',
 	'/utils/journal',
 	'/inbox',
 	'/settings'
@@ -134,8 +135,8 @@ test('Settings says the app contacts no servers, and lists every plugin', async 
 	const privacy = page.getByTestId('settings-privacy');
 	await expect(privacy.getByRole('heading', { name: 'Privacy' })).toBeVisible();
 	await expect(privacy).toContainText('Minimal never contacts a server.');
-	await privacy.getByText('Plugins (12)').click();
-	await expect(privacy.getByRole('listitem')).toHaveCount(12);
+	await privacy.getByText('Plugins (13)').click();
+	await expect(privacy.getByRole('listitem')).toHaveCount(13);
 	await expect(privacy.getByRole('listitem').first()).toHaveText(
 		/@xcwds\/plugin-shell\s*No network/
 	);
