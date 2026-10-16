@@ -4,7 +4,7 @@
  *
  * - **Hidden page.** `onHidden` turns a live camera off (`suspend`), and `onVisible` turns it
  *   back on only if it was on then, the app isn't locked and nothing turned it off meanwhile.
- *   Hidden between the shutter and the encoded photo, it waits for the photo first.
+ *   Hidden or locked between the shutter and the encoded photo, it lets the photo finish first.
  * - **Locked app.** When `app.lock` (from `@xcwds/plugin-lock`, if the app has it) locks, the
  *   camera stops for good: unlocking doesn't turn it back on, a tap on the viewfinder does.
  * - **Closing.** `onClose` stops it.
@@ -57,42 +57,53 @@ export function cameraPlugin(env: CameraEnv = {}) {
 			const lock = () => (app as { lock?: LockLike }).lock;
 			let unsubscribe: (() => void) | undefined;
 
+			/**
+			 * What to do once the photo being taken is encoded: stopping the track mid-capture
+			 * would lose it. `stop` (locked) wins over `suspend` (hidden), so a later hide can't
+			 * turn a lock's stop into something a return would undo.
+			 */
+			let pending: 'suspend' | 'stop' | undefined;
+			let waiting: (() => void) | undefined;
+			const cancel = () => {
+				waiting?.();
+				waiting = undefined;
+				pending = undefined;
+			};
+			const turnOff = (how: 'suspend' | 'stop') => {
+				if (!camera.capturing) {
+					cancel();
+					return camera[how]();
+				}
+				if (pending !== 'stop') pending = how;
+				waiting ??= camera.onChange(() => {
+					if (camera.capturing) return;
+					const next = pending;
+					cancel();
+					if (next) camera[next]();
+				});
+			};
+
 			app.addHook('onBoot', () => {
 				// Registered after every plugin, so it finds the lock whichever comes first.
 				unsubscribe = lock()?.subscribe((state) => {
-					if (state.locked) camera.stop();
+					if (state.locked) turnOff('stop');
 				});
 			});
-			/** Whether the page is hidden, as the last `onHidden`/`onVisible` said. */
-			let hidden = false;
-			/** Stops waiting for a photo to finish before turning the camera off. */
-			let waiting: (() => void) | undefined;
-			app.addHook('onHidden', () => {
-				hidden = true;
-				if (!camera.capturing) return camera.suspend();
-				// Stopping the track now would lose the photo just taken: let it finish first,
-				// then turn the camera off if the page is still hidden.
-				waiting ??= camera.onChange(() => {
-					if (camera.capturing) return;
-					waiting?.();
-					waiting = undefined;
-					if (hidden) camera.suspend();
-				});
-			});
+			app.addHook('onHidden', () => turnOff('suspend'));
 			app.addHook('onVisible', async () => {
-				hidden = false;
 				// The lock handles `visibilitychange` before these hooks run, so an auto-lock on
 				// return has already happened by now. Locked: forget it was on, so unlocking later
 				// and coming back can't turn it on either.
-				if (lock()?.state.locked) return camera.stop();
+				if (lock()?.state.locked) return turnOff('stop');
+				// Back before the photo was done: it stays on.
+				if (pending === 'suspend') cancel();
 				await camera.resume();
 			});
 			app.addHook('onBeforeReload', () => (camera.capturing ? SAVING : undefined));
 			app.addHook('onClose', () => {
 				unsubscribe?.();
 				unsubscribe = undefined;
-				waiting?.();
-				waiting = undefined;
+				cancel();
 				camera.stop();
 			});
 		},

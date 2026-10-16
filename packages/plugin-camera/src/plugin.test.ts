@@ -239,6 +239,43 @@ describe('app.camera', () => {
 		vi.unstubAllGlobals();
 	});
 
+	it('lets a photo finish before stopping for a lock, and a later hide keeps it stopped', async () => {
+		let finish!: (blob: Blob) => void;
+		const { env, tracks } = fakeEnv(new Promise<Blob>((resolve) => (finish = resolve)));
+		env.createImageBitmap = async () => ({ width: 1920, height: 1080, close() {} }) as ImageBitmap;
+		vi.stubGlobal(
+			'OffscreenCanvas',
+			class {
+				getContext = () => ({ drawImage() {}, fillRect() {}, fillStyle: '' });
+				convertToBlob = async () => new Blob(['jpeg'], { type: 'image/jpeg' });
+			}
+		);
+		const lock = fakeLock();
+		const app = await buildTestApp({
+			plugins: [
+				[cameraPlugin(env), {}],
+				definePlugin((a) => void a.decorate('lock', lock as never), { encapsulate: false })
+			]
+		});
+		const camera = app.camera!;
+		await camera.start();
+		const saving = camera.capture();
+		// Auto-lock at once: the lock goes first, then the page is hidden.
+		lock.set(true);
+		await app.hooks.run('onHidden', []);
+		expect(tracks[0]!.readyState).toBe('live');
+		finish(new Blob(['still']));
+		expect((await saving).ok).toBe(true);
+		expect(tracks[0]!.readyState).toBe('ended');
+		// Stopped, not suspended: unlocking and coming back leaves it off.
+		lock.set(false);
+		await app.hooks.run('onVisible', []);
+		expect(camera.state).toBe('idle');
+		expect(tracks).toHaveLength(1);
+		await app.close();
+		vi.unstubAllGlobals();
+	});
+
 	it('stops when the app closes', async () => {
 		const { env, tracks } = fakeEnv();
 		const app = await buildTestApp({ plugins: [[cameraPlugin(env), {}]] });
