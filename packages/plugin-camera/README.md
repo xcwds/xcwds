@@ -50,7 +50,8 @@ destroyed, after any photo being taken). The plugin declares `network: false`.
 ```
 
 - Nothing asks for the camera until **Turn on camera** is tapped (browsers ask for permission
-  then). A blocked or missing camera shows its sentence under the picture.
+  then). A blocked or missing camera shows its sentence under the picture; a blocked one also
+  says where this browser keeps the setting that unblocks it (below).
 - **Take photo** is a button, so Space and Enter work, enabled once the picture has its first
   frame. `onCapture` gets each photo (a JPEG with no
   metadata, see below); while it runs, the shutter waits and app updates are held back
@@ -60,7 +61,7 @@ destroyed, after any photo being taken). The plugin declares `network: false`.
   mirrored, like a mirror, but its photos aren't.
 - A **Zoom** slider for the camera's own zoom, or a **Digital zoom** slider without one, with a
   line saying it crops the picture and adds no detail. The picture scales to show the crop the
-  photo will be. **Light** shows when the camera has one.
+  photo will be. Pinching the picture with two fingers zooms too. **Light** shows when the camera has one.
 - `camera` takes another controller instead of `app.camera`; `text` replaces any of the labels.
 
 ## The camera controller
@@ -102,6 +103,27 @@ camera.stop();
 
 Options: `facing`, `type` (`image/jpeg` or `image/webp`), `quality`, `maxSide` and
 `maxDigitalZoom`, all JSON. Nothing here makes a network request.
+
+## A blocked camera
+
+Once someone blocks the camera, a page can't ask again or open the setting, so the most it can do
+is say where it is. `blockedHelp(device)`, from `@xcwds/plugin-camera/help`, gives those steps for
+the browser `device` describes (`thisDevice()` reads the page's user agent, touch points and
+whether it was opened from the Home Screen):
+
+| Browser                              | Where the setting is                                |
+| ------------------------------------ | --------------------------------------------------- |
+| Safari on iPhone and iPad            | aA in the address bar → Website Settings → Camera   |
+| A Home Screen app on iPhone and iPad | the Settings app → Apps → Safari → Camera           |
+| Chrome, Firefox or Edge on iOS       | the Settings app → that browser → Camera            |
+| Chrome, Edge or Samsung on Android   | the icon left of the address → Permissions → Camera |
+| Firefox on Android                   | the lock icon in the address bar → Camera           |
+| Chrome or Edge on a computer         | the icon left of the address → Camera               |
+| Firefox on a computer                | the crossed-out camera icon in the address bar      |
+| Safari on a Mac                      | Safari → Settings → Websites → Camera               |
+
+On Android, and on a Mac, the system can block the camera for the whole browser too, so those
+steps also point at the system's settings. These are the menus as of 2026; browsers move them.
 
 ## Cleaning an image
 

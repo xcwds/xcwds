@@ -9,10 +9,13 @@
 	 *
 	 * Nothing asks for the camera until "Turn on camera" is tapped. Leaving the page turns it off.
 	 * Without hardware zoom the slider is a digital zoom, labelled so: it crops the picture, and
-	 * the photo is that same crop. While `onCapture` runs (saving the photo), app updates wait.
+	 * the photo is that same crop; pinching the picture zooms too. A blocked camera says where
+	 * this browser keeps the setting that unblocks it. While `onCapture` runs (saving the photo),
+	 * app updates wait.
 	 */
 	import { useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
+	import { blockedHelp, pinchZoom, thisDevice } from './help.js';
 	import {
 		SAVING,
 		type Camera as Controller,
@@ -158,6 +161,35 @@
 	function onZoom(event: Event) {
 		void camera?.setZoom(Number((event.currentTarget as HTMLInputElement).value));
 	}
+
+	/** Where to unblock the camera in this browser, once it's blocked (read in the page only). */
+	const help = $derived(status === 'denied' ? blockedHelp(thisDevice()) : '');
+
+	// Pinch to zoom: two fingers on the picture set the same zoom as the slider.
+	/** Fingers on the picture, by pointer id. Not reactive: only the zoom they set is shown. */
+	const pointers: Record<number, { x: number; y: number }> = {};
+	const fingers = () => Object.keys(pointers).length;
+	let pinch: { from: number; start: number } | null = null;
+	const spread = () => {
+		const [a, b] = Object.values(pointers);
+		return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+	};
+	function pointerDown(event: PointerEvent) {
+		if (!live || !zoom) return;
+		pointers[event.pointerId] = { x: event.clientX, y: event.clientY };
+		if (fingers() === 2) pinch = { from: spread(), start: zoom.value };
+	}
+	function pointerMove(event: PointerEvent) {
+		if (!(event.pointerId in pointers)) return;
+		pointers[event.pointerId] = { x: event.clientX, y: event.clientY };
+		if (!pinch || !zoom || fingers() !== 2) return;
+		const next = pinchZoom(pinch.start, pinch.from, spread(), zoom);
+		if (next !== zoom.value) void camera?.setZoom(next);
+	}
+	function pointerUp(event: PointerEvent) {
+		delete pointers[event.pointerId];
+		if (fingers() < 2) pinch = null;
+	}
 </script>
 
 <div class="flex flex-col gap-3" data-testid="camera">
@@ -165,6 +197,12 @@
 		class="relative overflow-hidden rounded-xl bg-black"
 		data-state={status}
 		data-zoom={zoom?.kind}
+		style:touch-action={live && zoom ? 'none' : undefined}
+		onpointerdown={pointerDown}
+		onpointermove={pointerMove}
+		onpointerup={pointerUp}
+		onpointercancel={pointerUp}
+		role="presentation"
 	>
 		<video
 			bind:this={video}
@@ -201,6 +239,9 @@
 		{message ||
 			(status === 'denied' || status === 'unavailable' || status === 'error' ? error : '')}
 	</p>
+	{#if help}
+		<p class="text-sm" data-testid="camera-help">{help}</p>
+	{/if}
 
 	{#if live}
 		<div class="flex flex-wrap items-center justify-center gap-3">
