@@ -2,19 +2,44 @@
 
 Photos taken inside an [@xcwds](https://github.com/xcwds/xcwds) app, with no metadata and the
 camera on only while it's being used. **Work in progress**
-([#145](https://github.com/xcwds/xcwds/issues/145)): not published yet, and not a plugin you can
-install yet.
+([#145](https://github.com/xcwds/xcwds/issues/145)): not published yet.
 
-So far it holds the camera controller, from `@xcwds/plugin-camera/camera`, and the image cleaning,
-from `@xcwds/plugin-camera/image`. The `<Camera>` viewfinder component, the plugin that hands the
-controller to the app as `app.camera` (and stops it when the page is hidden or the app locks)
-and the browser notes come next; keeping photos in the app is #146.
+So far it holds the plugin, which hands the app a camera controller as `app.camera`, the
+controller itself, from `@xcwds/plugin-camera/camera`, and the image cleaning, from
+`@xcwds/plugin-camera/image`. The `<Camera>` viewfinder component and the browser notes come next;
+keeping photos in the app is #146.
+
+## The plugin
+
+```ts
+// xcwds.config.ts
+import camera from '@xcwds/plugin-camera';
+export default defineConfig({ brand, plugins: [camera({ maxSide: 2048 })] });
+```
+
+The page gets one controller (below) as `app.camera`, made with the plugin's options, and the
+plugin keeps it off whenever nobody can be using it:
+
+- **The page is hidden** (another app, the app switcher, a locked phone): the camera turns off,
+  and turns back on when the page returns only if it was on then and nothing has turned it off
+  meanwhile.
+- **The app locks** (with [`@xcwds/plugin-lock`](../plugin-lock/README.md), if the app has it):
+  the camera stops for good, so unlocking never turns it back on; a tap does.
+- **The app closes**: it stops.
+- **A photo is being saved**: from the shutter until the photo is encoded, an `onBeforeReload`
+  reason holds app updates back. Previewing holds nothing. Hiding the page or locking the app in
+  that moment waits for the photo before turning the camera off (stopping the track mid-capture
+  would lose it), so the camera light can stay on for that long.
+
+Leaving the page that shows the viewfinder should stop the camera too; the `<Camera>` component
+will, when it's destroyed. The plugin declares `network: false`.
 
 ## The camera controller
 
 ```ts
 import { createCamera } from '@xcwds/plugin-camera/camera';
 
+// With the plugin, use `app.camera`; without it, make one:
 const camera = createCamera({ facing: 'environment', maxSide: 2048 });
 button.onclick = async () => {
 	// Browsers ask for permission here, so call it from a tap, never on page load.
@@ -25,7 +50,8 @@ shutter.onclick = async () => {
 	const result = await camera.capture(video);
 	if (result.ok) save(result.photo.blob); // a JPEG with no metadata
 };
-// When done, or when the page is hidden: every track stops and the camera light goes off.
+// When done (and, without the plugin, when the page is hidden): every track stops and the
+// camera light goes off.
 camera.stop();
 ```
 

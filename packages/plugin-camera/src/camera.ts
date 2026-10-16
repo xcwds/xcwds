@@ -3,9 +3,9 @@
  * Framework-agnostic and safe to import during prerender: browser APIs are reached only when a
  * method is called, through `env` (the real browser by default), so tests can stand one in.
  *
- * The plugin's page entry will hand one controller to the app as `app.camera` and stop it when
- * the page is hidden or the app locks (`suspend`/`resume`); the viewfinder component renders
- * `stream` in a `<video>` and passes that element to `capture`.
+ * The plugin's page entry (`client.ts`) hands one controller to the app as `app.camera` and
+ * stops it when the page is hidden or the app locks (`suspend`/`resume`); the viewfinder component
+ * renders `stream` in a `<video>` and passes that element to `capture`.
  */
 import { encode, fitSize, imageQuality, imageType, type Crop, type ImageType } from './clean.js';
 
@@ -375,6 +375,10 @@ export function createCamera(options: CameraOptions = {}, env: CameraEnv = {}): 
 			capturing = true;
 			emit();
 			const takenAt = now();
+			// What was shown at the shutter: a suspend or zoom change while the photo is taken
+			// mustn't change it.
+			const zoom = digitalZoom;
+			const { width: shownWidth = 0, height: shownHeight = 0 } = t.getSettings();
 			let frame: ImageBitmap | null = null;
 			try {
 				const Capture =
@@ -390,10 +394,9 @@ export function createCamera(options: CameraOptions = {}, env: CameraEnv = {}): 
 				}
 				if (!frame && video && video.videoWidth > 0) frame = await bitmap(video).catch(() => null);
 				if (!frame) return { ok: false, error: MESSAGES.noFrame };
-				const { width: shownWidth = 0, height: shownHeight = 0 } = t.getSettings();
 				const crop =
-					digitalZoom > 1
-						? zoomCrop(frame.width, frame.height, shownWidth / shownHeight, digitalZoom)
+					zoom > 1
+						? zoomCrop(frame.width, frame.height, shownWidth / shownHeight, zoom)
 						: undefined;
 				const size = fitSize(
 					crop?.width ?? frame.width,

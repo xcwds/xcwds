@@ -341,6 +341,22 @@ describe('createCamera', () => {
 			expect(drawn).toEqual([[1000, 938, 2000, 1125, 0, 0, 2000, 1125]]);
 		});
 
+		it('keeps the zoom shown at the shutter if the camera stops or zooms meanwhile', async () => {
+			const drawn = stubCanvas();
+			const env = fakeEnv(() => fakeTrack({}, { width: 4000, height: 3000 }));
+			let frame!: (bitmap: ImageBitmap) => void;
+			env.createImageBitmap = vi.fn(() => new Promise<ImageBitmap>((resolve) => (frame = resolve)));
+			const camera = createCamera({}, env);
+			await camera.start();
+			await camera.setZoom(2);
+			const result = camera.capture({ videoWidth: 4000 } as HTMLVideoElement);
+			await camera.setZoom(1);
+			camera.suspend();
+			frame(bitmapOf(4000, 3000) as unknown as ImageBitmap);
+			expect(await result).toMatchObject({ ok: true, photo: { width: 2000, height: 1500 } });
+			expect(drawn).toEqual([[1000, 750, 2000, 1500, 0, 0, 2000, 1500]]);
+		});
+
 		it('returns an error, not a rejection, without createImageBitmap', async () => {
 			stubCanvas();
 			vi.stubGlobal('createImageBitmap', undefined);
