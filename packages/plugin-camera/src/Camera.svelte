@@ -13,7 +13,13 @@
 	 */
 	import { useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
-	import type { Camera as Controller, CameraState, Capabilities, Photo } from './client.js';
+	import {
+		SAVING,
+		type Camera as Controller,
+		type CameraState,
+		type Capabilities,
+		type Photo
+	} from './client.js';
 
 	type Text = {
 		start: string;
@@ -67,6 +73,8 @@
 	let caps = $state.raw<Capabilities>({ zoom: null, torch: false, torchOn: false });
 	let count = $state(0);
 	let saving = $state(false);
+	/** `onCapture` is running (the photo is taken and encoded). */
+	let handing = false;
 	let message = $state('');
 	let video: HTMLVideoElement | undefined = $state();
 
@@ -87,21 +95,31 @@
 		};
 		read();
 		const stop = c.onChange(read);
-		// While a photo is being saved, an app update would lose it (`@xcwds/plugin-update`).
+		// While `onCapture` saves a photo, an app update would lose it (`@xcwds/plugin-update`). The
+		// plugin holds updates while the photo is taken; this covers the rest.
 		const update = (app as { update?: { markBusy(name: string, busy: () => boolean): () => void } })
 			.update;
-		const unmark = update?.markBusy('A photo is being saved.', () => saving || c.capturing);
+		const unmark = update?.markBusy(SAVING, () => handing);
 		return () => {
 			stop();
 			unmark?.();
-			// Leaving the page turns the camera off.
-			c.stop();
+			// Leaving the page turns the camera off, once a photo being taken is done (stopping the
+			// track now would lose it before it reaches `onCapture`).
+			if (!c.capturing) return c.stop();
+			const wait = c.onChange(() => {
+				if (c.capturing) return;
+				wait();
+				c.stop();
+			});
 		};
 	});
 
+	/** The picture has a frame: until then the shutter would have nothing to take. */
+	let ready = $state(false);
 	$effect(() => {
 		if (!video) return;
 		video.srcObject = stream;
+		ready = false;
 		if (stream) void video.play().catch(() => {});
 	});
 
@@ -118,7 +136,7 @@
 	}
 
 	async function shoot() {
-		if (!camera || !live || saving || camera.capturing) return;
+		if (!camera || !live || !ready || saving || camera.capturing) return;
 		message = '';
 		saving = true;
 		try {
@@ -127,11 +145,13 @@
 				message = result.error;
 				return;
 			}
+			handing = true;
 			await onCapture?.(result.photo);
 		} catch (e) {
 			message = e instanceof Error ? e.message : String(e);
 		} finally {
 			saving = false;
+			handing = false;
 		}
 	}
 
@@ -154,6 +174,7 @@
 			playsinline
 			muted
 			autoplay
+			onloadeddata={() => (ready = true)}
 			aria-label="Camera picture"
 		></video>
 		{#if !live}
@@ -197,7 +218,7 @@
 				type="button"
 				class="size-16 rounded-full border-4 border-(--xcwds-shell-accent) bg-white font-medium text-black hover:not-disabled:bg-gray-200 active:bg-gray-200 disabled:opacity-40"
 				onclick={shoot}
-				disabled={saving}
+				disabled={saving || !ready}
 				aria-describedby="{uid}-status"
 			>
 				<span class="sr-only">{saving ? t.saving : t.shutter}</span>

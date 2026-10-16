@@ -41,8 +41,11 @@ type LockLike = {
 	subscribe(listener: (state: { readonly locked: boolean }) => void): () => void;
 };
 
-/** What a reload would interrupt: the photo between the shutter and its file. */
-export const SAVING = 'A photo is being saved.';
+/**
+ * What a reload would interrupt: the photo between the shutter and its file. A noun phrase, as
+ * plugin-update's banner says "Reloading now will interrupt your {busy}".
+ */
+export const SAVING = 'photo being saved';
 
 /**
  * Makes the plugin with the browser APIs in `env` (tests pass stand-ins); the default export uses

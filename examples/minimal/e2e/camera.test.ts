@@ -81,6 +81,34 @@ test('asks only on a tap, takes a photo with no metadata, and turns off when hid
 	expect(away).toEqual([]);
 });
 
+test('leaving right after the shutter lets the photo finish before the camera turns off', async ({
+	page
+}) => {
+	// A slow full-resolution still, so Back lands while the photo is being taken.
+	await page.addInitScript(() => {
+		const take = ImageCapture.prototype.takePhoto;
+		ImageCapture.prototype.takePhoto = async function (...args) {
+			(window as unknown as { taking: boolean }).taking = true;
+			await new Promise((resolve) => setTimeout(resolve, 1500));
+			(window as unknown as { taking: boolean }).taking = false;
+			return take.apply(this, args);
+		};
+	});
+	await gotoHydrated(page, url('/utils/camera'));
+	await page.getByRole('button', { name: 'Turn on camera' }).click();
+	await expect(page.locator('[data-state]')).toHaveAttribute('data-state', 'live');
+	await keepTrack(page);
+	await page.getByRole('button', { name: 'Take photo' }).click();
+	await expect
+		.poll(() => page.evaluate(() => (window as unknown as { taking: boolean }).taking))
+		.toBe(true);
+	await page.locator('header [data-shell-back]').click();
+	await expect(page).toHaveURL(url('/utils'));
+	// Still on while the photo is taken, then off.
+	expect(await trackState(page)).toBe('live');
+	await expect.poll(() => trackState(page)).toBe('ended');
+});
+
 test('without hardware zoom, the slider says digital zoom and the photo is the centre crop', async ({
 	page
 }) => {

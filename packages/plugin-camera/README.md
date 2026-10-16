@@ -32,7 +32,7 @@ plugin keeps it off whenever nobody can be using it:
   would lose it), so the camera light can stay on for that long.
 
 Leaving the page that shows the viewfinder stops the camera too (`<Camera>` does, when it's
-destroyed). The plugin declares `network: false`.
+destroyed, after any photo being taken). The plugin declares `network: false`.
 
 ## The viewfinder
 
@@ -51,7 +51,8 @@ destroyed). The plugin declares `network: false`.
 
 - Nothing asks for the camera until **Turn on camera** is tapped (browsers ask for permission
   then). A blocked or missing camera shows its sentence under the picture.
-- **Take photo** is a button, so Space and Enter work. `onCapture` gets each photo (a JPEG with no
+- **Take photo** is a button, so Space and Enter work, enabled once the picture has its first
+  frame. `onCapture` gets each photo (a JPEG with no
   metadata, see below); while it runs, the shutter waits and app updates are held back
   (`app.update.markBusy` from [`@xcwds/plugin-update`](../plugin-update/README.md), if the app
   has it).
