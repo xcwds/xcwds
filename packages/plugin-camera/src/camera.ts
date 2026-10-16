@@ -3,9 +3,9 @@
  * Framework-agnostic and safe to import during prerender: browser APIs are reached only when a
  * method is called, through `env` (the real browser by default), so tests can stand one in.
  *
- * The plugin's page entry will hand one controller to the app as `app.camera` and stop it when
- * the page is hidden or the app locks (`suspend`/`resume`); the viewfinder component renders
- * `stream` in a `<video>` and passes that element to `capture`.
+ * The plugin's page entry (`client.ts`) hands one controller to the app as `app.camera` and
+ * stops it when the page is hidden or the app locks (`suspend`/`resume`); the viewfinder component
+ * renders `stream` in a `<video>` and passes that element to `capture`.
  */
 import { encode, fitSize, imageQuality, imageType, type Crop, type ImageType } from './clean.js';
 
