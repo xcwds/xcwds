@@ -4,6 +4,7 @@
  *
  * - **Hidden page.** `onHidden` turns a live camera off (`suspend`), and `onVisible` turns it
  *   back on only if it was on then, the app isn't locked and nothing turned it off meanwhile.
+ *   Hidden between the shutter and the encoded photo, it waits for the photo first.
  * - **Locked app.** When `app.lock` (from `@xcwds/plugin-lock`, if the app has it) locks, the
  *   camera stops for good: unlocking doesn't turn it back on, a tap on the viewfinder does.
  * - **Closing.** `onClose` stops it.
@@ -62,8 +63,24 @@ export function cameraPlugin(env: CameraEnv = {}) {
 					if (state.locked) camera.stop();
 				});
 			});
-			app.addHook('onHidden', () => camera.suspend());
+			/** Whether the page is hidden, as the last `onHidden`/`onVisible` said. */
+			let hidden = false;
+			/** Stops waiting for a photo to finish before turning the camera off. */
+			let waiting: (() => void) | undefined;
+			app.addHook('onHidden', () => {
+				hidden = true;
+				if (!camera.capturing) return camera.suspend();
+				// Stopping the track now would lose the photo just taken: let it finish first,
+				// then turn the camera off if the page is still hidden.
+				waiting ??= camera.onChange(() => {
+					if (camera.capturing) return;
+					waiting?.();
+					waiting = undefined;
+					if (hidden) camera.suspend();
+				});
+			});
 			app.addHook('onVisible', async () => {
+				hidden = false;
 				// The lock handles `visibilitychange` before these hooks run, so an auto-lock on
 				// return has already happened by now. Locked: forget it was on, so unlocking later
 				// and coming back can't turn it on either.
@@ -74,6 +91,8 @@ export function cameraPlugin(env: CameraEnv = {}) {
 			app.addHook('onClose', () => {
 				unsubscribe?.();
 				unsubscribe = undefined;
+				waiting?.();
+				waiting = undefined;
 				camera.stop();
 			});
 		},

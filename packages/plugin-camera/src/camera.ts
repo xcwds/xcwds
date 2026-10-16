@@ -375,6 +375,10 @@ export function createCamera(options: CameraOptions = {}, env: CameraEnv = {}): 
 			capturing = true;
 			emit();
 			const takenAt = now();
+			// What was shown at the shutter: a suspend or zoom change while the photo is taken
+			// mustn't change it.
+			const zoom = digitalZoom;
+			const { width: shownWidth = 0, height: shownHeight = 0 } = t.getSettings();
 			let frame: ImageBitmap | null = null;
 			try {
 				const Capture =
@@ -390,10 +394,9 @@ export function createCamera(options: CameraOptions = {}, env: CameraEnv = {}): 
 				}
 				if (!frame && video && video.videoWidth > 0) frame = await bitmap(video).catch(() => null);
 				if (!frame) return { ok: false, error: MESSAGES.noFrame };
-				const { width: shownWidth = 0, height: shownHeight = 0 } = t.getSettings();
 				const crop =
-					digitalZoom > 1
-						? zoomCrop(frame.width, frame.height, shownWidth / shownHeight, digitalZoom)
+					zoom > 1
+						? zoomCrop(frame.width, frame.height, shownWidth / shownHeight, zoom)
 						: undefined;
 				const size = fitSize(
 					crop?.width ?? frame.width,

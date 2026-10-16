@@ -187,6 +187,58 @@ describe('app.camera', () => {
 		await app.close();
 	});
 
+	it('lets a photo finish before turning off for a hidden page', async () => {
+		let finish!: (blob: Blob) => void;
+		const { env, tracks } = fakeEnv(new Promise<Blob>((resolve) => (finish = resolve)));
+		const sizes: [number, number][] = [];
+		env.createImageBitmap = async () => {
+			const width = 1920;
+			const height = 1080;
+			return { width, height, close() {} } as ImageBitmap;
+		};
+		vi.stubGlobal(
+			'OffscreenCanvas',
+			class {
+				constructor(width: number, height: number) {
+					sizes.push([width, height]);
+				}
+				getContext = () => ({ drawImage() {}, fillRect() {}, fillStyle: '' });
+				convertToBlob = async () => new Blob(['jpeg'], { type: 'image/jpeg' });
+			}
+		);
+		const app = await buildTestApp({ plugins: [[cameraPlugin(env), {}]] });
+		const camera = app.camera!;
+		await camera.start();
+		await camera.setZoom(1.2);
+		const saving = camera.capture();
+		await app.hooks.run('onHidden', []);
+		// Still on: the photo is being taken.
+		expect(tracks[0]!.readyState).toBe('live');
+		finish(new Blob(['still']));
+		const result = await saving;
+		expect(result.ok).toBe(true);
+		// The 1.2× crop shown at the shutter.
+		expect(sizes).toEqual([[1600, 900]]);
+		expect(camera.state).toBe('idle');
+		expect(tracks[0]!.readyState).toBe('ended');
+		await app.hooks.run('onVisible', []);
+		expect(camera.state).toBe('live');
+
+		// Back before the photo is done: it stays on.
+		let again!: (blob: Blob) => void;
+		env.ImageCapture = class {
+			takePhoto = () => new Promise<Blob>((resolve) => (again = resolve));
+		};
+		const next = camera.capture();
+		await app.hooks.run('onHidden', []);
+		await app.hooks.run('onVisible', []);
+		again(new Blob(['still']));
+		expect((await next).ok).toBe(true);
+		expect(camera.state).toBe('live');
+		await app.close();
+		vi.unstubAllGlobals();
+	});
+
 	it('stops when the app closes', async () => {
 		const { env, tracks } = fakeEnv();
 		const app = await buildTestApp({ plugins: [[cameraPlugin(env), {}]] });
