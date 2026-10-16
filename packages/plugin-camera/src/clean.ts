@@ -31,6 +31,14 @@ export type CleanResult =
 
 const TYPES: readonly string[] = ['image/jpeg', 'image/webp'];
 
+/** `type` when it's one this package writes, else JPEG. */
+export const imageType = (type: unknown): ImageType =>
+	typeof type === 'string' && TYPES.includes(type) ? (type as ImageType) : 'image/jpeg';
+
+/** `quality` when it's from 0 to 1, else 0.92. */
+export const imageQuality = (quality: unknown): number =>
+	typeof quality === 'number' && quality >= 0 && quality <= 1 ? quality : 0.92;
+
 /** The size to draw at: the original's, scaled down to fit `maxSide`. */
 export function fitSize(
 	width: number,
@@ -49,37 +57,46 @@ export function fitSize(
 
 type Context = Pick<CanvasRenderingContext2D, 'drawImage' | 'fillRect' | 'fillStyle'>;
 
+/** A region of the source, in its pixels. */
+export type Crop = { x: number; y: number; width: number; height: number };
+
 /**
- * Draws `source` at `width`×`height`. JPEG has no transparency, so it gets a white background
- * first: a transparent PNG would otherwise come out black.
+ * Draws `source` (or its `crop` region) at `width`×`height`. JPEG has no transparency, so it gets
+ * a white background first: a transparent PNG would otherwise come out black.
  */
 function draw(
 	context: Context,
 	source: CanvasImageSource,
 	width: number,
 	height: number,
-	type: string
+	type: string,
+	crop?: Crop
 ) {
 	if (type === 'image/jpeg') {
 		context.fillStyle = '#fff';
 		context.fillRect(0, 0, width, height);
 	}
-	context.drawImage(source, 0, 0, width, height);
+	if (crop) context.drawImage(source, crop.x, crop.y, crop.width, crop.height, 0, 0, width, height);
+	else context.drawImage(source, 0, 0, width, height);
 }
 
-/** Draws `source` and encodes it, on an `OffscreenCanvas` where there is one. */
-async function encode(
+/**
+ * Draws `source` (or its `crop` region) and encodes it, on an `OffscreenCanvas` where there is
+ * one. Resolves to null when there's no canvas to draw on.
+ */
+export async function encode(
 	source: CanvasImageSource,
 	width: number,
 	height: number,
 	type: string,
-	quality: number
+	quality: number,
+	crop?: Crop
 ): Promise<Blob | null> {
 	if (typeof OffscreenCanvas !== 'undefined') {
 		const canvas = new OffscreenCanvas(width, height);
 		const context = canvas.getContext('2d');
 		if (!context) return null;
-		draw(context, source, width, height, type);
+		draw(context, source, width, height, type, crop);
 		return canvas.convertToBlob({ type, quality });
 	}
 	if (typeof document === 'undefined') return null;
@@ -88,7 +105,7 @@ async function encode(
 	canvas.height = height;
 	const context = canvas.getContext('2d');
 	if (!context) return null;
-	draw(context, source, width, height, type);
+	draw(context, source, width, height, type, crop);
 	return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
 }
 
@@ -97,11 +114,8 @@ async function encode(
  * the browser can't decode (HEIC outside Safari, say) or can't re-encode.
  */
 export async function cleanImage(file: Blob, options: CleanOptions = {}): Promise<CleanResult> {
-	const type = options.type && TYPES.includes(options.type) ? options.type : 'image/jpeg';
-	const quality =
-		typeof options.quality === 'number' && options.quality >= 0 && options.quality <= 1
-			? options.quality
-			: 0.92;
+	const type = imageType(options.type);
+	const quality = imageQuality(options.quality);
 	let removed: ImageMetadata;
 	try {
 		removed = readMetadata(new Uint8Array(await file.arrayBuffer()));
