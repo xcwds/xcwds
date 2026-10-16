@@ -8,6 +8,8 @@
  * - **Locked app.** When `app.lock` (from `@xcwds/plugin-lock`, if the app has it) locks, the
  *   camera stops for good: unlocking doesn't turn it back on, a tap on the viewfinder does.
  * - **Closing.** `onClose` stops it.
+ * - **Keeping photos.** `app.photos` saves them in the app's blob store (`app:camera:photos`,
+ *   group `photos`), each with a small thumbnail (`app:camera:photos-thumbs`), out of backups.
  * - **Saving a photo.** While `capturing`, an `onBeforeReload` reason holds app updates back, so
  *   an update can't drop a photo between the shutter and its file. Previewing holds nothing.
  *
@@ -17,6 +19,7 @@
 import { definePlugin } from '@xcwds/core';
 import { createCamera, type Camera, type CameraEnv } from './camera.js';
 import { CORE, NAME, resolveOptions, type CameraPluginOptions } from './options.js';
+import { createPhotos, type Photos } from './photos.js';
 
 export type {
 	Camera,
@@ -27,11 +30,14 @@ export type {
 	Photo,
 	Zoom
 } from './camera.js';
+export type { Photos, SavedPhoto, SaveResult, PhotoInput } from './photos.js';
 
 declare module '@xcwds/core' {
 	interface App {
 		/** From `@xcwds/plugin-camera`. */
 		readonly camera?: Camera;
+		/** From `@xcwds/plugin-camera`: the photos kept in the app (`app:camera:photos`). */
+		readonly photos?: Photos;
 	}
 }
 
@@ -56,6 +62,8 @@ export function cameraPlugin(env: CameraEnv = {}) {
 		(app, input: CameraPluginOptions) => {
 			const camera = createCamera(resolveOptions(input), env);
 			app.decorate('camera', camera);
+			// Photos kept in the app: personal (a lock's reset clears them), never in backups.
+			app.decorate('photos', createPhotos(app.blobs, {}, env));
 
 			const lock = () => (app as { lock?: LockLike }).lock;
 			let unsubscribe: (() => void) | undefined;

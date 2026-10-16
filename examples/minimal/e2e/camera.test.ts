@@ -81,6 +81,36 @@ test('asks only on a tap, takes a photo with no metadata, and turns off when hid
 	expect(away).toEqual([]);
 });
 
+test('photos are kept in the app: they survive a reload and clear with their group (#146)', async ({
+	page
+}) => {
+	page.on('dialog', (dialog) => dialog.accept());
+	await gotoHydrated(page, url('/utils/camera'));
+	await expect(page.getByTestId('kept')).toHaveText('0 photos kept');
+	await page.getByRole('button', { name: 'Turn on camera' }).click();
+	await page.getByRole('button', { name: 'Take photo' }).click();
+	await expect(page.getByTestId('kept')).toHaveText('1 photo kept');
+	await expect(page.getByTestId('photo')).toBeVisible();
+	await page.getByRole('button', { name: 'Take photo' }).click();
+	await expect(page.getByTestId('kept')).toHaveText('2 photos kept');
+	await page.reload();
+	await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+	await expect(page.getByTestId('kept')).toHaveText('2 photos kept');
+
+	await gotoHydrated(page, url('/settings'));
+	// Counted as photos, each with its thumbnail; never in backups.
+	const group = page.getByRole('listitem').filter({ hasText: 'Photos (thumbnails)' });
+	await expect(group.getByTestId('files-note')).toHaveText([
+		/^Photos: 2 files, /,
+		/^Photos \(thumbnails\): 2 files, /
+	]);
+	await expect(group.getByTestId('backup-note')).toHaveText('Not in backups');
+	await group.getByRole('button', { name: /^Clear/ }).click();
+	await expect(group.getByTestId('files-note')).toHaveCount(0);
+	await gotoHydrated(page, url('/utils/camera'));
+	await expect(page.getByTestId('kept')).toHaveText('0 photos kept');
+});
+
 test('leaving right after the shutter lets the photo finish before the camera turns off', async ({
 	page
 }) => {
