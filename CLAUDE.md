@@ -8,6 +8,8 @@ same PR when a decision changes.
 pnpm monorepo: `packages/*` are published under the `@xcwds` scope, `examples/*` are test apps.
 Never publish to npm unless the user asks.
 
+- [AGENTS.md](AGENTS.md) collects the conventions and gotchas for agents working here (releases, package
+  rules, cloud containers); keep it in step with this file.
 - Before pushing: `pnpm build && pnpm check && pnpm lint && pnpm publint && pnpm test:unit --run && pnpm test:e2e`,
   plus `pnpm test:starter` when a generated app could change (`packages/create`, or any package it uses).
 - In Claude Code cloud containers don't run `playwright install`; set
