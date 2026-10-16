@@ -27,7 +27,9 @@ plugin keeps it off whenever nobody can be using it:
   the camera stops for good, so unlocking never turns it back on; a tap does.
 - **The app closes**: it stops.
 - **A photo is being saved**: from the shutter until the photo is encoded, an `onBeforeReload`
-  reason holds app updates back. Previewing holds nothing.
+  reason holds app updates back. Previewing holds nothing. Hiding the page or locking the app in
+  that moment waits for the photo before turning the camera off (stopping the track mid-capture
+  would lose it), so the camera light can stay on for that long.
 
 Leaving the page that shows the viewfinder should stop the camera too; the `<Camera>` component
 will, when it's destroyed. The plugin declares `network: false`.
