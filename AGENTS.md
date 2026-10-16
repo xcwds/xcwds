@@ -53,8 +53,8 @@ The plugins, `sveltekit` and `testing` peer on `@xcwds/core` with a `^0.x` range
 
 ## Package gotchas
 
-- Every `packages/plugin-*` needs `src/options.ts` exporting `CORE` (for example `export const CORE = '^0.4.0';`). `scripts/sync-core-version.js` moves it along with core's minor, and fails without it.
-- Every plugin `index.ts`, `client.ts` and `worker.ts` must call `definePlugin` with `core: CORE`. `packages/core/src/first-party.test.ts` checks this.
+- Every `packages/plugin-*` needs `src/options.ts` exporting `CORE`, set to core's current range (for example `export const CORE = '^0.4.0';`). Don't pick it by hand: `pnpm version-packages` runs `scripts/sync-core-version.js`, which moves it (and the copies in `examples/plugin-tally` and `docs/plugin-guide.md`) along with core's minor, and fails if a plugin lacks the file.
+- Each `definePlugin` call in a plugin's `index.ts`, `client.ts` or `worker.ts` (whichever it has) passes `core: CORE`. `packages/core/src/first-party.test.ts` checks both rules.
 - Unreleased packages are `"private": true` and listed in `ignore` in [`.changeset/config.json`](.changeset/config.json). A changeset that names an ignored package breaks the release run. When a package ships, remove both, and add it to `docs/ecosystem.md` and `PACKAGES` in `site/src/lib/server/pages.ts`.
 - Changing a file in `examples/plugin-tally` means copying it into `docs/plugin-guide.md`. A site unit test compares them. Renovate leaves that example's `package.json` alone, so bump it by hand with the guide.
 - Docs use relative file links so they work on GitHub and on the docs site alike.
