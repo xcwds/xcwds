@@ -1,0 +1,46 @@
+{
+	"name": "@xcwds/plugin-camera",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Photos taken inside an @xcwds app, with no metadata and the camera on only while it's used. Work in progress (#145), not published yet.",
+	"license": "MIT",
+	"type": "module",
+	"sideEffects": false,
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/xcwds/xcwds.git",
+		"directory": "packages/plugin-camera"
+	},
+	"exports": {
+		"./image": {
+			"types": "./dist/image.d.ts",
+			"default": "./dist/image.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"!dist/**/*.test.*"
+	],
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"check": "tsc -p tsconfig.json --noEmit",
+		"publint": "publint"
+	},
+	"devDependencies": {
+		"typescript": "^5.9.3",
+		"vitest": "^5.0.0"
+	},
+	"keywords": [
+		"pwa",
+		"offline-first",
+		"xcwds",
+		"xcwds-plugin",
+		"camera",
+		"exif",
+		"privacy"
+	],
+	"engines": {
+		"node": ">=22.18"
+	}
+}
