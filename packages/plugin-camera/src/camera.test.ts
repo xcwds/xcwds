@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MESSAGES, centreCrop, createCamera, digitalZoomLimit, type CameraEnv } from './camera.js';
+import {
+	MESSAGES,
+	centreCrop,
+	createCamera,
+	digitalZoomLimit,
+	zoomCrop,
+	type CameraEnv
+} from './camera.js';
 
 /** A stand-in video track: `caps` are what `getCapabilities()` reports. */
 function fakeTrack(caps: Record<string, unknown> = {}, settings = { width: 1920, height: 1080 }) {
@@ -56,6 +63,21 @@ describe('digital zoom', () => {
 		expect(digitalZoomLimit(8000, 6000, 2)).toBe(2);
 		expect(digitalZoomLimit(640, 480)).toBe(1);
 		expect(digitalZoomLimit(0, 0)).toBe(1);
+	});
+
+	it("crops a still to the viewfinder's shape before zooming", () => {
+		// A 4:3 still behind a 16:9 viewfinder at 2×: 2000×1125 from the middle, not 2000×1500.
+		expect(zoomCrop(4000, 3000, 16 / 9, 2)).toEqual({ x: 1000, y: 938, width: 2000, height: 1125 });
+		// A frame already the viewfinder's shape is just zoomed.
+		expect(zoomCrop(4000, 3000, 4 / 3, 2)).toEqual({ x: 1000, y: 750, width: 2000, height: 1500 });
+		// A taller still behind a wide viewfinder, and a missing shape.
+		expect(zoomCrop(3000, 4000, 16 / 9, 1)).toEqual({ x: 0, y: 1156, width: 3000, height: 1688 });
+		expect(zoomCrop(4000, 3000, Number.NaN, 2)).toEqual({
+			x: 1000,
+			y: 750,
+			width: 2000,
+			height: 1500
+		});
 	});
 
 	it('crops the centre of the frame', () => {
@@ -182,6 +204,10 @@ describe('createCamera', () => {
 		await camera.setZoom(40);
 		expect(track.applyConstraints).toHaveBeenCalledWith({ advanced: [{ zoom: 10 }] });
 		expect(camera.capabilities().zoom?.value).toBe(10);
+		// A zoom the camera refuses isn't reported as applied.
+		track.applyConstraints.mockRejectedValueOnce(new DOMException('no', 'OverconstrainedError'));
+		await camera.setZoom(2);
+		expect(camera.capabilities().zoom?.value).toBe(10);
 		await camera.setTorch(true);
 		expect(track.applyConstraints).toHaveBeenLastCalledWith({ advanced: [{ torch: true }] });
 		expect(camera.capabilities()).toMatchObject({ torch: true, torchOn: true });
@@ -296,6 +322,31 @@ describe('createCamera', () => {
 			const result = await camera.capture({ videoWidth: 4000 } as HTMLVideoElement);
 			expect(result).toMatchObject({ ok: true, photo: { width: 2000, height: 1500 } });
 			expect(drawn).toEqual([[1000, 750, 2000, 1500, 0, 0, 2000, 1500]]);
+		});
+
+		it('crops a zoomed full-resolution still to what the 16:9 viewfinder showed', async () => {
+			const drawn = stubCanvas();
+			const env = fakeEnv(() => fakeTrack({}, { width: 4000, height: 2250 }));
+			env.ImageCapture = class {
+				async takePhoto() {
+					return new Blob(['still']);
+				}
+			};
+			env.createImageBitmap = vi.fn(async () => bitmapOf(4000, 3000) as unknown as ImageBitmap);
+			const camera = createCamera({}, env);
+			await camera.start();
+			await camera.setZoom(2);
+			const result = await camera.capture(video);
+			expect(result).toMatchObject({ ok: true, photo: { width: 2000, height: 1125 } });
+			expect(drawn).toEqual([[1000, 938, 2000, 1125, 0, 0, 2000, 1125]]);
+		});
+
+		it('returns an error, not a rejection, without createImageBitmap', async () => {
+			stubCanvas();
+			vi.stubGlobal('createImageBitmap', undefined);
+			const camera = createCamera({}, fakeEnv());
+			await camera.start();
+			expect(await camera.capture(video)).toEqual({ ok: false, error: MESSAGES.noFrame });
 		});
 
 		it('refuses while the camera is off, with no frame, or mid-capture', async () => {

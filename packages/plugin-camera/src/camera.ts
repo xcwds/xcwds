@@ -136,6 +136,27 @@ export function centreCrop(width: number, height: number, zoom: number): Crop {
 	return { x: Math.round((width - w) / 2), y: Math.round((height - h) / 2), width: w, height: h };
 }
 
+/**
+ * The region of a `width`×`height` frame that a viewfinder of `aspect` (width / height) zoomed by
+ * `zoom` showed: the largest centred area of that shape, then its centre `1/zoom`. A full-
+ * resolution still is often 4:3 while the viewfinder is 16:9, so cropping the still by the zoom
+ * alone would keep more than was shown.
+ */
+export function zoomCrop(width: number, height: number, aspect: number, zoom: number): Crop {
+	let w = width;
+	let h = height;
+	if (Number.isFinite(aspect) && aspect > 0) {
+		if (width / height > aspect) w = height * aspect;
+		else h = width / aspect;
+	}
+	const inner = centreCrop(w, h, zoom);
+	return {
+		...inner,
+		x: Math.round((width - inner.width) / 2),
+		y: Math.round((height - inner.height) / 2)
+	};
+}
+
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 function failure(error: unknown): { state: CameraState; error: string } {
@@ -183,7 +204,8 @@ export function createCamera(options: CameraOptions = {}, env: CameraEnv = {}): 
 		env.media ?? (typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined);
 	const secure = () =>
 		env.secure ?? (typeof isSecureContext === 'undefined' ? true : isSecureContext);
-	const bitmap = (source: ImageBitmapSource, opts?: ImageBitmapOptions) =>
+	// Async, so a missing API is a rejection the callers handle rather than a throw.
+	const bitmap = async (source: ImageBitmapSource, opts?: ImageBitmapOptions) =>
 		(env.createImageBitmap ?? createImageBitmap)(source, opts);
 	const now = () => (env.now ?? Date.now)();
 	const track = () => stream?.getVideoTracks()[0];
@@ -329,10 +351,11 @@ export function createCamera(options: CameraOptions = {}, env: CameraEnv = {}): 
 			const next = clamp(value, zoom.min, zoom.max);
 			if (zoom.kind === 'digital') digitalZoom = next;
 			else {
+				// Only a zoom the camera took counts: a rejected one leaves the value as it was.
 				await track()
 					?.applyConstraints({ advanced: [{ zoom: next } as MediaTrackConstraintSet] })
+					.then(() => (hardwareZoom = next))
 					.catch(() => {});
-				hardwareZoom = next;
 			}
 			emit();
 		},
@@ -367,8 +390,11 @@ export function createCamera(options: CameraOptions = {}, env: CameraEnv = {}): 
 				}
 				if (!frame && video && video.videoWidth > 0) frame = await bitmap(video).catch(() => null);
 				if (!frame) return { ok: false, error: MESSAGES.noFrame };
+				const { width: shownWidth = 0, height: shownHeight = 0 } = t.getSettings();
 				const crop =
-					digitalZoom > 1 ? centreCrop(frame.width, frame.height, digitalZoom) : undefined;
+					digitalZoom > 1
+						? zoomCrop(frame.width, frame.height, shownWidth / shownHeight, digitalZoom)
+						: undefined;
 				const size = fitSize(
 					crop?.width ?? frame.width,
 					crop?.height ?? frame.height,
