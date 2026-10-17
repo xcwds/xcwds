@@ -1,5 +1,5 @@
 // @xcwds/plugin-qr (#147) in examples/minimal: /utils/qr draws `<QrCode>` for what you type, and
-// an independent decoder (jsQR) reads the drawn code back.
+// an independent decoder (jsQR) reads the drawn code back; a picked image is read with `scan()`.
 import { expect, test, type Page } from '@playwright/test';
 import jsQR from 'jsqr';
 import { gotoHydrated, serveStatic, type StaticServer } from '@xcwds/testing/playwright';
@@ -62,4 +62,71 @@ test('draws what you type as a QR code that reads back, and says when it is too 
 	await page.getByLabel('Text or link').fill('a'.repeat(2400));
 	await expect(page.getByRole('alert')).toHaveText('This is too long for a QR code.');
 	await expect(page.locator('svg[data-qr]')).toHaveCount(0);
+});
+
+test('reads a code from an image with the bundled decoder in a Worker, and finds none in a plain one', async ({
+	page
+}) => {
+	const workers: string[] = [];
+	page.on('worker', (worker) => workers.push(worker.url()));
+	await gotoHydrated(page, url('/utils/qr'));
+	const text = 'WIFI:S:Café ☕;T:WPA;P:p@ss;;';
+	await page.getByLabel('Text or link').fill(text);
+	// This Chromium has no BarcodeDetector, so the fallback reads it.
+	expect(await page.evaluate(() => 'BarcodeDetector' in window)).toBe(false);
+	const png = await page.locator('svg[data-qr]').screenshot();
+	await page
+		.getByTestId('qr-file')
+		.setInputFiles({ name: 'code.png', mimeType: 'image/png', buffer: png });
+	await expect(page.getByTestId('qr-found')).toHaveText('Wi-Fi: Café ☕');
+	await expect(page.getByTestId('qr-found')).toHaveAttribute('data-kind', 'wifi');
+	expect(workers).toHaveLength(1);
+	expect(new URL(workers[0]!).origin).toBe(new URL(url('/')).origin);
+
+	const plain = await page.getByRole('heading', { level: 1 }).screenshot();
+	await page
+		.getByTestId('qr-file')
+		.setInputFiles({ name: 'plain.png', mimeType: 'image/png', buffer: plain });
+	await expect(page.getByTestId('qr-found')).toHaveText('No code found in that image.');
+
+	await page
+		.getByTestId('qr-file')
+		.setInputFiles({ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('not a png') });
+	await expect(page.getByText("That image couldn't be read.")).toBeVisible();
+});
+
+test("prefers the browser's BarcodeDetector where it reads QR codes", async ({ page }) => {
+	await page.addInitScript(() => {
+		class BarcodeDetector {
+			static async getSupportedFormats() {
+				return ['qr_code'];
+			}
+			async detect() {
+				return [{ rawValue: 'https://example.com/from-detector', format: 'qr_code' }];
+			}
+		}
+		Object.assign(window, { BarcodeDetector });
+	});
+	const workers: string[] = [];
+	page.on('worker', (worker) => workers.push(worker.url()));
+	await gotoHydrated(page, url('/utils/qr'));
+	const png = await page.locator('svg[data-qr]').screenshot();
+	await page
+		.getByTestId('qr-file')
+		.setInputFiles({ name: 'code.png', mimeType: 'image/png', buffer: png });
+	await expect(page.getByTestId('qr-found')).toHaveText('https://example.com/from-detector');
+	await expect(page.getByTestId('qr-found')).toHaveAttribute('data-kind', 'url');
+	expect(workers).toEqual([]);
+});
+
+test('reads a code on the page when the Worker file is out of reach (offline before it was cached)', async ({
+	page
+}) => {
+	await page.route('**/workers/**', (route) => route.abort());
+	await gotoHydrated(page, url('/utils/qr'));
+	const png = await page.locator('svg[data-qr]').screenshot();
+	await page
+		.getByTestId('qr-file')
+		.setInputFiles({ name: 'code.png', mimeType: 'image/png', buffer: png });
+	await expect(page.getByTestId('qr-found')).toHaveText('https://example.com');
 });
