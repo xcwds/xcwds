@@ -27,8 +27,11 @@ export type PluginInfo = {
 	summary: string;
 	/** Other plugins it needs (added with it). */
 	requires: PluginId[];
-	/** The call in xcwds.config.ts, e.g. `timers({ page: '/timers' })`, unindented. */
-	call: string;
+	/**
+	 * The call in xcwds.config.ts, e.g. `timers({ page: '/timers' })`, unindented; a function when
+	 * it depends on the app's other plugins.
+	 */
+	call: string | ((plugins: readonly PluginId[]) => string);
 	/** Extra lines for the top of xcwds.config.ts. */
 	configImports?: string[];
 	/** A CSS file to import after Tailwind. */
@@ -54,7 +57,8 @@ export const PLUGIN_IDS = [
 	'changelog',
 	'lock',
 	'camera',
-	'qr'
+	'qr',
+	'blocks'
 ] as const;
 export type PluginId = (typeof PLUGIN_IDS)[number];
 
@@ -199,7 +203,9 @@ export const CATALOG: Record<PluginId, PluginInfo> = {
 		recommended: false,
 		summary: 'A Share button in the installed app (links only, never your data)',
 		requires: ['shell'],
-		call: "share({ exclude: ['/settings'] })"
+		// A link to a page that runs one of your apps (blocks) opens nothing on another device.
+		call: (plugins) =>
+			`share({ exclude: ['/settings'${plugins.includes('blocks') ? ", '/my-apps'" : ''}] })`
 	},
 	changelog: {
 		id: 'changelog',
@@ -244,8 +250,47 @@ export const changelog: ChangelogEntry[] = [
 		css: '@xcwds/plugin-qr/styles.css',
 		section: { path: '/qr', label: 'QR', emoji: '🔳' },
 		files: () => [{ path: 'src/routes/qr/+page.svelte', content: QR }]
+	},
+	blocks: {
+		id: 'blocks',
+		package: '@xcwds/plugin-blocks',
+		recommended: false,
+		summary: 'Small apps people add from templates: checklists, counters, logs, notes',
+		requires: ['shell'],
+		call: 'blocks()',
+		css: '@xcwds/plugin-blocks/styles.css',
+		section: { path: '/my-apps', label: 'Your apps', emoji: '🧩' },
+		files: () => [
+			{
+				path: 'src/routes/my-apps/+page.svelte',
+				content: page(
+					'<main class="page-wide pt-2 pb-6">\n\t<YourApps />\n</main>',
+					"\timport YourApps from '@xcwds/plugin-blocks/YourApps.svelte';"
+				)
+			},
+			{
+				path: 'src/routes/my-apps/app/+page.svelte',
+				content: page(
+					'<main class="page-narrow pt-2 pb-6">\n\t<BlocksApp />\n</main>',
+					"\timport BlocksApp from '@xcwds/plugin-blocks/BlocksApp.svelte';"
+				)
+			},
+			{
+				path: 'src/routes/my-apps/private/+page.svelte',
+				content: page(
+					'<main class="page-narrow pt-2 pb-6">\n\t<BlocksApp private />\n</main>',
+					"\timport BlocksApp from '@xcwds/plugin-blocks/BlocksApp.svelte';"
+				)
+			}
+		]
 	}
 };
+
+/** A plugin's call in xcwds.config.ts, in an app with `plugins`. */
+export function callOf(id: PluginId, plugins: readonly PluginId[]): string {
+	const { call } = CATALOG[id];
+	return typeof call === 'string' ? call : call(plugins);
+}
 
 const CAMERA = `<script lang="ts">
 	// Photos taken here are saved in the app (\`app.photos\`), never in the phone's gallery, and

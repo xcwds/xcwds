@@ -2,7 +2,7 @@
  * The files of a new app: a SvelteKit project wired to @xcwds (RFC 0001 decisions 1-4), with the
  * thin route files each picked plugin needs, tests and a GitHub Pages deploy workflow.
  */
-import { CATALOG, withRequirements, type AppPlan, type PluginId } from './catalog.js';
+import { CATALOG, callOf, withRequirements, type AppPlan, type PluginId } from './catalog.js';
 import { THIRD_PARTY_VERSIONS, XCWDS_VERSIONS } from './versions.js';
 
 export type PackageManager = 'pnpm' | 'npm';
@@ -151,8 +151,8 @@ export const sectionItem = (path: string, label: string, emoji: string) =>
 export const indent = (text: string, prefix: string) => text.replace(/\n/g, `\n${prefix}`);
 
 /** How a plugin appears in `plugins: [...]`, indented for it. */
-export function pluginCall(id: PluginId, prefix = '\t\t'): string {
-	return prefix + indent(CATALOG[id].call, prefix);
+export function pluginCall(id: PluginId, plugins: readonly PluginId[], prefix = '\t\t'): string {
+	return prefix + indent(callOf(id, plugins), prefix);
 }
 
 export function pluginImport(id: PluginId): string {
@@ -203,7 +203,7 @@ ${brand.join('\n')}
 	},
 	plugins: [
 		// \`xcwds add <plugin>\` adds more (it also writes their pages and styles).
-${plan.plugins.map((id) => pluginCall(id)).join(',\n')}
+${plan.plugins.map((id) => pluginCall(id, plan.plugins)).join(',\n')}
 	]
 });
 `;

@@ -1,6 +1,6 @@
 // What CI runs to prove the starter works (#23): generates the tools template into
 // examples/starter (git-ignored, inside the workspace so it uses these packages, not npm), adds
-// four plugins with `xcwds add` (qr brings camera), installs, then runs the app's own check,
+// five plugins with `xcwds add` (qr brings camera), installs, then runs the app's own check,
 // lint, unit and e2e.
 import { execFileSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
@@ -31,7 +31,15 @@ run('node', [
 ]);
 run(
 	'node',
-	['../../packages/create/dist/xcwds.js', 'add', 'share', 'changelog', 'qr', '--no-install'],
+	[
+		'../../packages/create/dist/xcwds.js',
+		'add',
+		'share',
+		'changelog',
+		'qr',
+		'blocks',
+		'--no-install'
+	],
 	app
 );
 run('pnpm', ['install', '--no-frozen-lockfile']);

@@ -120,6 +120,24 @@ describe('appFiles', () => {
 		expect(pkg.dependencies['@xcwds/plugin-qr']).toMatch(/^\^\d/);
 	});
 
+	it('wires up your apps (blocks), kept out of Share', () => {
+		const files = appFiles({ name: 'Box', plugins: withRequirements(['share', 'blocks']) });
+		const config = files.get('xcwds.config.ts')!;
+		expect(config).toContain("import blocks from '@xcwds/plugin-blocks';");
+		expect(config).toMatch(/\t\tblocks\(\),?\n/);
+		expect(config).toContain("share({ exclude: ['/settings', '/my-apps'] })");
+		expect(config).toContain("\t{ path: '/my-apps', label: 'Your apps', emoji: '🧩' }");
+		expect(files.get('src/xcwds.css')).toContain("@import '@xcwds/plugin-blocks/styles.css';");
+		expect(files.get('src/routes/my-apps/+page.svelte')).toContain('<YourApps />');
+		expect(files.get('src/routes/my-apps/app/+page.svelte')).toContain('<BlocksApp />');
+		expect(files.get('src/routes/my-apps/private/+page.svelte')).toContain('<BlocksApp private />');
+		expect(JSON.parse(files.get('package.json')!).dependencies['@xcwds/plugin-blocks']).toMatch(
+			/^\^\d/
+		);
+		const without = appFiles({ name: 'Box', plugins: withRequirements(['share']) });
+		expect(without.get('xcwds.config.ts')).toContain("share({ exclude: ['/settings'] })");
+	});
+
 	it('depends on the workspace for this repository CI, and quotes names safely', () => {
 		const files = appFiles({ name: "Bob's {app}", plugins: [], workspace: true });
 		expect(JSON.parse(files.get('package.json')!).dependencies['@xcwds/core']).toBe('workspace:*');
@@ -190,6 +208,19 @@ describe('addPlugins', () => {
 		const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 		expect(pkg.dependencies['@xcwds/plugin-timers']).toBe('workspace:*');
 		expect(addPlugins(root, ['@xcwds/plugin-timers']).added).toEqual([]);
+	});
+
+	it('says to keep your apps out of a Share button the app already has', () => {
+		writeApp(root, appFiles({ name: 'Box', plugins: withRequirements(['share']) }));
+		const result = addPlugins(root, ['blocks']);
+		expect(result.added).toEqual(['blocks']);
+		expect(result.manual).toEqual([
+			"Add '/my-apps' to `share({ exclude })` in your xcwds config: a link to a page that runs one of your apps opens nothing on another device."
+		]);
+		expect(readFileSync(join(root, 'xcwds.config.ts'), 'utf8')).toContain('\t\tblocks()');
+		expect(readFileSync(join(root, 'src/routes/my-apps/app/+page.svelte'), 'utf8')).toContain(
+			'<BlocksApp />'
+		);
 	});
 
 	it('leaves files the app has taken over, and says what to do', () => {

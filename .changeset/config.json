@@ -13,8 +13,7 @@
 		"xcwds-plugin-tally",
 		"@xcwds/site",
 		"@xcwds-site/plugin-pages",
-		"@xcwds/plugin-vault",
-		"@xcwds/plugin-blocks"
+		"@xcwds/plugin-vault"
 	],
 	"___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
 		"onlyUpdatePeerDependentsWhenOutOfRange": true

@@ -1,15 +1,14 @@
 # @xcwds/plugin-blocks
 
 Small apps people add to an @xcwds app (a chore checklist, a water counter, a mood or symptom
-log), defined as data rather than code (RFC 0001, decision 14). **Work in progress**
-([#160](https://github.com/xcwds/xcwds/issues/160)): not published yet, and not a plugin you can
-install yet.
+log), defined as data rather than code (RFC 0001, decision 14).
 
-So far it holds the definition format and the logic of each block, from
-`@xcwds/plugin-blocks/model`; the plugin, which saves your apps and their data on the device
-(`app.blocks`) and adds each one to `@xcwds/plugin-tools` as a tool; and the pages: Your apps, with
-Add from a template, and the page that runs an app. Still to come: `xcwds add` support and publishing, then building your own apps (#161) and sharing them
-(#162).
+It holds the definition format and the logic of each block, from `@xcwds/plugin-blocks/model`;
+the plugin, which saves your apps and their data on the device (`app.blocks`) and adds each one to
+`@xcwds/plugin-tools` as a tool; and the pages: Your apps, with Add from a template, and the page
+that runs an app. `pnpm xcwds add blocks` adds it to an app. Still to come: building your own apps
+([#161](https://github.com/xcwds/xcwds/issues/161)) and sharing them
+([#162](https://github.com/xcwds/xcwds/issues/162)).
 
 ## The plugin
 
