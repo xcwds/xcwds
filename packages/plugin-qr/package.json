@@ -7,6 +7,7 @@
 	"type": "module",
 	"sideEffects": [
 		"**/*.svelte",
+		"**/*.css",
 		"**/*.worker.js"
 	],
 	"repository": {
@@ -28,6 +29,12 @@
 			"types": "./dist/scan.d.ts",
 			"default": "./dist/scan.js"
 		},
+		"./QrScanner.svelte": {
+			"types": "./dist/QrScanner.svelte.d.ts",
+			"svelte": "./dist/QrScanner.svelte",
+			"default": "./dist/QrScanner.svelte"
+		},
+		"./styles.css": "./dist/styles.css",
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -43,11 +50,18 @@
 		"jsqr": "^1.4.0"
 	},
 	"peerDependencies": {
+		"@xcwds/core": "workspace:^",
+		"@xcwds/plugin-camera": "workspace:^",
+		"@xcwds/sveltekit": "workspace:^",
 		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
+		"@sveltejs/kit": "^2.49.1",
 		"@sveltejs/package": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@xcwds/core": "workspace:^",
+		"@xcwds/plugin-camera": "workspace:^",
+		"@xcwds/sveltekit": "workspace:^",
 		"svelte": "^5.45.6",
 		"svelte-check": "^4.3.4",
 		"typescript": "^5.9.3",

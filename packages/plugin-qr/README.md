@@ -5,10 +5,9 @@ app. Most QR sites and apps see everything you turn into a code or scan; this on
 anywhere. **Work in progress** ([#147](https://github.com/xcwds/xcwds/issues/147)): not
 published yet.
 
-So far it makes codes (`<QrCode>` and `qrSvg()`, from its own encoder) and reads them from still
-images (`scan()`). No WASM anywhere, so the app's Content Security Policy stays as it is. Scanning
-with the live camera comes next; what each browser allows for that is in
-[Camera support](../../docs/camera.md).
+It makes codes (`<QrCode>` and `qrSvg()`, from its own encoder), reads them from still images
+(`scan()`) and from the camera (`<QrScanner>`). No WASM anywhere, so the app's Content Security
+Policy stays as it is. What each browser allows is in [Camera support](../../docs/camera.md).
 
 ## `<QrCode>`
 
@@ -72,3 +71,29 @@ rejects only when the image itself can't be read. `formats` defaults to `['qr_co
   `wifi`, `contact` (vCard or MECARD), `text`, or `other` (any other scheme: `mailto:`, `tel:`,
   `otpauth://`, a broken link). **Nothing is opened or followed**: the page decides, and the app
   sends links through its URL sanitizer. `parseQr(text)` does the same parsing on any text.
+
+## Scanning with the camera: `<QrScanner>`
+
+```svelte
+<script>
+	import QrScanner from '@xcwds/plugin-qr/QrScanner.svelte';
+</script>
+
+<QrScanner onResult={(found) => show(found)} />
+```
+
+It needs `@xcwds/plugin-camera` in the app (it uses `app.camera`, or a controller passed as
+`camera`), and `@import '@xcwds/plugin-qr/styles.css';` after Tailwind for its classes.
+
+- Nothing asks for the camera until **Scan a code** is tapped. The viewfinder is read a few times a
+  second (`interval`, default 250 ms) at most 640 px on a side, one frame at a time: with
+  `BarcodeDetector` where it reads the format, else the bundled decoder in one Worker that lives
+  as long as the scan.
+- The first code goes to `onResult` (the same `{ format, text, kind }` as `scan()`; never opened)
+  and turns the camera off, unless `continuous`, which reports each new code and keeps going (a
+  code still in view isn't reported again). The phone vibrates once where it can.
+- Leaving the page turns the camera off, and the camera plugin turns it off while the page is
+  hidden or the app locked. The sweeping line holds still for people who ask for less motion.
+- `formats` as for `scan()`; `text` replaces any of its labels.
+- `createReader(options)` (from `@xcwds/plugin-qr/scan`) is what it reads with: `read(source)` for
+  one image after another with the same detector and Worker, and `close()` when done.

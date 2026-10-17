@@ -1,5 +1,6 @@
 <script lang="ts">
 	import QrCode from '@xcwds/plugin-qr/QrCode.svelte';
+	import QrScanner from '@xcwds/plugin-qr/QrScanner.svelte';
 	import { scan, type ScanResult } from '@xcwds/plugin-qr/scan';
 
 	// Drawn and read on the device: the text never leaves it.
@@ -9,6 +10,7 @@
 	let reading = $state(false);
 	let found = $state<ScanResult | null>();
 	let error = $state('');
+	let scanned = $state<ScanResult>();
 
 	async function read(file: File | undefined) {
 		if (!file) return;
@@ -27,6 +29,12 @@
 </script>
 
 <main class="page-narrow flex flex-col gap-4 pt-2">
+	<QrScanner onResult={(found) => (scanned = found)} />
+	{#if scanned}
+		<!-- Shown, never opened: the page decides what a link does. -->
+		<p data-testid="qr-scanned" data-kind={scanned.kind}>{scanned.text}</p>
+	{/if}
+
 	<label class="flex flex-col gap-1">
 		Text or link
 		<textarea class="min-h-11 rounded-xl border p-2" rows="3" bind:value={text}></textarea>
