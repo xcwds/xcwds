@@ -124,7 +124,9 @@
 	);
 	const offerUndo = (photos: PhotoInput[]) => {
 		if (undo) clearTimeout(undo.timer);
-		undo = photos.length ? { photos, timer: setTimeout(() => (undo = null), 8000) } : null;
+		// Locked while deleting: the lock already dropped Undo, and it stays dropped.
+		undo =
+			photos.length && !locked ? { photos, timer: setTimeout(() => (undo = null), 8000) } : null;
 	};
 
 	/**
