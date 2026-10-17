@@ -14,6 +14,7 @@ and the design is [RFC 0001](docs/rfc/0001-architecture.md).
 - [Writing a plugin](docs/plugin-guide.md): build, test and use a plugin of your own
 - [Ecosystem](docs/ecosystem.md): every plugin
 - [Privacy](docs/privacy.md): how the framework keeps apps from phoning home
+- [Camera support](docs/camera.md): what each browser lets a page do with the camera
 
 The same pages, with a reference for every package, are a docs site built with @xcwds itself
 (`site/`), deployed to GitHub Pages from `main` at [docs.xcwds.com](https://docs.xcwds.com).
