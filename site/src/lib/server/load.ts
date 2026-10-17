@@ -56,7 +56,12 @@ export function loadPage(path: string): DocPage {
 		html,
 		headings: [
 			...headings.filter((h) => h.depth === 2),
-			...(api ? [{ id: 'api', text: 'API', depth: 2 }] : [])
+			// Only when the page has an API section to show: a plugin without options, decorators,
+			// settings or hooks (plugin-qr) has none.
+			...(api &&
+			(api.options?.members.length || api.app.length || api.settings.length || api.hooks.length)
+				? [{ id: 'api', text: 'API', depth: 2 }]
+				: [])
 		],
 		file: found.file,
 		...(api ? { api } : {}),

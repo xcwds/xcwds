@@ -21,6 +21,8 @@ Published as `@xcwds/plugin-<name>` from [xcwds/xcwds](https://github.com/xcwds/
 | [`@xcwds/plugin-share`](../packages/plugin-share)         | A Share button that shares links, never what you typed, and a private share target                                                             | No                |
 | [`@xcwds/plugin-changelog`](../packages/plugin-changelog) | What's new on the settings page, with a badge on new entries and a toast after an update                                                       | No                |
 | [`@xcwds/plugin-lock`](../packages/plugin-lock)           | A passcode lock for private pages (or the whole app), a cover over them in the app switcher, and no spellcheck or autocomplete in their fields | No                |
+| [`@xcwds/plugin-camera`](../packages/plugin-camera)       | Photos taken inside the app with no metadata, the camera on only while it's used, and photos kept in the app                                   | No                |
+| [`@xcwds/plugin-qr`](../packages/plugin-qr)               | QR codes made and scanned on the device, from images or the camera                                                                             | No                |
 
 ## Building blocks
 
