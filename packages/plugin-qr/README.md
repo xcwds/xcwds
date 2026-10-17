@@ -28,6 +28,7 @@ contrast), with `QR code: <value>` as what screen readers say.
 - `margin`: the light border scanners need, in modules (default 4, as the standard asks).
 - `label` replaces what screen readers say; `tooLong` replaces the message shown instead of a code
   when the text doesn't fit (more than 2,331 bytes of UTF-8 at `'M'`); `class` goes on the `<svg>`.
+  An empty `value` shows nothing, since its code would scan to nothing.
 
 ## `qrSvg()` and `encodeQr()`
 

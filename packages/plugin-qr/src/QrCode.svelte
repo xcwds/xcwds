@@ -7,7 +7,8 @@
 	 * <QrCode value="https://example.com" class="w-64" />
 	 * ```
 	 *
-	 * Text too long for a QR code shows `tooLong` instead.
+	 * Text too long for a QR code shows `tooLong` instead; empty text shows nothing (a code for it
+	 * would scan to nothing).
 	 */
 	import { checkMargin, encodeQr, qrPath, type ErrorCorrection } from './make.js';
 
@@ -32,6 +33,7 @@
 
 	const code = $derived.by(() => {
 		const quiet = checkMargin(margin);
+		if (value === '') return null;
 		try {
 			const matrix = encodeQr(value, { errorCorrection });
 			return { side: matrix.size + quiet * 2, d: qrPath(matrix, quiet) };
@@ -55,6 +57,6 @@
 		<rect width={code.side} height={code.side} fill="#fff" />
 		<path fill="#000" d={code.d} />
 	</svg>
-{:else}
+{:else if code === undefined}
 	<p class={className} data-qr-error role="alert">{tooLong}</p>
 {/if}

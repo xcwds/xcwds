@@ -54,6 +54,11 @@ test('draws what you type as a QR code that reads back, and says when it is too 
 	await expect(page.getByRole('img', { name: `QR code: ${text}` })).toBeVisible();
 	expect(await readCode(page)).toBe(text);
 
+	// Nothing to show for nothing: a code would scan to an empty string.
+	await page.getByLabel('Text or link').fill('');
+	await expect(page.locator('svg[data-qr]')).toHaveCount(0);
+	await expect(page.getByRole('alert')).toHaveCount(0);
+
 	await page.getByLabel('Text or link').fill('a'.repeat(2400));
 	await expect(page.getByRole('alert')).toHaveText('This is too long for a QR code.');
 	await expect(page.locator('svg[data-qr]')).toHaveCount(0);
