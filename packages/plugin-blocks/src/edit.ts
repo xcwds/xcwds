@@ -5,6 +5,7 @@
  * that no longer fits. The builder asks first (`dataLoss`), and saving removes that data
  * (`pruneData`) rather than leaving it hidden in storage.
  */
+import type { CounterData } from './counter.js';
 import { parseData, type AppData, type BlockData } from './data.js';
 import { newId, type AppDefinition, type Block, type LogField, type LogBlock } from './format.js';
 import type { LogData } from './log.js';
@@ -13,6 +14,8 @@ import type { LogData } from './log.js';
 export type Loss =
 	/** A block removed (or turned into another type) that has data. */
 	| { kind: 'block'; block: string }
+	/** A counter that never reset starts resetting: its running `count` starts again at 0. */
+	| { kind: 'count'; block: string; count: number; reset: 'daily' | 'weekly' }
 	/** A log field removed: `count` entries have a value for it. */
 	| { kind: 'field'; block: string; field: string; count: number }
 	/** A log field given another type: its `count` values go. */
@@ -28,6 +31,8 @@ export function lossText(loss: Loss): string {
 	switch (loss.kind) {
 		case 'block':
 			return `“${loss.block}” and everything saved in it.`;
+		case 'count':
+			return `The count of “${loss.block}” so far (${loss.count}), because it now starts again each ${loss.reset === 'daily' ? 'day' : 'week'}.`;
 		case 'field':
 			return `“${loss.field}” in “${loss.block}”, from ${entries(loss.count)}.`;
 		case 'type':
@@ -93,6 +98,13 @@ export function dataLoss(before: AppDefinition, after: AppDefinition, data: AppD
 		const now = next.get(block.id);
 		if (!kept(block, now)) {
 			losses.push({ kind: 'block', block: block.label });
+			continue;
+		}
+		if (block.type === 'counter' && now.type === 'counter') {
+			// A count that never reset has no day or week to file it under, so it isn't kept.
+			const { value } = saved as CounterData;
+			if (block.reset === 'never' && now.reset !== 'never' && value > 0)
+				losses.push({ kind: 'count', block: block.label, count: value, reset: now.reset });
 			continue;
 		}
 		if (block.type !== 'log' || now.type !== 'log') continue;

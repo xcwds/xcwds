@@ -131,6 +131,31 @@ describe('editing an app', () => {
 		);
 	});
 
+	it('says when a counter that never reset starts resetting, which starts its count again', () => {
+		const counter = (reset: 'never' | 'daily' | 'weekly'): AppDefinition => ({
+			...health,
+			blocks: health.blocks.map((b) => (b.type === 'counter' ? { ...b, reset } : b))
+		});
+		const total: AppData = {
+			...data,
+			blocks: { ...data.blocks, water: { period: 'all', value: 12, history: [] } }
+		};
+		expect(dataLoss(counter('never'), counter('weekly'), total)).toEqual([
+			{ kind: 'count', block: 'Water', count: 12, reset: 'weekly' }
+		]);
+		expect(lossText({ kind: 'count', block: 'Water', count: 12, reset: 'daily' })).toBe(
+			'The count of “Water” so far (12), because it now starts again each day.'
+		);
+		// From daily to weekly (or back) the count goes to the history, and nothing is lost.
+		expect(dataLoss(counter('daily'), counter('weekly'), data)).toEqual([]);
+		expect(
+			dataLoss(counter('never'), counter('daily'), {
+				...total,
+				blocks: { ...total.blocks, water: { period: 'all', value: 0, history: [] } }
+			})
+		).toEqual([]);
+	});
+
 	it('treats a block turned into another type as removed', () => {
 		const after: AppDefinition = {
 			...health,

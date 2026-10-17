@@ -186,8 +186,9 @@ Fields, items and options are matched by id, so renaming one keeps its data. Wha
 - **`dataLoss(before, after, data)`**: what saving `after` would remove, to ask first: a block
   with data that's removed or becomes another type (`kind: 'block'`), a log field removed
   (`'field'`), a field whose type changes (`'type'`, even when the old values would fit the new
-  type), and values that no longer fit a field's options or limits (`'values'`), each with its
-  number of entries or values. Ticks of removed checklist items go without asking.
+  type), values that no longer fit a field's options or limits (`'values'`), and a counter's
+  running total when it starts resetting daily or weekly (`'count'`), each with its number of
+  entries or values. Ticks of removed checklist items go without asking.
   **`lossText(loss)`** says one as a sentence.
 - **`pruneData(before, after, data)`**: the data `after` keeps; `app.blocks.save` writes it, so
   dropped data is removed, not hidden.
