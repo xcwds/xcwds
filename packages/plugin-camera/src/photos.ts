@@ -254,7 +254,8 @@ export function createPhotos(
 		async add(files) {
 			const result: AddResult = { added: 0, failed: [], removed: noMetadata() };
 			const cameras = new Set<string>();
-			for (const file of files) {
+			const list = [...files];
+			for (const [i, file] of list.entries()) {
 				const cleaned = await (env.clean ?? cleanImage)(file, options.image).catch(() => ({
 					ok: false as const,
 					error: "This browser can't open this image. Try a JPEG, PNG or WebP file."
@@ -270,8 +271,9 @@ export function createPhotos(
 					takenAt: takenAtOf(cleaned.removed.taken) ?? (file.lastModified || undefined)
 				});
 				if (!saved.ok) {
-					result.failed.push({ name: file.name, error: saved.error });
-					// Storage is full: the rest won't fit either.
+					// Storage is full: the rest won't fit either, and each says so.
+					for (const rest of list.slice(i))
+						result.failed.push({ name: rest.name, error: saved.error });
 					break;
 				}
 				result.added++;

@@ -269,9 +269,13 @@ describe('add (from files)', () => {
 		const { photos, blobs } = store({ ...env(), clean });
 		vi.spyOn(blobs, 'put').mockResolvedValue(false);
 		const result = await photos.add([new File(['a'], 'a.jpg'), new File(['b'], 'b.jpg')]);
+		// Nothing is dropped silently: every file not kept is named.
 		expect(result).toMatchObject({
 			added: 0,
-			failed: [{ name: 'a.jpg', error: PHOTO_MESSAGES.full }]
+			failed: [
+				{ name: 'a.jpg', error: PHOTO_MESSAGES.full },
+				{ name: 'b.jpg', error: PHOTO_MESSAGES.full }
+			]
 		});
 		expect(clean).toHaveBeenCalledTimes(1);
 		const throwing = store({ ...env(), clean: () => Promise.reject(new Error('boom')) });
