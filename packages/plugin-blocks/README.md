@@ -7,9 +7,7 @@ It holds the definition format and the logic of each block, from `@xcwds/plugin-
 the plugin, which saves your apps and their data on the device (`app.blocks`) and adds each one to
 `@xcwds/plugin-tools` as a tool; and the pages: Your apps, with New app and Add from a template,
 the page that runs an app, and the builder that makes or edits one. `pnpm xcwds add blocks` adds
-it to an app. Still to come: keeping a builder draft, a preview
-([#161](https://github.com/xcwds/xcwds/issues/161)), and sharing apps
-([#162](https://github.com/xcwds/xcwds/issues/162)).
+it to an app. Still to come: sharing apps ([#162](https://github.com/xcwds/xcwds/issues/162)).
 
 ## The plugin
 
@@ -93,7 +91,10 @@ Add each page's route file, and the components' styles after Tailwind and the sh
   up / Move down for blocks, items and fields, and Remove with Undo for blocks and fields. The
   limits show as you go ("3 of 12 fields"). Save checks the app with `parseApp` and shows the
   problem next to Save; if the change drops saved data, it lists what (`dataLoss`) and asks
-  first, then saves (removing that data) and opens the app.
+  first, then saves (removing that data), says Saved (`app.toast`) and opens the app. Changes
+  are kept as you make them (`saveDraft`), so leaving and coming back, or a reload, brings them
+  back until Save or Discard changes; one draft at a time. Preview shows the app as it will
+  look, working on data that's thrown away ("Preview, nothing saved").
 
 With `@xcwds/plugin-share`, add `path` to its `exclude`: a link to `<path>/app` or `<path>/edit`
 opens nothing on another device.
@@ -121,12 +122,16 @@ const data = app.blocks.data(added.app.id); // read against the app's definition
 - **`usage()`**: about how much your apps take up, `{ total, apps, nearLimit }`, counted as
   storage counts it (characters of keys and values); `nearLimit` is past `NEAR_LIMIT`, 80% of
   the 5 million characters most browsers give a site.
+- **`draft()`** and **`saveDraft(draft)`**: the builder's unsaved changes, `{ for, app }` (`for`
+  is the app's id, or `''` for a new app); `undefined` clears them. A private app's draft (or one
+  being made private) is kept in the private group; drafts are never backed up.
 - **`onChange(listener)`**: your apps or their data changed, here, in another tab, or by
   clearing or importing data.
 
 Saved data: definitions in `app:blocks:apps` (group `blocks`, backed up) and, for private apps,
 `app:blocks:private-apps` (group `blocks-private`, personal, so a lock's reset clears it); each
-app's data in `app:blocks:data:<id>` or `app:blocks:private:<id>`. Turning an app private (or
+app's data in `app:blocks:data:<id>` or `app:blocks:private:<id>`; the builder's draft in
+`app:blocks:draft` or `app:blocks:private-draft` (not backed up). Turning an app private (or
 back) writes its definition and data to the new keys first and removes the old ones after, so a
 failed write leaves it where it was. Every failed write is reported through the app's
 save-failure toast.
@@ -213,6 +218,8 @@ Fields, items and options are matched by id, so renaming one keeps its data. Wha
   dropped data is removed, not hidden.
 - **`blankApp()`**, **`blankBlock(type)`**, **`blankField(type)`**: starting points for the
   builder, with new ids. **`move(list, index, by)`**: Move up (`-1`) and Move down (`1`).
+- **`parseDraft(raw)`**: reads a saved draft back, allowing what a builder holds mid-edit (an
+  empty name or label) but only shapes it can show; `parseApp` still checks it at Save.
 
 ## Templates
 

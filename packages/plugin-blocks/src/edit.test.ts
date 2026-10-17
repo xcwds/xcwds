@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { AppData } from './data.js';
-import { blankApp, blankBlock, blankField, dataLoss, lossText, move, pruneData } from './edit.js';
+import {
+	blankApp,
+	blankBlock,
+	blankField,
+	dataLoss,
+	lossText,
+	move,
+	parseDraft,
+	pruneData
+} from './edit.js';
 import { parseApp, type AppDefinition, type LogBlock } from './format.js';
 
 const health: AppDefinition = {
@@ -206,5 +215,25 @@ describe('the builder’s starting points', () => {
 		expect(move(['a', 'b', 'c'], 1, 1)).toEqual(['a', 'c', 'b']);
 		expect(move(['a', 'b', 'c'], 0, -1)).toEqual(['a', 'b', 'c']);
 		expect(move(['a', 'b', 'c'], 2, 1)).toEqual(['a', 'b', 'c']);
+	});
+});
+
+describe('drafts', () => {
+	it('keeps a draft mid-edit, with an empty name or label, and drops shapes it can’t show', () => {
+		const app = {
+			...blankApp(),
+			blocks: [blankBlock('log'), { ...blankBlock('notes'), label: '' }]
+		};
+		expect(parseDraft({ for: '', app })).toEqual({ for: '', app });
+		expect(parseDraft({ for: 'abc', app: { ...health, blocks: health.blocks } })?.for).toBe('abc');
+		for (const bad of [
+			null,
+			{ for: 1, app },
+			{ for: '', app: { ...app, format: 2 } },
+			{ for: '', app: { ...app, blocks: [{ id: 'x', type: 'timer', label: 'T' }] } },
+			{ for: '', app: { ...app, blocks: [{ id: 'x', type: 'log', label: 'L', fields: [{}] }] } },
+			{ for: '', app: { ...app, blocks: [{ id: 'x', type: 'checklist', label: 'C' }] } }
+		])
+			expect(parseDraft(bad)).toBeUndefined();
 	});
 });

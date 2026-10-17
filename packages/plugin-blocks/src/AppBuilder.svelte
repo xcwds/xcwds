@@ -11,13 +11,20 @@
 	 * With no fragment it makes a new app; `#<id>` edits that one (a private app on the private
 	 * page, which `@xcwds/plugin-lock` locks). Save checks the app with `parseApp` and shows the
 	 * problem next to Save; when the change would drop saved data (`dataLoss`), it says what and
-	 * asks first. Saving opens the app.
+	 * asks first. Saving says so (`app.toast`, from `@xcwds/plugin-shell`) and opens the app.
+	 *
+	 * Changes are kept as you go (`app.blocks.saveDraft`), so leaving the page and coming back,
+	 * or a reload, picks up where you were; Save or Discard changes clears them. Preview shows
+	 * the app as it will look, to try out without saving anything.
 	 */
 	import { useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
+	import BlockList from './blocks/BlockList.svelte';
+	import type { UpdateBlock } from './blocks/types.js';
 	import BlockSettings from './builder/BlockSettings.svelte';
 	import { BLOCK_TYPES } from './builder/types.js';
 	import type {} from './client.js';
+	import type { AppData, BlockData } from './data.js';
 	import { blankApp, blankBlock, dataLoss, lossText, move } from './edit.js';
 	import { LIMITS, parseApp, type AppDefinition, type Block } from './format.js';
 	import { go, href } from './navigate.js';
@@ -45,6 +52,13 @@
 	/** An id in the fragment that isn't on this device. */
 	let missing = $state(false);
 	let draft = $state<AppDefinition>(blankApp());
+	/** The app as it was when the builder opened, as JSON: a draft equal to it isn't kept. */
+	let pristine = '';
+	/** Unsaved changes from before were picked up. */
+	let restored = $state(false);
+	/** The app as Preview shows it, with data that lives only on this page. */
+	let preview = $state.raw<{ app: AppDefinition; data: AppData }>();
+	let now = $state(Date.now());
 	let nameError = $state('');
 	let error = $state('');
 	/** The last block or field removed, until Undo times out. */
@@ -69,8 +83,14 @@
 		}
 		missing = !!id && !found;
 		before = found;
-		draft = found ? (JSON.parse(JSON.stringify(found)) as AppDefinition) : blankApp();
-		if (!found && personal) draft.private = true;
+		const start = found ? (JSON.parse(JSON.stringify(found)) as AppDefinition) : blankApp();
+		if (!found && personal) start.private = true;
+		pristine = JSON.stringify(start);
+		// Unsaved changes to this app (or to a new one, on the page for new apps) come back.
+		const kept = missing ? undefined : blocks.draft();
+		restored = !!kept && kept.for === (found?.id ?? '') && (!!found || !id);
+		draft = restored && kept ? kept.app : start;
+		preview = undefined;
 		nameError = error = '';
 		loaded = true;
 		(app as { shell?: ShellLike }).shell?.setTitle(found ? `Edit ${found.name}` : undefined);
@@ -85,6 +105,16 @@
 			stopLock?.();
 			if (undo) clearTimeout(undo.timer);
 		};
+	});
+
+	// Keeps the changes as they're made. Back to the app as it was, its draft goes; another
+	// app's draft stays until this one has changes of its own (there's one draft at a time).
+	$effect(() => {
+		const json = JSON.stringify(draft);
+		if (!loaded || missing || !blocks) return;
+		const target = before?.id ?? '';
+		if (json !== pristine) blocks.saveDraft({ for: target, app: JSON.parse(json) });
+		else if (blocks.draft()?.for === target) blocks.saveDraft(undefined);
 	});
 
 	function removed(label: string, restore: () => void) {
@@ -158,12 +188,50 @@
 			error = saved.error;
 			return;
 		}
+		finish();
+		// Only once it's really saved (`save` checks the write).
+		(app as { toast?: (message: string) => void }).toast?.('Saved');
 		void go(blocks.pathOf(saved.app), true);
+	}
+
+	/** Stops keeping changes: the draft goes, and the page stops saving one. */
+	function finish() {
+		loaded = false;
+		blocks?.saveDraft(undefined);
 	}
 
 	function discard() {
 		if (!blocks) return;
-		void go(before ? blocks.pathOf(before) : blocks.path);
+		const target = before ? blocks.pathOf(before) : blocks.path;
+		finish();
+		void go(target);
+	}
+
+	/** Shows the app as it will look; it needs a name only once it's saved. */
+	function showPreview() {
+		const snapshot = $state.snapshot(draft);
+		const parsed = parseApp({ ...snapshot, name: snapshot.name.trim() || 'Preview' });
+		if (!parsed.ok) {
+			error = parsed.error;
+			return;
+		}
+		error = '';
+		now = Date.now();
+		preview = { app: parsed.value, data: { format: 1, blocks: {} } };
+		scrollTo({ top: 0 });
+	}
+
+	/** Preview's blocks work, on data that's thrown away with the preview. */
+	function previewUpdate<T extends BlockData>(blockId: string): UpdateBlock<T> {
+		return (change) => {
+			if (!preview) return false;
+			const next = change(preview.data.blocks[blockId] as T | undefined);
+			preview = {
+				...preview,
+				data: { ...preview.data, blocks: { ...preview.data.blocks, [blockId]: next } }
+			};
+			return true;
+		};
 	}
 
 	const atLimit = $derived(draft.blocks.length >= LIMITS.blocks);
@@ -177,7 +245,28 @@
 			<p>This app isn't on this device.</p>
 			<a href={href(blocks.path)} class="{button} flex items-center">Your apps</a>
 		</div>
+	{:else if preview}
+		<div class="flex flex-col gap-6" data-testid="builder-preview">
+			<p
+				class="rounded-xl border border-(--xcwds-shell-border) px-4 py-3 font-medium"
+				role="status"
+			>
+				Preview, nothing saved
+			</p>
+			<p class="flex items-center gap-3 text-xl font-semibold">
+				<span aria-hidden="true">{preview.app.emoji ?? '🧩'}</span>{preview.app.name}
+			</p>
+			<BlockList app={preview.app} data={preview.data} {now} update={previewUpdate} />
+			<button type="button" class="{primary} self-start" onclick={() => (preview = undefined)}
+				>Back to editing</button
+			>
+		</div>
 	{:else}
+		{#if restored}
+			<p class="{muted} mb-4" role="status" data-testid="builder-restored">
+				Your unsaved changes from before are back.
+			</p>
+		{/if}
 		<form class="flex flex-col gap-6" onsubmit={save} novalidate data-testid="builder">
 			<section class="flex flex-col gap-4" aria-labelledby="builder-about">
 				<h2 id="builder-about" class="sr-only">About the app</h2>
@@ -326,6 +415,7 @@
 				{/if}
 				<div class="flex flex-wrap gap-2">
 					<button type="submit" class={primary}>Save</button>
+					<button type="button" class={button} onclick={showPreview}>Preview</button>
 					<button type="button" class={button} onclick={discard}>Discard changes</button>
 				</div>
 			</div>

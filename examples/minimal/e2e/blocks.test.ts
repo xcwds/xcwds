@@ -391,3 +391,89 @@ test('a private app is edited on its own page, behind the lock like the app', as
 	await gotoHydrated(page, url('/my-apps/edit#nothing'));
 	await expect(page.getByTestId('blocks-missing')).toBeVisible();
 });
+
+test('the builder keeps unsaved changes until Save or Discard, and previews without saving', async ({
+	page
+}) => {
+	await gotoHydrated(page, url('/my-apps/edit'));
+	const builder = page.getByTestId('builder');
+	await builder.getByLabel('Name').fill('Garden');
+	await builder.getByRole('button', { name: /^Add counter/ }).click();
+	await builder.getByTestId('builder-block').getByLabel('Heading').fill('Watered');
+
+	// Gone and back: the changes are still there.
+	await gotoHydrated(page, url('/my-apps'));
+	await page.getByRole('link', { name: 'New app' }).click();
+	await expect(page.getByTestId('builder-restored')).toBeVisible();
+	await expect(builder.getByLabel('Name')).toHaveValue('Garden');
+	await expect(builder.getByTestId('builder-block').getByLabel('Heading')).toHaveValue('Watered');
+
+	// Preview works, saves nothing, and goes back to the same changes.
+	await builder.getByRole('button', { name: 'Preview' }).click();
+	const preview = page.getByTestId('builder-preview');
+	await expect(preview.getByRole('status')).toHaveText('Preview, nothing saved');
+	await expect(preview.getByRole('heading', { level: 2 })).toHaveText(['Watered']);
+	await preview.getByRole('button', { name: 'One more: Watered' }).click();
+	await expect(preview.getByTestId('counter-value')).toHaveText('1');
+	expect(await auditTapTargets(page)).toEqual([]);
+	await preview.getByRole('button', { name: 'Back to editing' }).click();
+	await expect(builder.getByLabel('Name')).toHaveValue('Garden');
+	expect(
+		await page.evaluate(() =>
+			Object.keys(localStorage).filter((k) => k.startsWith('app:blocks:data'))
+		)
+	).toEqual([]);
+
+	// Discard clears them.
+	await builder.getByRole('button', { name: 'Discard changes' }).click();
+	await expect(page).toHaveURL(url('/my-apps'));
+	await page.getByRole('link', { name: 'New app' }).click();
+	await expect(builder.getByLabel('Name')).toHaveValue('');
+	await expect(page.getByTestId('builder-restored')).toHaveCount(0);
+
+	// An app's edits come back after a reload, and Save clears them.
+	const id = await add(page, 'Water');
+	await page.getByTestId('blocks-edit').click();
+	await builder.getByLabel('Name').fill('Water at work');
+	await page.reload();
+	await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+	await expect(builder.getByLabel('Name')).toHaveValue('Water at work');
+	await builder.getByRole('button', { name: 'Save' }).click();
+	await expect(page).toHaveURL(url(`/my-apps/app#${id}`));
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Water at work$/);
+	await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+	expect(await page.evaluate(() => localStorage.getItem('app:blocks:draft'))).toBeNull();
+});
+
+test('an app can be built with the keyboard alone', async ({ page }) => {
+	/** Tabs forward until `target` has focus, so it's reachable without a pointer. */
+	async function tabTo(target: ReturnType<Page['locator']>) {
+		for (let i = 0; i < 80; i++) {
+			if (await target.evaluate((el) => el === document.activeElement)) return;
+			await page.keyboard.press('Tab');
+		}
+		throw new Error(`Couldn't tab to ${String(target)}`);
+	}
+	await gotoHydrated(page, url('/my-apps'));
+	await tabTo(page.getByRole('link', { name: 'New app' }));
+	await page.keyboard.press('Enter');
+	await expect(page).toHaveURL(url('/my-apps/edit'));
+	const builder = page.getByTestId('builder');
+	await tabTo(builder.getByLabel('Name'));
+	await page.keyboard.type('Reading');
+	await tabTo(builder.getByRole('button', { name: /^Add checklist/ }));
+	await page.keyboard.press('Enter');
+	const block = builder.getByTestId('builder-block');
+	await tabTo(block.getByRole('button', { name: 'Add item' }));
+	await page.keyboard.press('Space');
+	await tabTo(block.getByLabel('Item 1', { exact: true }));
+	await page.keyboard.press('ControlOrMeta+a');
+	await page.keyboard.type('One chapter');
+	await tabTo(builder.getByRole('button', { name: 'Save' }));
+	await page.keyboard.press('Enter');
+	await expect(page).toHaveURL(/\/my-apps\/app#/);
+	await expect(page.getByRole('checkbox', { name: /One chapter/ })).toBeVisible();
+	await tabTo(page.getByRole('checkbox', { name: /One chapter/ }));
+	await page.keyboard.press('Space');
+	await expect(page.getByTestId('checklist-progress')).toHaveText('1 of 1 done');
+});

@@ -7,7 +7,7 @@
  */
 import type { Entry, PrefixEntry, StorageScope } from '@xcwds/core';
 import { emptyData, parseData, type AppData } from './data.js';
-import { pruneData } from './edit.js';
+import { parseDraft, pruneData, type Draft } from './edit.js';
 import { ID, newId, parseApp, type AppDefinition, type Parsed } from './format.js';
 
 /** An app as lists show it. */
@@ -76,6 +76,17 @@ export interface Blocks {
 	remove(id: string): Removed;
 	/** About how much storage your apps and their data take up. */
 	usage(): Usage;
+	/**
+	 * The builder's unsaved changes (#161), if any: one draft at a time, for a new app (`for: ''`)
+	 * or the app it edits.
+	 */
+	draft(): Draft | undefined;
+	/**
+	 * Keeps the builder's unsaved changes, or clears them with `undefined`. A draft of a private
+	 * app (or one being made private) goes in the private group, so a lock's reset clears it;
+	 * drafts are never backed up. False if it couldn't be saved.
+	 */
+	saveDraft(draft: Draft | undefined): boolean;
 	/** Your apps or their data changed: saved here, by another tab, cleared or imported. */
 	onChange(listener: () => void): () => void;
 }
@@ -107,6 +118,8 @@ export interface BlocksEntries {
 	privateApps: Entry<AppDefinition[]>;
 	data: PrefixEntry<AppData>;
 	privateData: PrefixEntry<AppData>;
+	draft: Entry<Draft>;
+	privateDraft: Entry<Draft>;
 }
 
 /** Registers the plugin's storage entries in its namespace (once, in the plugin's setup). */
@@ -125,6 +138,20 @@ export function registerEntries(storage: StorageScope): BlocksEntries {
 			group: 'blocks-private',
 			sensitive: true,
 			parse: parseList
+		}),
+		// Unsaved changes in the builder: this device's work in progress, never backed up.
+		draft: storage.entry('draft', {
+			label: 'Your apps: unsaved changes',
+			group: 'blocks',
+			backup: false,
+			parse: parseDraft
+		}),
+		privateDraft: storage.entry('private-draft', {
+			label: 'Your private apps: unsaved changes',
+			group: 'blocks-private',
+			sensitive: true,
+			backup: false,
+			parse: parseDraft
 		}),
 		privateData: storage.entry('private', {
 			label: 'Your private apps: data',
@@ -292,6 +319,16 @@ export function createBlocks(
 				}
 			}
 			return { total, apps, nearLimit: total > NEAR_LIMIT };
+		},
+		draft: () => storage.read(entries.privateDraft) ?? storage.read(entries.draft),
+		saveDraft(draft) {
+			const personal = !!draft && (draft.app.private || !!find(draft.for)?.private);
+			const keep = personal ? entries.privateDraft : entries.draft;
+			const other = personal ? entries.draft : entries.privateDraft;
+			if (storage.read(other) !== undefined) storage.remove(other);
+			if (!draft)
+				return storage.read(keep) === undefined || storage.saveResult(keep, storage.remove(keep));
+			return storage.saveResult(keep, storage.write(keep, draft));
 		},
 		onChange(listener) {
 			const keys = [entries.apps.key, entries.privateApps.key];
