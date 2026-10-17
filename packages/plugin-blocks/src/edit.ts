@@ -102,8 +102,8 @@ export function dataLoss(before: AppDefinition, after: AppDefinition, data: AppD
 		}
 		if (block.type === 'counter' && now.type === 'counter') {
 			// A count that never reset has no day or week to file it under, so it isn't kept.
-			const { value } = saved as CounterData;
-			if (block.reset === 'never' && now.reset !== 'never' && value > 0)
+			const { period, value } = saved as CounterData;
+			if (period === 'all' && now.reset !== 'never' && value > 0)
 				losses.push({ kind: 'count', block: block.label, count: value, reset: now.reset });
 			continue;
 		}

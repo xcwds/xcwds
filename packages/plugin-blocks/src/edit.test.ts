@@ -146,8 +146,10 @@ describe('editing an app', () => {
 		expect(lossText({ kind: 'count', block: 'Water', count: 12, reset: 'daily' })).toBe(
 			'The count of “Water” so far (12), because it now starts again each day.'
 		);
-		// From daily to weekly (or back) the count goes to the history, and nothing is lost.
+		// From daily to weekly (or back) the count goes to the history, and nothing is lost; the
+		// same for a day's count saved before the counter stopped resetting.
 		expect(dataLoss(counter('daily'), counter('weekly'), data)).toEqual([]);
+		expect(dataLoss(counter('never'), counter('daily'), data)).toEqual([]);
 		expect(
 			dataLoss(counter('never'), counter('daily'), {
 				...total,
