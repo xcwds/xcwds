@@ -105,6 +105,11 @@ describe('options', () => {
 			parent: '/my-apps',
 			private: true
 		});
+		expect(app.routes.get('/my-apps/import')).toMatchObject({
+			title: 'Add a shared app',
+			parent: '/my-apps'
+		});
+		expect(app.routes.get('/my-apps/import')?.private).toBeUndefined();
 		expect(pluginMeta(build).network).toBe(false);
 		expect(pluginMeta(client).network).toBe(false);
 	});

@@ -1,6 +1,7 @@
 <script lang="ts">
 	/**
-	 * Your apps (#160): the list, each one deletable with Undo, and Add from a template. Render
+	 * Your apps (#160): the list, each one shareable (Share design, #162) and deletable with Undo,
+	 * Add from a file, and Add from a template. Render
 	 * it from the `<path>` route's file (default `/my-apps`), inside `<main class="page-wide">`:
 	 *
 	 * ```svelte
@@ -15,6 +16,7 @@
 	import type {} from './client.js';
 	import type { AppDefinition } from './format.js';
 	import { go, href } from './navigate.js';
+	import ShareDesign from './ShareDesign.svelte';
 	import type { AppSummary, Removed, Usage } from './store.js';
 	import { button, card, muted, primary } from './ui.js';
 	import { sizeText } from './view.js';
@@ -80,7 +82,12 @@
 	<div class="flex flex-col gap-6">
 		<section class="flex flex-col gap-3" aria-labelledby="your-apps-heading">
 			<h2 id="your-apps-heading" class="sr-only">Your apps</h2>
-			<a href={href(blocks.editPathOf())} class="{primary} flex items-center self-start">New app</a>
+			<div class="flex flex-wrap gap-2">
+				<a href={href(blocks.editPathOf())} class="{primary} flex items-center">New app</a>
+				<a href={href(`${blocks.path}/import`)} class="{button} flex items-center"
+					>Add from a file</a
+				>
+			</div>
 			{#if list && !list.length}
 				<p class={muted} data-testid="your-apps-empty">
 					No apps yet. Make one, or add one from a template below.
@@ -88,10 +95,11 @@
 			{:else if list}
 				<ul class="grid gap-2 md:grid-cols-2 lg:grid-cols-3" data-testid="your-apps">
 					{#each list as summary (summary.id)}
-						<li class="flex items-stretch gap-2">
+						{@const design = blocks.get(summary.id)}
+						<li class="flex flex-wrap items-stretch gap-2">
 							<a
 								href={href(summary.path)}
-								class="flex flex-1 items-center gap-3 rounded-xl bg-(--xcwds-shell-card) px-4 py-3 hover:bg-(--xcwds-shell-hover-bg)"
+								class="flex min-w-48 flex-1 items-center gap-3 rounded-xl bg-(--xcwds-shell-card) px-4 py-3 hover:bg-(--xcwds-shell-hover-bg)"
 							>
 								<span aria-hidden="true" class="text-2xl">{summary.emoji ?? '🧩'}</span>
 								<span class="flex flex-col">
@@ -103,6 +111,9 @@
 									>
 								</span>
 							</a>
+							{#if design}
+								<ShareDesign {design} label="Share design of {summary.name}" />
+							{/if}
 							<button
 								type="button"
 								class={button}

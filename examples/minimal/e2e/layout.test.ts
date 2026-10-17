@@ -166,6 +166,7 @@ for (const { name, dir, base } of targets) {
 					'/utils/qr',
 					'/my-apps',
 					'/my-apps/edit',
+					'/my-apps/import',
 					'/no-such-page'
 				]) {
 					await gotoHydrated(page, url(path));

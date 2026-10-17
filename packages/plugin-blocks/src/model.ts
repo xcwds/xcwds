@@ -10,3 +10,4 @@ export * from './edit.js';
 export * from './format.js';
 export * from './log.js';
 export * from './templates.js';
+export * from './design.js';

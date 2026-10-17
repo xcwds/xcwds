@@ -135,6 +135,7 @@ describe('appFiles', () => {
 		expect(files.get('src/routes/my-apps/private-edit/+page.svelte')).toContain(
 			'<AppBuilder private />'
 		);
+		expect(files.get('src/routes/my-apps/import/+page.svelte')).toContain('<ImportApp />');
 		expect(JSON.parse(files.get('package.json')!).dependencies['@xcwds/plugin-blocks']).toMatch(
 			/^\^\d/
 		);

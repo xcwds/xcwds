@@ -1,6 +1,6 @@
 // Your apps (@xcwds/plugin-blocks, #160) in examples/minimal: apps added from templates at
 // /my-apps, run at /my-apps/app#<id> or, private, /my-apps/private#<id>, and built or edited at
-// /my-apps/edit (#161).
+// /my-apps/edit (#161); designs shared as links or files open at /my-apps/import (#162).
 import { expect, test, type Page } from '@playwright/test';
 import {
 	auditTapTargets,
@@ -559,4 +559,130 @@ test('a draft held back by the lock is kept, and comes back once unlocked', asyn
 	await page.getByTestId('blocks-edit').click();
 	await expect(page.getByTestId('builder-restored')).toBeVisible();
 	await expect(builder.getByLabel('Name')).toHaveValue('Private water');
+});
+
+test('a design shared as a link opens on another device, holding nothing saved', async ({
+	page,
+	browser
+}) => {
+	await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+	const id = await add(page, 'Chores');
+	await page.getByRole('checkbox').first().check();
+	await gotoHydrated(page, url('/my-apps'));
+	await page.getByRole('button', { name: 'Share design of Chores' }).click();
+	const dialog = page.getByTestId('share-design');
+	await expect(dialog).toBeVisible();
+	expect(await auditTapTargets(page)).toEqual([]);
+	await dialog.getByRole('button', { name: 'Copy link' }).click();
+	await expect(page.getByText('Link copied.')).toBeVisible();
+	const link = await page.evaluate(() => navigator.clipboard.readText());
+	expect(link).toMatch(new RegExp(`^${url('/my-apps/import')}#app=[A-Za-z0-9_-]+$`));
+	expect(link).not.toContain('?');
+
+	// Someone else, with nothing saved.
+	const other = await browser.newContext({ viewport: { width: 390, height: 844 } });
+	const theirs = await other.newPage();
+	await gotoHydrated(theirs, link);
+	await expect(theirs).toHaveURL(url('/my-apps/import'));
+	const preview = theirs.getByTestId('import-preview');
+	await expect(theirs.getByRole('note')).toContainText('Someone shared this app with you');
+	await expect(preview.getByRole('heading', { name: /Chores/ })).toBeVisible();
+	await expect(preview).toContainText('Checklist');
+	expect(await auditTapTargets(theirs)).toEqual([]);
+	// Nothing is added until Add app.
+	expect(await theirs.evaluate(() => localStorage.getItem('app:blocks:apps'))).toBeNull();
+	await theirs.getByRole('button', { name: 'Add app' }).click();
+	await expect(theirs).toHaveURL(/\/my-apps\/app#/);
+	const added = new URL(theirs.url()).hash.slice(1);
+	expect(added).not.toBe(id);
+	await expect(theirs.getByRole('checkbox').first()).not.toBeChecked();
+	expect(
+		await theirs.evaluate(() =>
+			Object.keys(localStorage).filter((k) => k.startsWith('app:blocks:data'))
+		)
+	).toEqual([]);
+	// Back from the app doesn't land on the import page with the design again.
+	await theirs.goBack();
+	await expect(theirs).not.toHaveURL(/#app=/);
+
+	// A second import is a second app.
+	await gotoHydrated(theirs, link);
+	await theirs.getByRole('button', { name: 'Add app' }).click();
+	await expect(theirs).toHaveURL(/\/my-apps\/app#/);
+	await gotoHydrated(theirs, url('/my-apps'));
+	await expect(theirs.getByTestId('your-apps').getByRole('listitem')).toHaveCount(2);
+	await other.close();
+});
+
+test("a broken or foreign link says only that it can't be opened", async ({ page }) => {
+	for (const data of ['nonsense', 'u.eyJmb3JtYXQiOjJ9', '']) {
+		await gotoHydrated(page, url(`/my-apps/import#app=${data}`));
+		await expect(page.getByTestId('import-error')).toHaveText(
+			"This link doesn't contain an app this version can open."
+		);
+		await expect(page.getByTestId('import-preview')).toHaveCount(0);
+		await expect(page).toHaveURL(url('/my-apps/import'));
+	}
+	// Cancel leaves nothing behind.
+	await gotoHydrated(page, url('/my-apps'));
+	await expect(page.getByTestId('your-apps-empty')).toBeVisible();
+});
+
+test('a design saved as a file is added from Your apps', async ({ page, browser }, testInfo) => {
+	await add(page, 'Water');
+	await gotoHydrated(page, url('/my-apps/edit#' + new URL(page.url()).hash.slice(1)));
+	await page.getByTestId('builder').getByRole('button', { name: 'Share design' }).click();
+	const dialog = page.getByTestId('share-design');
+	await expect(dialog).toContainText('as last saved');
+	const download = page.waitForEvent('download');
+	await dialog.getByRole('button', { name: 'Save as file' }).click();
+	const file = await download;
+	expect(file.suggestedFilename()).toBe('water.xcwds-app.json');
+	const path = testInfo.outputPath(file.suggestedFilename());
+	await file.saveAs(path);
+	await dialog.getByRole('button', { name: 'Close' }).click();
+	await expect(dialog).toBeHidden();
+
+	const other = await browser.newContext({ viewport: { width: 390, height: 844 } });
+	const theirs = await other.newPage();
+	await gotoHydrated(theirs, url('/my-apps'));
+	await theirs.getByRole('link', { name: 'Add from a file' }).click();
+	await expect(theirs).toHaveURL(url('/my-apps/import'));
+	await theirs.getByLabel('Add an app from a file').setInputFiles({
+		name: 'nope.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from('{"format":1}')
+	});
+	await expect(theirs.getByTestId('import-error')).toHaveText(
+		"This file doesn't contain an app this version can open."
+	);
+	await theirs.getByLabel('Add an app from a file').setInputFiles(path);
+	await expect(theirs.getByTestId('import-preview')).toContainText('Water');
+	await theirs.getByRole('button', { name: 'Cancel' }).click();
+	await expect(theirs).toHaveURL(url('/my-apps'));
+	await expect(theirs.getByTestId('your-apps-empty')).toBeVisible();
+	await other.close();
+});
+
+test('sharing a private app asks first', async ({ page }) => {
+	await add(page, 'Mood');
+	await gotoHydrated(page, url('/my-apps'));
+	const asked: string[] = [];
+	let answer = false;
+	page.on('dialog', (d) => {
+		asked.push(d.message());
+		void (answer ? d.accept() : d.dismiss());
+	});
+	const share = page.getByRole('button', { name: 'Share design of Mood' });
+	await share.click();
+	expect(asked).toEqual([
+		'"Mood" is private. Its name and fields will be visible to whoever gets the link or file. Share it anyway?'
+	]);
+	await expect(page.getByTestId('share-design')).toBeHidden();
+	answer = true;
+	await share.click();
+	await expect(page.getByTestId('share-design')).toBeVisible();
+	await expect(
+		page.getByTestId('share-design').getByRole('button', { name: 'Copy link' })
+	).toBeVisible();
 });

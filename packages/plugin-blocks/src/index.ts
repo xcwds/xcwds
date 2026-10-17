@@ -20,8 +20,9 @@ type ToolsLike = { index: string; apps(): readonly { id: string }[] };
 /**
  * Checks the options when the config loads, so a mistake fails the build, not the page, and adds
  * the pages to the route registry: Your apps at `path`, the pages that run an app at
- * `<path>/app` and `<path>/private`, and the builder at `<path>/edit` and `<path>/private-edit`
- * (the private ones locked, covered and never shared).
+ * `<path>/app` and `<path>/private`, the builder at `<path>/edit` and `<path>/private-edit`
+ * (the private ones locked, covered and never shared), and `<path>/import`, which adds a design
+ * someone shared.
  */
 export const build = definePlugin(
 	(app, input: BlocksPluginOptions) => {
@@ -53,6 +54,8 @@ export const build = definePlugin(
 			width: 'narrow',
 			private: true
 		});
+		// A shared design (#162): its link's fragment carries the design, never the query.
+		app.route({ path: `${path}/import`, title: 'Add a shared app', parent: path, width: 'narrow' });
 		if (options.app === undefined) return;
 		if (!tools) fail('`app` needs `@xcwds/plugin-tools`, registered before this plugin.');
 		if (!tools.apps().some((a) => a.id === options.app))

@@ -295,6 +295,13 @@ export const changelog: ChangelogEntry[] = [
 					'<main class="page-narrow pt-2 pb-6">\n\t<AppBuilder private />\n</main>',
 					"\timport AppBuilder from '@xcwds/plugin-blocks/AppBuilder.svelte';"
 				)
+			},
+			{
+				path: 'src/routes/my-apps/import/+page.svelte',
+				content: page(
+					'<main class="page-narrow pt-2 pb-6">\n\t<ImportApp />\n</main>',
+					"\timport ImportApp from '@xcwds/plugin-blocks/ImportApp.svelte';"
+				)
 			}
 		]
 	}
