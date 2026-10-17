@@ -24,6 +24,7 @@ const PAGES = [
 	'/utils/dice',
 	'/utils/units',
 	'/utils/camera',
+	'/utils/qr',
 	'/utils/journal',
 	'/inbox',
 	'/settings'

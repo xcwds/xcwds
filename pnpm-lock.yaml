@@ -232,6 +232,9 @@ importers:
       '@xcwds/plugin-offline':
         specifier: workspace:*
         version: link:../../packages/plugin-offline
+      '@xcwds/plugin-qr':
+        specifier: workspace:*
+        version: link:../../packages/plugin-qr
       '@xcwds/plugin-settings':
         specifier: workspace:*
         version: link:../../packages/plugin-settings
@@ -275,6 +278,9 @@ importers:
       '@xcwds/testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      jsqr:
+        specifier: ^1.4.0
+        version: 1.4.0
       svelte:
         specifier: ^5.45.6
         version: 5.57.2(@typescript-eslint/types@8.71.2)
@@ -539,6 +545,33 @@ importers:
       '@xcwds/testing':
         specifier: workspace:*
         version: link:../testing
+      svelte:
+        specifier: ^5.45.6
+        version: 5.57.2(@typescript-eslint/types@8.71.2)
+      svelte-check:
+        specifier: ^4.3.4
+        version: 4.7.6(picomatch@4.0.7)(svelte@5.57.2(@typescript-eslint/types@8.71.2))(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^7.2.6
+        version: 7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0)
+      vitest:
+        specifier: ^5.0.0
+        version: 5.0.4(@types/node@24.19.2)(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0))
+
+  packages/plugin-qr:
+    devDependencies:
+      '@sveltejs/package':
+        specifier: ^3.0.0
+        version: 3.0.0(svelte@5.57.2(@typescript-eslint/types@8.71.2))(typescript@5.9.3)
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^6.2.1
+        version: 6.2.4(svelte@5.57.2(@typescript-eslint/types@8.71.2))(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0))
+      jsqr:
+        specifier: ^1.4.0
+        version: 1.4.0
       svelte:
         specifier: ^5.45.6
         version: 5.57.2(@typescript-eslint/types@8.71.2)
@@ -2212,6 +2245,9 @@ packages:
 
   jsonfile@4.0.0:
     resolution: {integrity: sha512-m6F1R3z8jjlf2imQHS2Qez5sjKWQzbuuhuJ/FKYFRZvPE3PuHcSMVZzfsLhGVOkfd20obL5SWEBew5ShlquNxg==}
+
+  jsqr@1.4.0:
+    resolution: {integrity: sha512-dxLob7q65Xg2DvstYkRpkYtmKm2sPJ9oFhrhmudT1dZvNFFTlroai3AWSpLey/w5vMcLBXRgOJsbXpdN9HzU/A==}
 
   keyv@5.6.0:
     resolution: {integrity: sha512-CYDD3SOtsHtyXeEORYRx2qBtpDJFjRTGXUtmNEMGyzYOKj1TE3tycdlho7kA1Ufx9OYWZzg52QFBGALTirzDSw==}
@@ -3973,6 +4009,8 @@ snapshots:
   jsonfile@4.0.0:
     optionalDependencies:
       graceful-fs: 4.2.11
+
+  jsqr@1.4.0: {}
 
   keyv@5.6.0:
     dependencies:

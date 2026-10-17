@@ -67,6 +67,7 @@ export default defineConfig({
 				{ path: '/utils/dice', emoji: '🎲', name: 'Dice', blurb: 'Roll a die.' },
 				{ path: '/utils/units', emoji: '📏', name: 'Units', blurb: 'Convert lengths.' },
 				{ path: '/utils/camera', emoji: '📷', name: 'Camera', blurb: 'Photos with no metadata.' },
+				{ path: '/utils/qr', emoji: '🔳', name: 'QR code', blurb: 'Show text as a QR code.' },
 				// Private: never under Recently used, shared or a shortcut; named discreetly.
 				{
 					path: '/utils/journal',
