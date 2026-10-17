@@ -40,6 +40,10 @@
 			"types": "./dist/photos.d.ts",
 			"default": "./dist/photos.js"
 		},
+		"./share": {
+			"types": "./dist/share.d.ts",
+			"default": "./dist/share.js"
+		},
 		"./Camera.svelte": {
 			"types": "./dist/Camera.svelte.d.ts",
 			"svelte": "./dist/Camera.svelte",

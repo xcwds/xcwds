@@ -7,8 +7,8 @@ camera on only while it's being used. **Work in progress**
 So far it holds the plugin, which hands the app a camera controller as `app.camera`, the
 `<Camera>` viewfinder, the controller itself, from `@xcwds/plugin-camera/camera`, and the image
 cleaning, from `@xcwds/plugin-camera/image`, and the start of keeping photos in the app
-([#146](https://github.com/xcwds/xcwds/issues/146)): `app.photos` and the `<Photos>` grid.
-Sharing and saving a photo out of the app, and importing one, come next.
+([#146](https://github.com/xcwds/xcwds/issues/146)): `app.photos` and the `<Photos>` grid,
+with Share and Save. Selecting several photos and importing one come next.
 
 ## The plugin
 
@@ -115,9 +115,22 @@ const notes = createPhotos(app.blobs, { label: 'Note photos', group: 'notes' });
 - Tapping one opens the viewer (a modal `<dialog>`): **Previous** and **Next**, the arrow keys
   or a swipe step through the photos, Escape or **Close** closes it, and **Delete** deletes the
   photo and opens the next one. **Undo** brings a deleted photo back for 8 seconds.
+- **Share** hands the photo to the system share sheet (Web Share with files). Where the browser
+  can't share files (Firefox on computers, older browsers) the button is **Save**, which
+  downloads it, named for when it was taken (`photo-20261017-083005.jpg`). The first time a
+  photo leaves the app on a page load, the viewer says so: it's now outside the app, and wherever
+  it went may keep or back it up. What leaves is the clean file, with no metadata.
 - While the app is locked ([`@xcwds/plugin-lock`](../plugin-lock/README.md)), nothing is rendered
   and no object URL exists; the lock's cover handles the app switcher.
 - `photos` takes another store instead of `app.photos`; `text` replaces any of the labels.
+
+### Sharing from elsewhere
+
+`@xcwds/plugin-camera/share` has the pieces: `sharePhoto({ blob, takenAt })` shares or saves and
+resolves to `shared`, `saved`, `cancelled` (the share sheet was dismissed) or `failed`, never
+rejecting; `canShareFiles()` says which button to show; `fileName(photo)` and `saveFile(file)`.
+Call `sharePhoto` straight from the tap, with the file already loaded: Safari only opens the share
+sheet while the tap is fresh.
 
 ## The camera controller
 

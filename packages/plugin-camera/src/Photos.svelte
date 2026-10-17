@@ -1,7 +1,13 @@
+<script lang="ts" module>
+	/** Whether this page load has said that a shared or saved photo is outside the app. */
+	let told = false;
+</script>
+
 <script lang="ts">
 	/**
 	 * The photos kept in the app (`@xcwds/plugin-camera`): a grid of thumbnails, newest first, and
-	 * a viewer with Previous and Next (arrow keys and swipes too) and Delete, which can be undone.
+	 * a viewer with Previous and Next (arrow keys and swipes too), Share (or Save where files can't
+	 * be shared) and Delete, which can be undone.
 	 *
 	 * ```svelte
 	 * <Photos />
@@ -14,6 +20,7 @@
 	import { useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
 	import type { PhotoInput, Photos as PhotoStore, SavedPhoto } from './photos.js';
+	import { SHARE_MESSAGES, canShareFiles, sharePhoto } from './share.js';
 
 	type Text = {
 		label: string;
@@ -23,6 +30,10 @@
 		previous: string;
 		next: string;
 		delete: string;
+		share: string;
+		save: string;
+		outside: string;
+		shareFailed: string;
 		deleted: string;
 		undo: string;
 		failed: string;
@@ -36,6 +47,10 @@
 		previous: 'Previous photo',
 		next: 'Next photo',
 		delete: 'Delete',
+		share: 'Share',
+		save: 'Save',
+		outside: SHARE_MESSAGES.outside,
+		shareFailed: SHARE_MESSAGES.failed,
 		deleted: 'Photo deleted.',
 		undo: 'Undo',
 		failed: "The photo couldn't be deleted. Try again.",
@@ -72,6 +87,14 @@
 	/** The photo open in the viewer, by id, and its full-size URL. */
 	let current = $state<string | null>(null);
 	let full = $state<string | null>(null);
+	/** The open photo's file, loaded with it, so Share runs straight from the tap. */
+	let file = $state.raw<{ id: string; blob: Blob } | null>(null);
+	/** Share (the share sheet takes files) or Save (a download). Read in the page only. */
+	let shares = $state(false);
+	/** What the viewer says: that a photo left the app, or that it couldn't. */
+	let notice = $state('');
+	/** The share sheet is open (a second `navigator.share` meanwhile would be refused). */
+	let sharing = $state(false);
 	let dialog: HTMLDialogElement | undefined = $state();
 	const index = $derived(list && current ? list.findIndex((p) => p.id === current) : -1);
 	const shown = $derived(index >= 0 ? list![index] : undefined);
@@ -106,6 +129,7 @@
 		for (const id of Object.keys(urls)) forget(id);
 		if (full) URL.revokeObjectURL(full);
 		full = null;
+		file = null;
 	}
 
 	async function load(photo: SavedPhoto) {
@@ -143,18 +167,22 @@
 		if (!store) return;
 		current = id;
 		message = '';
+		notice = '';
 		if (dialog && !dialog.open) dialog.showModal();
 		const run = ++opening;
 		const blob = await store.get(id);
 		if (run !== opening || current !== id || locked) return;
 		if (full) URL.revokeObjectURL(full);
 		full = blob ? URL.createObjectURL(blob) : null;
+		file = blob ? { id, blob } : null;
 	}
 	function close() {
 		opening++;
 		current = null;
+		notice = '';
 		if (full) URL.revokeObjectURL(full);
 		full = null;
+		file = null;
 		if (dialog?.open) dialog.close();
 	}
 	function step(by: number) {
@@ -203,6 +231,21 @@
 		if (!saved.ok) message = saved.error;
 	}
 
+	/** The photo leaves the app only here, on the person's tap. */
+	async function share() {
+		if (!shown || file?.id !== shown.id || sharing) return;
+		notice = '';
+		sharing = true;
+		const outcome = await sharePhoto({ blob: file.blob, takenAt: shown.takenAt }).finally(
+			() => (sharing = false)
+		);
+		if (outcome === 'failed') notice = t.shareFailed;
+		else if (outcome !== 'cancelled' && !told) {
+			told = true;
+			notice = t.outside;
+		}
+	}
+
 	function keydown(event: KeyboardEvent) {
 		if (event.key === 'ArrowLeft') step(-1);
 		else if (event.key === 'ArrowRight') step(1);
@@ -225,6 +268,7 @@
 	}
 
 	onMount(() => {
+		shares = canShareFiles();
 		const stopLock = lock?.subscribe((state) => {
 			if (state.locked === locked) return;
 			locked = state.locked;
@@ -333,6 +377,12 @@
 					>
 					<button
 						type="button"
+						class="min-h-11 rounded-xl bg-white/15 px-4 font-medium hover:not-disabled:bg-white/25 active:bg-white/25 disabled:opacity-40"
+						onclick={share}
+						disabled={file?.id !== shown.id || sharing}>{shares ? t.share : t.save}</button
+					>
+					<button
+						type="button"
 						class="min-h-11 rounded-xl bg-red-700 px-4 font-medium hover:not-disabled:bg-red-800 active:bg-red-800"
 						onclick={remove}>{t.delete}</button
 					>
@@ -342,6 +392,13 @@
 						onclick={close}>{t.close}</button
 					>
 				</div>
+				<p
+					class="min-h-6 px-3 pb-3 text-center text-sm"
+					aria-live="polite"
+					data-testid="viewer-notice"
+				>
+					{notice}
+				</p>
 			</div>
 		{/if}
 	</dialog>

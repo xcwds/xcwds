@@ -190,6 +190,93 @@ test('the grid opens a photo in the viewer; delete can be undone; a locked app s
 	await expect(undo).toHaveCount(0);
 });
 
+/** Takes `count` photos and opens the newest in the viewer. */
+async function openNewest(page: Page, count = 1) {
+	await gotoHydrated(page, url('/utils/camera'));
+	await page.getByRole('button', { name: 'Turn on camera' }).click();
+	for (let n = 1; n <= count; n++) {
+		await page.getByRole('button', { name: 'Take photo' }).click();
+		await expect(page.getByTestId('kept')).toHaveText(
+			n === 1 ? '1 photo kept' : `${n} photos kept`
+		);
+	}
+	await page.getByRole('button', { name: 'Turn off camera' }).click();
+	await page.getByRole('list', { name: 'Photos' }).getByRole('button').first().click();
+	const viewer = page.getByTestId('photo-viewer');
+	await expect(viewer.locator('img[src^="blob:"]')).toBeVisible();
+	return viewer;
+}
+
+test('where files can’t be shared, Save downloads the photo and says once that it left (#146)', async ({
+	page
+}) => {
+	await page.addInitScript(() => {
+		Object.defineProperty(navigator, 'canShare', { value: () => false });
+	});
+	const viewer = await openNewest(page, 2);
+	const notice = viewer.getByTestId('viewer-notice');
+	const download = page.waitForEvent('download');
+	await viewer.getByRole('button', { name: 'Save' }).click();
+	const file = await download;
+	expect(file.suggestedFilename()).toMatch(/^photo-\d{8}-\d{6}\.jpg$/);
+	await expect(notice).toContainText('That photo is now outside this app');
+	// Once: the next one leaves without saying it again.
+	await viewer.getByRole('button', { name: 'Next photo' }).click();
+	await expect(notice).toHaveText('');
+	const again = page.waitForEvent('download');
+	await viewer.getByRole('button', { name: 'Save' }).click();
+	await again;
+	await expect(notice).toHaveText('');
+});
+
+test('Share hands the clean photo to the share sheet; dismissing it says nothing (#146)', async ({
+	page
+}) => {
+	await page.addInitScript(() => {
+		const w = window as unknown as {
+			shared: { name: string; type: string; size: number }[];
+			dismiss: boolean;
+			hold: boolean;
+			release: () => void;
+		};
+		w.shared = [];
+		w.dismiss = true;
+		Object.defineProperty(navigator, 'canShare', { value: () => true });
+		Object.defineProperty(navigator, 'share', {
+			value: async ({ files }: { files: File[] }) => {
+				// `hold`: the sheet stays open until the test calls `release`.
+				if (w.hold) await new Promise<void>((resolve) => (w.release = resolve));
+				w.hold = false;
+				if (w.dismiss) throw new DOMException('Share canceled', 'AbortError');
+				w.shared.push(...files.map((f) => ({ name: f.name, type: f.type, size: f.size })));
+			}
+		});
+	});
+	const viewer = await openNewest(page);
+	const notice = viewer.getByTestId('viewer-notice');
+	await viewer.getByRole('button', { name: 'Share' }).click();
+	await expect(notice).toHaveText('');
+	// While the share sheet is open, Share waits: a second tap can't make it fail.
+	await page.evaluate(() => ((window as unknown as { hold: boolean }).hold = true));
+	const button = viewer.getByRole('button', { name: 'Share' });
+	await button.click();
+	await expect(button).toBeDisabled();
+	await page.evaluate(() => (window as unknown as { release: () => void }).release());
+	await expect(button).toBeEnabled();
+	await expect(notice).toHaveText('');
+	await page.evaluate(() => ((window as unknown as { dismiss: boolean }).dismiss = false));
+	await viewer.getByRole('button', { name: 'Share' }).click();
+	await expect(notice).toContainText('That photo is now outside this app');
+	const shared = await page.evaluate(() => (window as unknown as { shared: unknown[] }).shared);
+	expect(shared).toEqual([
+		{
+			name: expect.stringMatching(/^photo-\d{8}-\d{6}\.jpg$/),
+			type: 'image/jpeg',
+			size: expect.any(Number)
+		}
+	]);
+});
+
 test('leaving right after the shutter lets the photo finish before the camera turns off', async ({
 	page
 }) => {
