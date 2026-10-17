@@ -1,13 +1,11 @@
 # @xcwds/plugin-camera
 
 Photos taken inside an [@xcwds](https://github.com/xcwds/xcwds) app, with no metadata and the
-camera on only while it's being used. **Work in progress**
-([#145](https://github.com/xcwds/xcwds/issues/145)): not published yet.
+camera on only while it's being used.
 
-So far it holds the plugin, which hands the app a camera controller as `app.camera`, the
-`<Camera>` viewfinder, the controller itself, from `@xcwds/plugin-camera/camera`, and the image
-cleaning, from `@xcwds/plugin-camera/image`, and the start of keeping photos in the app
-([#146](https://github.com/xcwds/xcwds/issues/146)): `app.photos` and the `<Photos>` grid,
+It holds the plugin, which hands the app a camera controller as `app.camera`, the `<Camera>`
+viewfinder, the controller itself (`@xcwds/plugin-camera/camera`), image cleaning
+(`@xcwds/plugin-camera/image`), and photos kept in the app: `app.photos` and the `<Photos>` grid,
 with Share, Save, Add from files and Select.
 
 What each browser lets the camera do (zoom, torch, Web Share with files, and the rest) is in

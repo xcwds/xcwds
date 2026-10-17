@@ -58,7 +58,9 @@ export const PACKAGES = [
 	'plugin-timers',
 	'plugin-share',
 	'plugin-changelog',
-	'plugin-lock'
+	'plugin-lock',
+	'plugin-camera',
+	'plugin-qr'
 ];
 
 const read = (file: string) => readFileSync(join(ROOT, file), 'utf8');

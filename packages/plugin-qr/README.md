@@ -2,8 +2,7 @@
 
 QR codes made and read on the device in an [@xcwds](https://github.com/xcwds/xcwds)
 app. Most QR sites and apps see everything you turn into a code or scan; this one sends nothing
-anywhere. **Work in progress** ([#147](https://github.com/xcwds/xcwds/issues/147)): not
-published yet.
+anywhere.
 
 It makes codes (`<QrCode>` and `qrSvg()`, from its own encoder), reads them from still images
 (`scan()`) and from the camera (`<QrScanner>`). No WASM anywhere, so the app's Content Security
