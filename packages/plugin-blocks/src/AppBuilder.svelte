@@ -28,6 +28,7 @@
 	import { blankApp, blankBlock, dataLoss, lossText, move } from './edit.js';
 	import { LIMITS, parseApp, type AppDefinition, type Block } from './format.js';
 	import { go, href } from './navigate.js';
+	import ShareDesign from './ShareDesign.svelte';
 	import { button, card, field as input, muted, primary } from './ui.js';
 
 	let { private: personal = false }: { private?: boolean } = $props();
@@ -434,6 +435,9 @@
 					<button type="submit" class={primary}>Save</button>
 					<button type="button" class={button} onclick={showPreview}>Preview</button>
 					<button type="button" class={button} onclick={discard}>Discard changes</button>
+					{#if before}
+						<ShareDesign design={before} note="It shares the app as last saved." />
+					{/if}
 				</div>
 			</div>
 		</form>

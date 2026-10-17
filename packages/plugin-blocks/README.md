@@ -5,9 +5,9 @@ log), defined as data rather than code (RFC 0001, decision 14).
 
 It holds the definition format and the logic of each block, from `@xcwds/plugin-blocks/model`;
 the plugin, which saves your apps and their data on the device (`app.blocks`) and adds each one to
-`@xcwds/plugin-tools` as a tool; and the pages: Your apps, with New app and Add from a template,
-the page that runs an app, and the builder that makes or edits one. `pnpm xcwds add blocks` adds
-it to an app. Still to come: sharing apps ([#162](https://github.com/xcwds/xcwds/issues/162)).
+`@xcwds/plugin-tools` as a tool; and the pages: Your apps, with New app, Add from a file and Add
+from a template, the page that runs an app, the builder that makes or edits one, and the page
+that adds an app someone shared. `pnpm xcwds add blocks` adds it to an app.
 
 ## The plugin
 
@@ -65,6 +65,13 @@ Add each page's route file, and the components' styles after Tailwind and the sh
 </script>
 
 <main class="page-narrow"><AppBuilder /></main>
+
+<!-- src/routes/my-apps/import/+page.svelte -->
+<script lang="ts">
+	import ImportApp from '@xcwds/plugin-blocks/ImportApp.svelte';
+</script>
+
+<main class="page-narrow"><ImportApp /></main>
 ```
 
 ```css
@@ -72,8 +79,9 @@ Add each page's route file, and the components' styles after Tailwind and the sh
 @import '@xcwds/plugin-blocks/styles.css';
 ```
 
-- **`<YourApps>`**: New app; your apps, each with its size and Delete (it asks with the app's
-  name, then offers Undo); how much they take up together, with a warning near the browser's
+- **`<YourApps>`**: New app and Add from a file; your apps, each with its size, Share design (for a
+  private app, only while unlocked) and
+  Delete (it asks with the app's name, then offers Undo); how much they take up together, with a warning near the browser's
   limit; and Add from a template, which saves a copy and opens it.
 - **`<BlocksApp>`**: runs the app whose id is in the fragment. The header shows its name
   (`app.shell.setTitle`; a private page's `<title>` stays "Private app"). An app opened on the
@@ -96,10 +104,22 @@ Add each page's route file, and the components' styles after Tailwind and the sh
   back until Save or Discard changes; one draft at a time. A private draft only comes back where the
   lock covers it: on the normal page while unlocked, or on the private page (a new private app's
   draft goes there). Preview shows the app as it will
-  look, working on data that's thrown away ("Preview, nothing saved").
+  look, working on data that's thrown away ("Preview, nothing saved"). An app that's saved also
+  has Share design, which shares it as last saved.
+- **Share design** (`<ShareDesign design={app} />`, also on its own): a dialog with Share link
+  (the system share sheet, where there is one), Copy link and Save as file
+  (`<name>.xcwds-app.json`). It shares how the app is built, never what's saved in it, and asks
+  first for a private app. A design whose link would be over 8 KB (`MAX_LINK`) is offered as a
+  file only.
+- **`<ImportApp>`**: opens a shared link (`<path>/import#app=<data>`) or, without one, lets you
+  choose a file. It takes the design out of the address bar and history as soon as it's read,
+  says it came from someone else, and lists the name, emoji and every block, item and field as
+  text. Add app saves a copy with a new id (so it never replaces one of yours) and opens it;
+  Cancel goes back to Your apps. A link or file that isn't a design this version can open says
+  only that.
 
 With `@xcwds/plugin-share`, add `path` to its `exclude`: a link to `<path>/app` or `<path>/edit`
-opens nothing on another device.
+opens nothing on another device, and `<path>/import` isn't worth sharing without its fragment.
 
 ### `app.blocks`
 
@@ -222,6 +242,19 @@ Fields, items and options are matched by id, so renaming one keeps its data. Wha
   builder, with new ids. **`move(list, index, by)`**: Move up (`-1`) and Move down (`1`).
 - **`parseDraft(raw)`**: reads a saved draft back, allowing what a builder holds mid-edit (an
   empty name or label) but only shapes it can show; `parseApp` still checks it at Save.
+
+## Sharing a design
+
+A shared design is the definition without its `id` (#162), from `@xcwds/plugin-blocks/model`:
+
+- **`encodeDesign(app)`**: the link's `<data>`: the JSON compressed with
+  `CompressionStream('deflate-raw')` and base64url-encoded, or, without `CompressionStream`,
+  uncompressed after a `u.` prefix. **`designFragment(data)`** makes `#app=<data>` and
+  **`dataOf(hash)`** reads it back. It lives in the fragment, which browsers never send to a
+  server.
+- **`decodeDesign(data)`**: the design, checked by `parseApp`, with a new id; anything that isn't
+  one (corrupt, another format, over the limits, or inflating past them) gives `NOT_AN_APP`.
+- **`designFile(app)`** (`{ name, text }`) and **`readDesignFile(text)`**: the same as a file.
 
 ## Templates
 

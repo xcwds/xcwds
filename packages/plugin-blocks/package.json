@@ -41,6 +41,16 @@
 			"svelte": "./dist/AppBuilder.svelte",
 			"default": "./dist/AppBuilder.svelte"
 		},
+		"./ImportApp.svelte": {
+			"types": "./dist/ImportApp.svelte.d.ts",
+			"svelte": "./dist/ImportApp.svelte",
+			"default": "./dist/ImportApp.svelte"
+		},
+		"./ShareDesign.svelte": {
+			"types": "./dist/ShareDesign.svelte.d.ts",
+			"svelte": "./dist/ShareDesign.svelte",
+			"default": "./dist/ShareDesign.svelte"
+		},
 		"./styles.css": "./dist/styles.css",
 		"./package.json": "./package.json"
 	},
