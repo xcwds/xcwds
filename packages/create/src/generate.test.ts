@@ -99,6 +99,27 @@ describe('appFiles', () => {
 		expect(pkg.devDependencies['@sveltejs/kit']).toMatch(/\d/);
 	});
 
+	it('wires up the camera and QR codes, with QR bringing the camera', () => {
+		expect(withRequirements(['qr'])).toEqual(['shell', 'camera', 'qr']);
+		const files = appFiles({ name: 'Box', plugins: ['qr'] });
+		const config = files.get('xcwds.config.ts')!;
+		expect(config).toContain("import camera from '@xcwds/plugin-camera';");
+		expect(config).toContain("import qr from '@xcwds/plugin-qr';");
+		expect(config).toContain('\t\tcamera(),');
+		expect(config).toMatch(/\t\tqr\(\),?\n/);
+		expect(config).toContain("\t{ path: '/camera', label: 'Camera', emoji: '📷' }");
+		expect(config).toContain("\t{ path: '/qr', label: 'QR', emoji: '🔳' }");
+		const css = files.get('src/xcwds.css')!;
+		expect(css).toContain("@import '@xcwds/plugin-camera/styles.css';");
+		expect(css).toContain("@import '@xcwds/plugin-qr/styles.css';");
+		expect(files.get('src/routes/camera/+page.svelte')).toContain('<Camera onCapture={keep} />');
+		expect(files.get('src/routes/camera/+page.svelte')).toContain('`app.photos`');
+		expect(files.get('src/routes/qr/+page.svelte')).toContain('<QrScanner');
+		const pkg = JSON.parse(files.get('package.json')!);
+		expect(pkg.dependencies['@xcwds/plugin-camera']).toMatch(/^\^\d/);
+		expect(pkg.dependencies['@xcwds/plugin-qr']).toMatch(/^\^\d/);
+	});
+
 	it('depends on the workspace for this repository CI, and quotes names safely', () => {
 		const files = appFiles({ name: "Bob's {app}", plugins: [], workspace: true });
 		expect(JSON.parse(files.get('package.json')!).dependencies['@xcwds/core']).toBe('workspace:*');
