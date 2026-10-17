@@ -156,23 +156,38 @@ test('the grid opens a photo in the viewer; delete can be undone; a locked app s
 	await expect(tiles).toHaveCount(3);
 	await expect(page.getByTestId('kept')).toHaveText('3 photos kept');
 
-	// Locked: no grid and no object URLs for its photos.
+	// Locked on this page (hidden with "Right away"): no grid and no object URLs.
 	await gotoHydrated(page, url('/settings'));
 	const lock = page.getByTestId('passcode-lock');
 	await lock.getByRole('button', { name: 'Set a passcode' }).click();
 	await lock.getByLabel('Passcode', { exact: true }).fill('246810');
 	await lock.getByLabel('Same again').fill('246810');
 	await lock.getByRole('button', { name: 'Save passcode' }).click();
-	await lock.getByRole('button', { name: 'Lock now' }).click();
-	await page.getByRole('link', { name: /Utils/ }).first().click();
-	await page
-		.getByRole('link', { name: /Camera/ })
-		.first()
-		.click();
+	await lock.getByRole('radio', { name: 'Right away' }).check();
+	const go = async (name: RegExp) => {
+		await page.getByRole('link', { name: /Utils/ }).first().click();
+		await page.getByRole('link', { name }).first().click();
+	};
+	await go(/Camera/);
+	await tiles.first().click();
+	await viewer.getByRole('button', { name: 'Delete' }).click();
+	await expect(page.getByTestId('kept')).toHaveText('2 photos kept');
+	await viewer.getByRole('button', { name: 'Close' }).click();
+	const undo = page.getByTestId('photos-status').getByRole('button', { name: 'Undo' });
+	await expect(undo).toBeVisible();
+	await setHidden(page, true);
+	await setHidden(page, false);
 	await expect(page).toHaveURL(url('/utils/camera'));
-	await expect(page.getByTestId('kept')).toHaveText('3 photos kept');
 	await expect(page.getByTestId('photos')).toHaveCount(0);
 	await expect(page.locator('img[src^="blob:"]')).toHaveCount(0);
+	// Unlocked again (through the Journal, a private page): the photos are back, with no stale Undo.
+	await go(/Journal/);
+	await page.getByTestId('unlock').getByLabel('Passcode').fill('246810');
+	await page.getByTestId('unlock').getByRole('button', { name: 'Unlock' }).click();
+	await expect(page).toHaveURL(/\/utils\/journal$/);
+	await go(/Camera/);
+	await expect(tiles).toHaveCount(2);
+	await expect(undo).toHaveCount(0);
 });
 
 test('leaving right after the shutter lets the photo finish before the camera turns off', async ({

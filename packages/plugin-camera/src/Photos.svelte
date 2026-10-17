@@ -16,6 +16,7 @@
 	import type { PhotoInput, Photos as PhotoStore, SavedPhoto } from './photos.js';
 
 	type Text = {
+		label: string;
 		empty: string;
 		open: string;
 		close: string;
@@ -28,6 +29,7 @@
 		missing: string;
 	};
 	const defaults: Text = {
+		label: 'Photos',
 		empty: 'No photos yet.',
 		open: 'Photo taken',
 		close: 'Close',
@@ -227,6 +229,9 @@
 			if (state.locked === locked) return;
 			locked = state.locked;
 			if (locked) {
+				// A lock's reset may clear the photos: Undo must not bring one back.
+				if (undo) clearTimeout(undo.timer);
+				undo = null;
 				close();
 				forgetAll();
 				list = undefined;
@@ -250,7 +255,7 @@
 		{:else if list && list.length === 0}
 			<p class="text-(--xcwds-shell-muted)">{t.empty}</p>
 		{:else if list}
-			<ul class="grid grid-cols-3 gap-1 sm:grid-cols-4" aria-label="Photos">
+			<ul class="grid grid-cols-3 gap-1 sm:grid-cols-4" aria-label={t.label}>
 				{#each list as photo (photo.id)}
 					<li>
 						<button
