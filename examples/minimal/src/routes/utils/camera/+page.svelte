@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Camera from '@xcwds/plugin-camera/Camera.svelte';
+	import Photos from '@xcwds/plugin-camera/Photos.svelte';
 	import type { Photo } from '@xcwds/plugin-camera/client';
 	import { readMetadata } from '@xcwds/plugin-camera/image';
 	import { useApp } from '@xcwds/sveltekit';
@@ -58,4 +59,5 @@
 			</figcaption>
 		</figure>
 	{/if}
+	<Photos />
 </main>

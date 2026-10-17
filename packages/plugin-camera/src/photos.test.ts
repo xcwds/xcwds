@@ -169,19 +169,28 @@ describe('createPhotos', () => {
 		expect(await photos.delete(saved.id)).toBe(true);
 	});
 
-	it('reports changes to its own collection and to clears', async () => {
+	it('reports its own saves and deletes, changes to its collection and clears', async () => {
 		const { photos, blobs } = store();
 		const other = blobs.register({ key: 'other', label: 'Other' });
 		const seen = vi.fn();
 		const stop = photos.onChange(seen);
 		await blobs.clear(other);
 		expect(seen).not.toHaveBeenCalled();
+		const saved = await photos.save({ blob: jpeg(), width: 1, height: 1 });
+		expect(seen).toHaveBeenCalledTimes(1);
+		if (!saved.ok) throw new Error(saved.error);
+		await photos.delete(saved.id);
+		expect(seen).toHaveBeenCalledTimes(2);
+		// Nothing to delete: nothing changed.
+		await photos.delete(saved.id);
+		expect(seen).toHaveBeenCalledTimes(2);
 		await blobs.clear(photos.collection);
 		await blobs.clear();
-		expect(seen).toHaveBeenCalledTimes(2);
+		expect(seen).toHaveBeenCalledTimes(4);
 		stop();
 		await blobs.clear();
-		expect(seen).toHaveBeenCalledTimes(2);
+		await photos.save({ blob: jpeg(), width: 1, height: 1 });
+		expect(seen).toHaveBeenCalledTimes(4);
 	});
 });
 

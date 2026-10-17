@@ -45,6 +45,11 @@
 			"svelte": "./dist/Camera.svelte",
 			"default": "./dist/Camera.svelte"
 		},
+		"./Photos.svelte": {
+			"types": "./dist/Photos.svelte.d.ts",
+			"svelte": "./dist/Photos.svelte",
+			"default": "./dist/Photos.svelte"
+		},
 		"./styles.css": "./dist/styles.css",
 		"./package.json": "./package.json"
 	},
