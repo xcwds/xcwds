@@ -1,5 +1,12 @@
 # @xcwds/create
 
+## 0.2.4
+
+### Patch Changes
+
+- 2cb06ac: `npm create @xcwds` and `xcwds add` know `blocks` (Your apps: small apps people add from templates), kept out of the Share button.
+- 08c3f09: `npm create @xcwds` and `xcwds add` know `camera` (a Camera page with photos kept in the app) and `qr` (a QR page to make and scan codes; it adds `camera`).
+
 ## 0.2.3
 
 ### Patch Changes
