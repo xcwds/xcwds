@@ -136,8 +136,8 @@ test('Settings says the app contacts no servers, and lists every plugin', async 
 	const privacy = page.getByTestId('settings-privacy');
 	await expect(privacy.getByRole('heading', { name: 'Privacy' })).toBeVisible();
 	await expect(privacy).toContainText('Minimal never contacts a server.');
-	await privacy.getByText('Plugins (14)').click();
-	await expect(privacy.getByRole('listitem')).toHaveCount(14);
+	await privacy.getByText('Plugins (15)').click();
+	await expect(privacy.getByRole('listitem')).toHaveCount(15);
 	await expect(privacy.getByRole('listitem').first()).toHaveText(
 		/@xcwds\/plugin-shell\s*No network/
 	);

@@ -6,9 +6,11 @@ log), defined as data rather than code (RFC 0001, decision 14). **Work in progre
 install yet.
 
 So far it holds the definition format and the logic of each block, from
-`@xcwds/plugin-blocks/model`, and the plugin, which saves your apps and their data on the device
-(`app.blocks`) and adds each one to `@xcwds/plugin-tools` as a tool. The pages that run apps come
-next; building your own apps is #161 and sharing them #162.
+`@xcwds/plugin-blocks/model`; the plugin, which saves your apps and their data on the device
+(`app.blocks`) and adds each one to `@xcwds/plugin-tools` as a tool; and the pages: Your apps, with
+Add from a template, and the page that runs an app. Still to come: log charts and editing
+entries, how much storage your apps use, then building your own apps (#161) and sharing them
+(#162).
 
 ## The plugin
 
@@ -34,7 +36,49 @@ Options (all JSON):
 - **`app`**: the id of an app in `@xcwds/plugin-tools`' `apps` that your apps join as tools. The build
   fails when it isn't one of them (register this plugin after `tools()`).
 
-It declares `network: false`.
+It declares `network: false`. Its build entry adds three pages to the route registry: Your apps at
+`path` (under the tools index, with plugin-tools), and `<path>/app` and `<path>/private` (private,
+so `@xcwds/plugin-lock` locks it, its cover applies and Share skips it).
+
+### The pages
+
+Add each page's route file, and the components' styles after Tailwind and the shell's:
+
+```svelte
+<!-- src/routes/my-apps/+page.svelte -->
+<script lang="ts">
+	import YourApps from '@xcwds/plugin-blocks/YourApps.svelte';
+</script>
+
+<main class="page-wide"><YourApps /></main>
+
+<!-- src/routes/my-apps/app/+page.svelte, and the same with <BlocksApp private /> in
+     src/routes/my-apps/private/+page.svelte -->
+<script lang="ts">
+	import BlocksApp from '@xcwds/plugin-blocks/BlocksApp.svelte';
+</script>
+
+<main class="page-narrow"><BlocksApp /></main>
+```
+
+```css
+/* app.css */
+@import '@xcwds/plugin-blocks/styles.css';
+```
+
+- **`<YourApps>`**: your apps, each with Delete (it asks with the app's name, then offers Undo),
+  and Add from a template, which saves a copy and opens it.
+- **`<BlocksApp>`**: runs the app whose id is in the fragment. The header shows its name
+  (`app.shell.setTitle`; a private page's `<title>` stays "Private app"). An app opened on the
+  wrong one of the two pages goes to the right one, and an id that isn't on this device says so
+  with a link back. A checklist ticks items off (a repeating one says when it's back), a counter
+  has − and + with its goal and past days or weeks, a log adds entries from its fields and lists
+  them newest first (Delete offers Undo), and notes save as you type. Each change saves from
+  what's stored now, so another tab's change isn't lost; while `app.lock` is locked a private
+  app shows nothing.
+
+With `@xcwds/plugin-share`, add `path` to its `exclude`: a link to `<path>/app` opens nothing on
+another device.
 
 ### `app.blocks`
 

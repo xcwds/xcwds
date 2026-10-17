@@ -1,0 +1,168 @@
+// Your apps (@xcwds/plugin-blocks, #160) in examples/minimal: apps added from templates at
+// /my-apps, run at /my-apps/app#<id> or, private, /my-apps/private#<id>.
+import { expect, test, type Page } from '@playwright/test';
+import {
+	auditTapTargets,
+	gotoHydrated,
+	serveStatic,
+	type StaticServer
+} from '@xcwds/testing/playwright';
+import { fileURLToPath } from 'node:url';
+
+test.use({ viewport: { width: 390, height: 844 } });
+
+const build = fileURLToPath(new URL('../build', import.meta.url));
+let server: StaticServer;
+const url = (path: string) => server.url(path);
+
+test.beforeAll(async () => {
+	server = await serveStatic(build);
+});
+test.afterAll(() => server.close());
+
+/** Adds a template from Your apps, which opens it; returns its id. */
+async function add(page: Page, name: string): Promise<string> {
+	await gotoHydrated(page, url('/my-apps'));
+	await page.getByRole('button', { name: new RegExp(`^Add ${name}`) }).click();
+	await expect(page.getByTestId('blocks-app')).toBeVisible();
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText(new RegExp(`${name}$`));
+	return (await page.getByTestId('blocks-app').getAttribute('data-app-id'))!;
+}
+
+test('a counter from a template counts, keeps its count, and joins the tools', async ({ page }) => {
+	await gotoHydrated(page, url('/utils'));
+	await page.getByTestId('your-apps-link').click();
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Your apps$/);
+	await expect(page.getByTestId('your-apps-empty')).toBeVisible();
+
+	const id = await add(page, 'Water');
+	await expect(page).toHaveURL(url(`/my-apps/app#${id}`));
+	await expect(page).toHaveTitle('Water · Minimal');
+	const more = page.getByRole('button', { name: 'One more: Glasses today' });
+	for (let i = 0; i < 3; i++) await more.click();
+	await page.getByRole('button', { name: 'One less: Glasses today' }).click();
+	await expect(page.getByTestId('counter-value')).toHaveText('2 / 8');
+	await page.reload();
+	await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+	await expect(page.getByTestId('counter-value')).toHaveText('2 / 8');
+	expect(await auditTapTargets(page)).toEqual([]);
+
+	// One of the tools: pinned on Home, and opened from there.
+	await gotoHydrated(page, url('/utils'));
+	await page.getByRole('button', { name: 'Pin Water to Home' }).click();
+	await gotoHydrated(page, url('/'));
+	await page.getByTestId('pinned').getByRole('link', { name: /Water/ }).click();
+	await expect(page).toHaveURL(url(`/my-apps/app#${id}`));
+	await expect(page.getByTestId('counter-value')).toHaveText('2 / 8');
+	// The header goes back to Your apps.
+	await page.locator('header [data-shell-back]').click();
+	await expect(page).toHaveURL(url('/my-apps'));
+	await expect(page.getByTestId('your-apps').getByRole('link')).toHaveText([/Water/]);
+});
+
+test('a checklist ticks items off and keeps them through a reload', async ({ page }) => {
+	await add(page, 'Chores');
+	await expect(page.getByTestId('checklist-progress')).toHaveText('0 of 4 done');
+	await page.getByRole('checkbox', { name: /Dishes/ }).check();
+	await expect(page.getByTestId('checklist-progress')).toHaveText('1 of 4 done');
+	await expect(page.getByText('Every day · Back tomorrow')).toBeVisible();
+	await page.reload();
+	await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+	await expect(page.getByRole('checkbox', { name: /Dishes/ })).toBeChecked();
+	await page.getByRole('checkbox', { name: /Dishes/ }).uncheck();
+	await expect(page.getByTestId('checklist-progress')).toHaveText('0 of 4 done');
+});
+
+test('a private app logs entries and notes, deletes with Undo, and stays out of Recently used', async ({
+	page
+}) => {
+	const id = await add(page, 'Mood');
+	await expect(page).toHaveURL(url(`/my-apps/private#${id}`));
+	// The header says Mood; the tab keeps the private page's own title.
+	await expect(page).toHaveTitle('Private app · Minimal');
+
+	// An empty entry is refused, inline.
+	await page.getByRole('button', { name: 'Add entry' }).click();
+	await expect(page.getByRole('alert')).toHaveText('Fill in at least one field.');
+	await page.getByText('4', { exact: true }).click();
+	await page.getByLabel('Sleep (h)').fill('7.5');
+	await page.getByRole('textbox', { name: 'Note', exact: true }).fill('<b>fine</b>');
+	await page.getByRole('button', { name: 'Add entry' }).click();
+	const entries = page.getByTestId('log-entry');
+	await expect(entries).toHaveCount(1);
+	await expect(entries.first()).toContainText(/Mood\s*4 of 5/);
+	await expect(entries.first()).toContainText(/Sleep\s*7.5 h/);
+	// Text stays text.
+	await expect(entries.first()).toContainText('<b>fine</b>');
+	await expect(page.getByLabel('Sleep (h)')).toHaveValue('');
+
+	await entries
+		.first()
+		.getByRole('button', { name: /Delete/ })
+		.click();
+	await expect(entries).toHaveCount(0);
+	await page.getByRole('button', { name: 'Undo' }).click();
+	await expect(entries).toHaveCount(1);
+
+	await page.getByRole('textbox', { name: 'Notes' }).fill('slept badly on Tuesday');
+	await page.getByRole('textbox', { name: 'Notes' }).blur();
+	await page.reload();
+	await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+	await expect(page.getByRole('textbox', { name: 'Notes' })).toHaveValue('slept badly on Tuesday');
+	await expect(entries).toHaveCount(1);
+	expect(await auditTapTargets(page)).toEqual([]);
+
+	// Opened on the normal page, it moves to the private one.
+	await gotoHydrated(page, url(`/my-apps/app#${id}`));
+	await expect(page).toHaveURL(url(`/my-apps/private#${id}`));
+	await expect(page.getByTestId('blocks-app')).toBeVisible();
+
+	await gotoHydrated(page, url('/'));
+	await expect(page.getByTestId('recent').getByRole('link', { name: /Mood/ })).toHaveCount(0);
+});
+
+test("an app that isn't here says so; deleting one from the list can be undone", async ({
+	page
+}) => {
+	await gotoHydrated(page, url('/my-apps/app#nothing'));
+	await expect(page.getByTestId('blocks-missing')).toContainText("This app isn't on this device.");
+	await page.getByTestId('blocks-missing').getByRole('link', { name: 'Your apps' }).click();
+	await expect(page).toHaveURL(url('/my-apps'));
+
+	await add(page, 'Water');
+	await gotoHydrated(page, url('/my-apps'));
+	expect(await auditTapTargets(page)).toEqual([]);
+	const dialogs: string[] = [];
+	page.on('dialog', (dialog) => {
+		dialogs.push(dialog.message());
+		void dialog.accept();
+	});
+	await page.getByRole('button', { name: 'Delete Water' }).click();
+	expect(dialogs).toEqual(['Delete "Water" and everything saved in it?']);
+	await expect(page.getByTestId('your-apps-empty')).toBeVisible();
+	await page.getByRole('button', { name: 'Undo' }).click();
+	await expect(page.getByTestId('your-apps').getByRole('link')).toHaveText([/Water/]);
+});
+
+test('a private app waits behind the passcode lock', async ({ page }) => {
+	await add(page, 'Mood');
+	await gotoHydrated(page, url('/settings'));
+	const lock = page.getByTestId('passcode-lock');
+	await lock.getByRole('button', { name: 'Set a passcode' }).click();
+	await lock.getByLabel('Passcode', { exact: true }).fill('246810');
+	await lock.getByLabel('Same again').fill('246810');
+	await lock.getByRole('button', { name: 'Save passcode' }).click();
+	await lock.getByRole('button', { name: 'Lock now' }).click();
+
+	// Links only: every page load starts locked.
+	await page.getByRole('link', { name: /Utils/ }).first().click();
+	await page.getByTestId('your-apps-link').click();
+	await page.getByRole('link', { name: /Mood/ }).click();
+	await expect(page).toHaveURL(/\/unlock$/);
+	await expect(page.getByTestId('blocks-app')).toHaveCount(0);
+	const screen = page.getByTestId('unlock');
+	await screen.getByLabel('Passcode').fill('246810');
+	await screen.getByRole('button', { name: 'Unlock' }).click();
+	await expect(page).toHaveURL(/\/my-apps\/private#/);
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Mood$/);
+});

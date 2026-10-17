@@ -5,7 +5,10 @@
 	"description": "Small apps people add to an @xcwds app (checklists, counters, logs, notes), defined as data rather than code. Work in progress (#160), not published yet.",
 	"license": "MIT",
 	"type": "module",
-	"sideEffects": false,
+	"sideEffects": [
+		"**/*.svelte",
+		"**/*.css"
+	],
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/xcwds/xcwds.git",
@@ -24,6 +27,17 @@
 			"types": "./dist/model.d.ts",
 			"default": "./dist/model.js"
 		},
+		"./YourApps.svelte": {
+			"types": "./dist/YourApps.svelte.d.ts",
+			"svelte": "./dist/YourApps.svelte",
+			"default": "./dist/YourApps.svelte"
+		},
+		"./BlocksApp.svelte": {
+			"types": "./dist/BlocksApp.svelte.d.ts",
+			"svelte": "./dist/BlocksApp.svelte",
+			"default": "./dist/BlocksApp.svelte"
+		},
+		"./styles.css": "./dist/styles.css",
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -31,15 +45,22 @@
 		"!dist/**/*.test.*"
 	],
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json",
-		"check": "tsc -p tsconfig.json --noEmit",
+		"build": "svelte-package -i src -o dist",
+		"check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
 		"publint": "publint"
 	},
 	"devDependencies": {
+		"@sveltejs/kit": "^2.49.1",
+		"@sveltejs/package": "^3.0.0",
+		"@sveltejs/vite-plugin-svelte": "^6.2.1",
 		"@xcwds/core": "workspace:^",
 		"@xcwds/plugin-tools": "workspace:^",
+		"@xcwds/sveltekit": "workspace:^",
 		"@xcwds/testing": "workspace:*",
+		"svelte": "^5.45.6",
+		"svelte-check": "^4.3.4",
 		"typescript": "^5.9.3",
+		"vite": "^7.2.6",
 		"vitest": "^5.0.0"
 	},
 	"keywords": [
@@ -55,6 +76,9 @@
 	},
 	"types": "./dist/index.d.ts",
 	"peerDependencies": {
-		"@xcwds/core": "workspace:^"
+		"@sveltejs/kit": "^2.20.0",
+		"@xcwds/core": "workspace:^",
+		"@xcwds/sveltekit": "workspace:^",
+		"svelte": "^5.0.0"
 	}
 }
