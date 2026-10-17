@@ -16,7 +16,7 @@ export type ShareOutcome = 'shared' | 'saved' | 'cancelled' | 'failed';
 export const SHARE_MESSAGES = {
 	/** Said once, the first time a photo leaves the app. */
 	outside:
-		'That photo is now outside this app: wherever it went (your gallery, a chat) may keep or back it up.',
+		'Photos you share or save are outside this app: wherever they go (your gallery, a chat) may keep or back them up.',
 	failed: "The photo couldn't be shared or saved."
 } as const;
 
@@ -76,23 +76,45 @@ export function saveFile(file: File, env: ShareEnv = {}): ShareOutcome {
  * Shares `blob` as a file named for when it was taken, or saves it where files can't be shared.
  * Never rejects: a dismissed share sheet is `cancelled`.
  */
-export async function sharePhoto(
+export function sharePhoto(
 	photo: { blob: Blob; takenAt: number },
 	env: ShareEnv = {}
 ): Promise<ShareOutcome> {
-	const type = photo.blob.type || 'image/jpeg';
-	const file = new File([photo.blob], fileName({ takenAt: photo.takenAt, type }), { type });
+	return sharePhotos([photo], env);
+}
+
+/**
+ * Shares several photos in one share sheet, or saves each where files can't be shared (or where
+ * the browser won't take this many at once). Files taken in the same second get `-2`, `-3`…
+ * Never rejects.
+ */
+export async function sharePhotos(
+	photos: readonly { blob: Blob; takenAt: number }[],
+	env: ShareEnv = {}
+): Promise<ShareOutcome> {
+	if (!photos.length) return 'cancelled';
+	const used: Record<string, number> = {};
+	const files = photos.map((photo) => {
+		const type = photo.blob.type || 'image/jpeg';
+		let name = fileName({ takenAt: photo.takenAt, type });
+		const seen = (used[name] = (used[name] ?? 0) + 1);
+		if (seen > 1) name = name.replace(/(\.\w+)$/, `-${seen}$1`);
+		return new File([photo.blob], name, { type });
+	});
 	const n = nav(env);
 	let can: boolean;
 	try {
-		can = canShareFiles(env) && n!.canShare({ files: [file] });
+		can = canShareFiles(env) && n!.canShare({ files });
 	} catch {
 		can = false;
 	}
-	if (!can) return saveFile(file, env);
+	if (!can) {
+		const outcomes = files.map((file) => saveFile(file, env));
+		return outcomes.includes('failed') ? 'failed' : 'saved';
+	}
 	try {
 		// Call it straight from the tap (Safari needs the tap's activation): no await before this.
-		await n!.share({ files: [file] });
+		await n!.share({ files });
 		return 'shared';
 	} catch (e) {
 		return e instanceof DOMException && e.name === 'AbortError' ? 'cancelled' : 'failed';

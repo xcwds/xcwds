@@ -220,7 +220,7 @@ test('where files can’t be shared, Save downloads the photo and says once that
 	await viewer.getByRole('button', { name: 'Save' }).click();
 	const file = await download;
 	expect(file.suggestedFilename()).toMatch(/^photo-\d{8}-\d{6}\.jpg$/);
-	await expect(notice).toContainText('That photo is now outside this app');
+	await expect(notice).toContainText('Photos you share or save are outside this app');
 	// Once: the next one leaves without saying it again.
 	await viewer.getByRole('button', { name: 'Next photo' }).click();
 	await expect(notice).toHaveText('');
@@ -267,7 +267,7 @@ test('Share hands the clean photo to the share sheet; dismissing it says nothing
 	await expect(notice).toHaveText('');
 	await page.evaluate(() => ((window as unknown as { dismiss: boolean }).dismiss = false));
 	await viewer.getByRole('button', { name: 'Share' }).click();
-	await expect(notice).toContainText('That photo is now outside this app');
+	await expect(notice).toContainText('Photos you share or save are outside this app');
 	const shared = await page.evaluate(() => (window as unknown as { shared: unknown[] }).shared);
 	expect(shared).toEqual([
 		{
@@ -276,6 +276,54 @@ test('Share hands the clean photo to the share sheet; dismissing it says nothing
 			size: expect.any(Number)
 		}
 	]);
+});
+
+test('Select picks several photos to share in one sheet or delete together, with Undo (#146)', async ({
+	page
+}) => {
+	await page.addInitScript(() => {
+		const w = window as unknown as { shared: string[][] };
+		w.shared = [];
+		Object.defineProperty(navigator, 'canShare', { value: () => true });
+		Object.defineProperty(navigator, 'share', {
+			value: async ({ files }: { files: File[] }) => void w.shared.push(files.map((f) => f.type))
+		});
+	});
+	await openNewest(page, 3);
+	await page.keyboard.press('Escape');
+	const toolbar = page.getByTestId('photos-toolbar');
+	const tiles = page.getByRole('list', { name: 'Photos' }).getByRole('button');
+	await toolbar.getByRole('button', { name: 'Select' }).click();
+	// In select mode a tap selects instead of opening.
+	await tiles.nth(0).click();
+	await tiles.nth(2).click();
+	await expect(page.getByTestId('photo-viewer')).toBeHidden();
+	await expect(toolbar).toContainText('2 selected');
+	await expect(tiles.nth(0)).toHaveAttribute('aria-pressed', 'true');
+	await expect(tiles.nth(1)).toHaveAttribute('aria-pressed', 'false');
+	await tiles.nth(2).click();
+	await expect(toolbar).toContainText('1 selected');
+	await tiles.nth(1).click();
+
+	// One share sheet with both.
+	await toolbar.getByRole('button', { name: 'Share' }).click();
+	await expect(page.getByTestId('photos-status')).toContainText(
+		'Photos you share or save are outside this app'
+	);
+	expect(await page.evaluate(() => (window as unknown as { shared: string[][] }).shared)).toEqual([
+		['image/jpeg', 'image/jpeg']
+	]);
+
+	await toolbar.getByRole('button', { name: 'Delete' }).click();
+	await expect(tiles).toHaveCount(1);
+	await expect(page.getByTestId('kept')).toHaveText('1 photo kept');
+	const status = page.getByTestId('photos-status');
+	await expect(status).toContainText('2 photos deleted.');
+	// Back out of select mode; Undo brings both back.
+	await expect(toolbar.getByRole('button', { name: 'Select' })).toBeVisible();
+	await status.getByRole('button', { name: 'Undo' }).click();
+	await expect(tiles).toHaveCount(3);
+	await expect(page.getByTestId('kept')).toHaveText('3 photos kept');
 });
 
 /** A small TIFF (EXIF) block with a camera and a GPS latitude. */

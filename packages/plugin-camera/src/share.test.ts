@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { canShareFiles, fileName, saveFile, sharePhoto, type ShareEnv } from './share.js';
+import {
+	canShareFiles,
+	fileName,
+	saveFile,
+	sharePhoto,
+	sharePhotos,
+	type ShareEnv
+} from './share.js';
 
 const jpeg = new Blob(['x'], { type: 'image/jpeg' });
 // 17 October 2026, 08:30:05 local time.
@@ -89,5 +96,51 @@ describe('sharePhoto', () => {
 
 	it('fails without a page to download from', () => {
 		expect(saveFile(new File([], 'a.jpg'), { document: {} as never })).toBe('failed');
+	});
+});
+
+describe('sharePhotos', () => {
+	it('shares several in one sheet, with distinct names for the same second', async () => {
+		const env = shareEnv(async () => {});
+		const later = takenAt + 60_000;
+		const result = await sharePhotos(
+			[
+				{ blob: jpeg, takenAt },
+				{ blob: jpeg, takenAt },
+				{ blob: jpeg, takenAt: later }
+			],
+			env
+		);
+		expect(result).toBe('shared');
+		const [[data]] = vi.mocked(env.navigator!.share).mock.calls as unknown as [[{ files: File[] }]];
+		expect(data.files.map((f) => f.name)).toEqual([
+			'photo-20261017-083005.jpg',
+			'photo-20261017-083005-2.jpg',
+			'photo-20261017-083105.jpg'
+		]);
+	});
+
+	it('saves each where the sheet won’t take them, and does nothing for none', async () => {
+		vi.useFakeTimers();
+		const { env, clicked } = downloadEnv();
+		env.navigator = {
+			share: vi.fn(),
+			canShare: vi.fn((data?: ShareData) => (data?.files?.length ?? 0) < 2)
+		};
+		expect(
+			await sharePhotos(
+				[
+					{ blob: jpeg, takenAt },
+					{ blob: jpeg, takenAt: takenAt + 1000 }
+				],
+				env
+			)
+		).toBe('saved');
+		expect(clicked.map((c) => c.download)).toEqual([
+			'photo-20261017-083005.jpg',
+			'photo-20261017-083006.jpg'
+		]);
+		expect(await sharePhotos([], env)).toBe('cancelled');
+		vi.useRealTimers();
 	});
 });
