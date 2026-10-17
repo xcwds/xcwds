@@ -49,7 +49,12 @@
 
 	function load() {
 		if (!blocks) return;
-		const id = decodeURIComponent(location.hash.slice(1));
+		let id = '';
+		try {
+			id = decodeURIComponent(location.hash.slice(1));
+		} catch {
+			// A malformed fragment names no app.
+		}
 		const found = id ? blocks.get(id) : undefined;
 		if (found && found.private !== personal) {
 			// On the wrong page: the private one locks, and the normal one would leave it in history.
@@ -79,18 +84,20 @@
 		};
 	});
 
-	/** Saves one block's data, starting from what's saved now. */
-	function updater<T extends BlockData>(blockId: string) {
+	/**
+	 * Saves one block's data, starting from what's saved now. Tied to its app, so a save that
+	 * lands after another app opened (a notes block's pending save) still goes to its own.
+	 */
+	function updater<T extends BlockData>(appId: string, blockId: string) {
 		return (change: (current: T | undefined) => T): boolean => {
-			const app = definition;
-			if (!blocks || !app) return false;
-			const latest = blocks.data(app.id);
+			if (!blocks) return false;
+			const latest = blocks.data(appId);
 			const next = change(latest.blocks[blockId] as T | undefined);
-			const saved = blocks.saveData(app.id, {
+			const saved = blocks.saveData(appId, {
 				...latest,
 				blocks: { ...latest.blocks, [blockId]: next }
 			});
-			data = blocks.data(app.id);
+			if (definition?.id === appId) data = blocks.data(appId);
 			return saved;
 		};
 	}
@@ -105,44 +112,47 @@
 			<a href={href(blocks.path)} class="{button} flex items-center">Your apps</a>
 		</div>
 	{:else}
-		<div class="flex flex-col gap-6" data-testid="blocks-app" data-app-id={definition.id}>
-			{#each definition.blocks as block (block.id)}
-				{@const saved = data?.blocks[block.id]}
-				<section class="flex flex-col gap-2" aria-labelledby="block-{block.id}">
-					<h2 id="block-{block.id}" class="text-lg font-semibold">{block.label}</h2>
-					{#if block.type === 'checklist'}
-						<Checklist
-							{block}
-							{now}
-							data={saved as ChecklistData | undefined}
-							update={updater<ChecklistData>(block.id)}
-						/>
-					{:else if block.type === 'counter'}
-						<Counter
-							{block}
-							{now}
-							data={saved as CounterData | undefined}
-							update={updater<CounterData>(block.id)}
-						/>
-					{:else if block.type === 'log'}
-						<Log
-							{block}
-							{now}
-							data={saved as LogData | undefined}
-							update={updater<LogData>(block.id)}
-						/>
-					{:else}
-						<Notes
-							{block}
-							data={saved as NotesData | undefined}
-							update={updater<NotesData>(block.id)}
-						/>
-					{/if}
-				</section>
-			{/each}
-			{#if !definition.blocks.length}
-				<p class={muted}>This app has no blocks yet.</p>
-			{/if}
-		</div>
+		<!-- Keyed: another app gets new blocks, never this one's (or its pending saves). -->
+		{#key definition.id}
+			<div class="flex flex-col gap-6" data-testid="blocks-app" data-app-id={definition.id}>
+				{#each definition.blocks as block (block.id)}
+					{@const saved = data?.blocks[block.id]}
+					<section class="flex flex-col gap-2" aria-labelledby="block-{block.id}">
+						<h2 id="block-{block.id}" class="text-lg font-semibold">{block.label}</h2>
+						{#if block.type === 'checklist'}
+							<Checklist
+								{block}
+								{now}
+								data={saved as ChecklistData | undefined}
+								update={updater<ChecklistData>(definition.id, block.id)}
+							/>
+						{:else if block.type === 'counter'}
+							<Counter
+								{block}
+								{now}
+								data={saved as CounterData | undefined}
+								update={updater<CounterData>(definition.id, block.id)}
+							/>
+						{:else if block.type === 'log'}
+							<Log
+								{block}
+								{now}
+								data={saved as LogData | undefined}
+								update={updater<LogData>(definition.id, block.id)}
+							/>
+						{:else}
+							<Notes
+								{block}
+								data={saved as NotesData | undefined}
+								update={updater<NotesData>(definition.id, block.id)}
+							/>
+						{/if}
+					</section>
+				{/each}
+				{#if !definition.blocks.length}
+					<p class={muted}>This app has no blocks yet.</p>
+				{/if}
+			</div>
+		{/key}
 	{/if}
 {/if}

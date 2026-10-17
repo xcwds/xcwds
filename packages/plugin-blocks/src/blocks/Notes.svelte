@@ -27,15 +27,20 @@
 	});
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
+	/** The block's `update` when the text was typed, so a late save goes where it was typed. */
+	let target: UpdateBlock<NotesData> | undefined;
 	function save() {
 		clearTimeout(timer);
 		timer = undefined;
+		const to = target ?? update;
+		target = undefined;
 		if (text === known) return;
 		const next = text;
-		if (update(() => ({ text: next }))) known = next;
+		if (to(() => ({ text: next }))) known = next;
 	}
 	function typed() {
 		clearTimeout(timer);
+		target = update;
 		timer = setTimeout(save, 500);
 	}
 	$effect(() => () => {

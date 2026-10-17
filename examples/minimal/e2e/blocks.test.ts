@@ -121,9 +121,30 @@ test('a private app logs entries and notes, deletes with Undo, and stays out of 
 	await expect(page.getByTestId('recent').getByRole('link', { name: /Mood/ })).toHaveCount(0);
 });
 
+test('notes typed in one app stay there when another app opens straight after', async ({
+	page
+}) => {
+	const first = await add(page, 'Mood');
+	const second = await add(page, 'Mood');
+	await page.evaluate((id) => (location.hash = id), first);
+	await expect(page.getByTestId('blocks-app')).toHaveAttribute('data-app-id', first);
+	await page.getByRole('textbox', { name: 'Notes' }).pressSequentially('first only');
+	// Before the typing is saved.
+	await page.evaluate((id) => (location.hash = id), second);
+	await expect(page.getByTestId('blocks-app')).toHaveAttribute('data-app-id', second);
+	await expect(page.getByRole('textbox', { name: 'Notes' })).toHaveValue('');
+	const notes = (id: string) =>
+		page.evaluate((id) => localStorage.getItem(`app:blocks:private:${id}`) ?? '', id);
+	await expect.poll(() => notes(first)).toContain('first only');
+	expect(await notes(second)).not.toContain('first only');
+});
+
 test("an app that isn't here says so; deleting one from the list can be undone", async ({
 	page
 }) => {
+	// A malformed fragment names no app either.
+	await gotoHydrated(page, url('/my-apps/app#%E0'));
+	await expect(page.getByTestId('blocks-missing')).toBeVisible();
 	await gotoHydrated(page, url('/my-apps/app#nothing'));
 	await expect(page.getByTestId('blocks-missing')).toContainText("This app isn't on this device.");
 	await page.getByTestId('blocks-missing').getByRole('link', { name: 'Your apps' }).click();
