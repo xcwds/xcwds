@@ -1,5 +1,12 @@
 # @xcwds/create
 
+## 0.2.5
+
+### Patch Changes
+
+- 0df1c20: `blocks` also writes the builder's two pages (`src/routes/my-apps/edit` and `private-edit`).
+- 1e3e1c4: `blocks` also writes the page that adds a shared app (`src/routes/my-apps/import`).
+
 ## 0.2.4
 
 ### Patch Changes
