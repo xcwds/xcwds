@@ -67,8 +67,8 @@ rejects only when the image itself can't be read. `formats` defaults to `['qr_co
   `code_128`…) are read only where `BarcodeDetector` has them.
 - The Worker's file isn't among what a service worker precaches (SvelteKit leaves Vite's worker
   files out of its list), so offline, before it was ever fetched, the decoder runs on the page.
-- The result is `{ format, text, kind }`, plus `url`, `wifi` (`{ ssid, security, password,
-hidden }`) or `name` (a contact's) when `kind` says so. `kind` is `url` (http and https only),
+- The result is `{ format, text, kind }`, plus `url`, `wifi` or `name` (a contact's) when `kind`
+  says so; `wifi` is `{ ssid, security, password, hidden }`. `kind` is `url` (http and https only),
   `wifi`, `contact` (vCard or MECARD), `text`, or `other` (any other scheme: `mailto:`, `tel:`,
   `otpauth://`, a broken link). **Nothing is opened or followed**: the page decides, and the app
   sends links through its URL sanitizer. `parseQr(text)` does the same parsing on any text.

@@ -83,11 +83,13 @@ export async function decodeInWorker(pixels: Pixels): Promise<string | null> {
 
 /** The image's pixels, at most `MAX_SIDE` on a side, upright as the photo was taken. */
 async function pixelsOf(source: ScanSource): Promise<Pixels> {
-	if (typeof ImageData !== 'undefined' && source instanceof ImageData) return source;
-	const image =
-		source instanceof Blob
-			? await createImageBitmap(source, { imageOrientation: 'from-image' })
-			: source;
+	const isData = typeof ImageData !== 'undefined' && source instanceof ImageData;
+	if (isData && Math.max(source.width, source.height) <= MAX_SIDE) return source;
+	// Files and large pixel arrays become a bitmap to draw smaller (files upright, as taken).
+	const bitmap = source instanceof Blob || isData;
+	const image = bitmap
+		? await createImageBitmap(source as Blob | ImageData, { imageOrientation: 'from-image' })
+		: source;
 	const { width, height } = image as { width: number; height: number };
 	if (!width || !height) throw new Error('The image is empty.');
 	const scale = Math.min(1, MAX_SIDE / Math.max(width, height));
@@ -104,7 +106,7 @@ async function pixelsOf(source: ScanSource): Promise<Pixels> {
 	context.fillStyle = '#fff';
 	context.fillRect(0, 0, w, h);
 	context.drawImage(image as CanvasImageSource, 0, 0, w, h);
-	if (source instanceof Blob) (image as ImageBitmap).close();
+	if (bitmap) (image as ImageBitmap).close();
 	return context.getImageData(0, 0, w, h);
 }
 

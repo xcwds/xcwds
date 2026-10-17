@@ -99,3 +99,51 @@ describe('scan', () => {
 		expect(decode).toHaveBeenCalledOnce();
 	});
 });
+
+describe('scan, in a browser without a detector', () => {
+	it('shrinks large pixel arrays before decoding, and leaves small ones as they are', async () => {
+		const drawn: number[][] = [];
+		const bitmaps: unknown[] = [];
+		vi.stubGlobal('createImageBitmap', async (source: unknown) => {
+			bitmaps.push(source);
+			return { width: 4000, height: 3000, close() {} };
+		});
+		vi.stubGlobal(
+			'OffscreenCanvas',
+			class {
+				constructor(
+					readonly width: number,
+					readonly height: number
+				) {
+					drawn.push([width, height]);
+				}
+				getContext() {
+					return {
+						fillRect() {},
+						drawImage() {},
+						getImageData: (_x: number, _y: number, w: number, h: number) => ({
+							data: new Uint8ClampedArray(w * h * 4),
+							width: w,
+							height: h
+						})
+					};
+				}
+			}
+		);
+		const sizes: string[] = [];
+		const decode = async (pixels: { width: number; height: number }) => {
+			sizes.push(`${pixels.width}x${pixels.height}`);
+			return null;
+		};
+		const ImageDataClass = (
+			globalThis as unknown as { ImageData: new (...a: unknown[]) => ImageData }
+		).ImageData;
+		const large = new ImageDataClass(new Uint8ClampedArray(4), 4000, 3000);
+		await scan(large, { env: { BarcodeDetector: null, decode } });
+		await scan(image(), { env: { BarcodeDetector: null, decode } });
+		expect(bitmaps).toEqual([large]);
+		expect(drawn).toEqual([[1024, 768]]);
+		expect(sizes).toEqual(['1024x768', '1x1']);
+		vi.unstubAllGlobals();
+	});
+});
