@@ -7,6 +7,7 @@
  */
 import type { Entry, PrefixEntry, StorageScope } from '@xcwds/core';
 import { emptyData, parseData, type AppData } from './data.js';
+import { pruneData } from './edit.js';
 import { ID, newId, parseApp, type AppDefinition, type Parsed } from './format.js';
 
 /** An app as lists show it. */
@@ -57,9 +58,11 @@ export interface Blocks {
 	/** Saves an app's data; false if it couldn't be saved (or there's no such app). */
 	saveData(id: string, data: AppData): boolean;
 	/**
-	 * Adds an app or replaces the one with its id, after checking it. Turning an app private (or
-	 * back) moves its definition and data to their new keys: the new ones are written first and
-	 * the old ones removed after, so a failed write leaves the app where it was.
+	 * Adds an app or replaces the one with its id, after checking it. Replacing one removes the
+	 * data the new definition can't keep (a removed block or field, a changed type: see
+	 * `dataLoss` to ask first). Turning an app private (or back) moves its definition and data to
+	 * their new keys: the new ones are written first and the old ones removed after, so a failed
+	 * write leaves the app where it was.
 	 */
 	save(input: unknown): Saved;
 	/** Adds a copy of a template with a new id. */
@@ -174,15 +177,28 @@ export function createBlocks(
 			const at = list.findIndex((a) => a.id === app.id);
 			return at < 0 ? [...list, app] : list.map((a, i) => (i === at ? app : a));
 		};
-		if (!before || before.private === app.private) {
+		if (!before) {
 			return changed(updateList(app.private, replace))
 				? { ok: true, app }
 				: { ok: false, error: NOT_SAVED };
 		}
+		// The data as saved, and what the new definition keeps of it.
+		const oldEntry = dataOf(before.private, app.id);
+		const oldData = storage.read(oldEntry);
+		const kept = oldData && pruneData(before, app, parseData(before, oldData));
+		if (before.private === app.private) {
+			const prune = kept !== undefined && JSON.stringify(kept) !== JSON.stringify(oldData);
+			if (prune && !write(oldEntry, kept)) return { ok: false, error: NOT_SAVED };
+			if (!updateList(app.private, replace)) {
+				if (prune) storage.write(oldEntry, oldData);
+				return { ok: false, error: NOT_SAVED };
+			}
+			changed(true);
+			return { ok: true, app };
+		}
 		// Moving between normal and private: new keys first, then the old ones go.
-		const oldData = storage.read(dataOf(before.private, app.id));
 		const newData = dataOf(app.private, app.id);
-		if (oldData && !write(newData, oldData)) return { ok: false, error: NOT_SAVED };
+		if (kept && !write(newData, kept)) return { ok: false, error: NOT_SAVED };
 		if (!updateList(app.private, replace)) {
 			if (oldData) storage.remove(newData);
 			return { ok: false, error: NOT_SAVED };
@@ -193,7 +209,7 @@ export function createBlocks(
 			if (oldData) storage.remove(newData);
 			return { ok: false, error: NOT_SAVED };
 		}
-		storage.remove(dataOf(before.private, app.id));
+		storage.remove(oldEntry);
 		changed(true);
 		return { ok: true, app };
 	}
