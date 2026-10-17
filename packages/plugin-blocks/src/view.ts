@@ -125,3 +125,12 @@ export function chartPoints(
 		return { x: round(box.pad + t * w), y: round(box.pad + (1 - v) * h) };
 	});
 }
+
+/** A size for people: "512 bytes", "4.2 KB", "1.5 MB" (1 KB = 1000, as phones count). */
+export function sizeText(size: number): string {
+	if (size < 1000) return `${size} ${size === 1 ? 'byte' : 'bytes'}`;
+	const mb = size >= 999_500;
+	const value = size / (mb ? 1_000_000 : 1000);
+	const shown = value < 10 ? Math.round(value * 10) / 10 : Math.round(value);
+	return `${shown} ${mb ? 'MB' : 'KB'}`;
+}

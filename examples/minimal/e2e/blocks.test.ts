@@ -209,9 +209,27 @@ test("an app that isn't here says so; deleting one from the list can be undone",
 	await page.getByTestId('blocks-missing').getByRole('link', { name: 'Your apps' }).click();
 	await expect(page).toHaveURL(url('/my-apps'));
 
-	await add(page, 'Water');
+	const id = await add(page, 'Water');
 	await gotoHydrated(page, url('/my-apps'));
 	expect(await auditTapTargets(page)).toEqual([]);
+	// How much they take up, each and all together.
+	await expect(page.getByTestId('your-apps-usage')).toHaveText(
+		/^Your apps use about \d+ bytes on this device\.$/
+	);
+	await expect(page.getByTestId('your-apps').getByRole('link')).toContainText(/\d+ bytes/);
+	await expect(page.getByRole('alert')).toHaveCount(0);
+	// Near the limit (data written straight to storage), it warns.
+	await page.evaluate((id) => {
+		const text = 'x'.repeat(4_000_000);
+		localStorage.setItem(
+			`app:blocks:data:${id}`,
+			JSON.stringify({ format: 1, blocks: { glasses: { text } } })
+		);
+	}, id);
+	await page.reload();
+	await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+	await expect(page.getByTestId('your-apps-usage')).toContainText('about 4 MB');
+	await expect(page.getByRole('alert')).toContainText('close to the space browsers give an app');
 	const dialogs: string[] = [];
 	page.on('dialog', (dialog) => {
 		dialogs.push(dialog.message());
