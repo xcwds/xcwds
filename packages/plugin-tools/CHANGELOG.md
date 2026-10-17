@@ -1,5 +1,15 @@
 # @xcwds/plugin-tools
 
+## 0.5.0
+
+### Minor Changes
+
+- ada9231: `app.tools.update(tool)` replaces a tool added at runtime in place (a new name or emoji), keeping its pin and its place under Recently used.
+
+### Patch Changes
+
+- ada9231: With `apps`, the page entry boots in Node (unit tests with `buildTestApp`) instead of failing on the missing `document`.
+
 ## 0.4.0
 
 ### Minor Changes
