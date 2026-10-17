@@ -1,0 +1,62 @@
+{
+	"name": "@xcwds/plugin-qr",
+	"version": "0.0.0",
+	"private": true,
+	"description": "QR codes made and scanned on the device in an @xcwds app, with nothing sent anywhere. Work in progress (#147), not published yet.",
+	"license": "MIT",
+	"type": "module",
+	"sideEffects": [
+		"**/*.svelte"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/xcwds/xcwds.git",
+		"directory": "packages/plugin-qr"
+	},
+	"exports": {
+		"./make": {
+			"types": "./dist/make.d.ts",
+			"default": "./dist/make.js"
+		},
+		"./QrCode.svelte": {
+			"types": "./dist/QrCode.svelte.d.ts",
+			"svelte": "./dist/QrCode.svelte",
+			"default": "./dist/QrCode.svelte"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"!dist/**/*.test.*"
+	],
+	"scripts": {
+		"build": "svelte-package -i src -o dist",
+		"check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+		"publint": "publint"
+	},
+	"peerDependencies": {
+		"svelte": "^5.0.0"
+	},
+	"devDependencies": {
+		"@sveltejs/package": "^3.0.0",
+		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"jsqr": "^1.4.0",
+		"svelte": "^5.45.6",
+		"svelte-check": "^4.3.4",
+		"typescript": "^5.9.3",
+		"vite": "^7.2.6",
+		"vitest": "^5.0.0"
+	},
+	"keywords": [
+		"pwa",
+		"offline-first",
+		"xcwds",
+		"xcwds-plugin",
+		"qr",
+		"qr-code",
+		"privacy"
+	],
+	"engines": {
+		"node": ">=22.18"
+	}
+}

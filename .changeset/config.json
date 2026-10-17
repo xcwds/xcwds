@@ -15,7 +15,8 @@
 		"@xcwds-site/plugin-pages",
 		"@xcwds/plugin-vault",
 		"@xcwds/plugin-blocks",
-		"@xcwds/plugin-camera"
+		"@xcwds/plugin-camera",
+		"@xcwds/plugin-qr"
 	],
 	"___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
 		"onlyUpdatePeerDependentsWhenOutOfRange": true

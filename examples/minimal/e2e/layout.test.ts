@@ -163,6 +163,7 @@ for (const { name, dir, base } of targets) {
 					'/utils/dice',
 					'/utils/timer',
 					'/utils/camera',
+					'/utils/qr',
 					'/no-such-page'
 				]) {
 					await gotoHydrated(page, url(path));
