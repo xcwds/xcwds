@@ -250,12 +250,26 @@ export class ToolList {
 	) {}
 
 	add(input: Tool): Tool {
+		if (this.#tools.some((t) => t.path === input.path))
+			fail(`there are two tools with the path "${input.path}".`);
+		const tool = this.#check(input);
+		this.#tools.push(tool);
+		return tool;
+	}
+
+	/** Replaces the tool at the same path, in place; false if there's none. */
+	replace(input: Tool): boolean {
+		const at = this.#tools.findIndex((t) => t.path === input.path);
+		if (at < 0) return false;
+		this.#tools[at] = this.#check(input);
+		return true;
+	}
+
+	#check(input: Tool): Tool {
 		const tool = { ...input };
 		if (tool.path === this.index) fail(`the tool "${tool.path}" has the index page's path.`);
 		if (this.apps.length && tool.path === this.catalog)
 			fail(`the tool "${tool.path}" has the Apps page's path.`);
-		if (this.#tools.some((t) => t.path === tool.path))
-			fail(`there are two tools with the path "${tool.path}".`);
 		if (tool.app !== undefined) {
 			const app = this.apps.find((a) => a.id === tool.app);
 			if (!app)
@@ -266,7 +280,6 @@ export class ToolList {
 				tool.private = true;
 			}
 		}
-		this.#tools.push(tool);
 		return tool;
 	}
 

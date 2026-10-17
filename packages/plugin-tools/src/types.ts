@@ -58,6 +58,11 @@ export type AppTools = {
 	 * come and go with the person's data, like the apps of `@xcwds/plugin-blocks`.
 	 */
 	remove(path: string): boolean;
+	/**
+	 * Replaces the tool at `tool.path` (a new name or emoji, say), keeping its place, its pin and
+	 * its place under Recently used (page only; false in the build or when there's no such tool).
+	 */
+	update(tool: Tool): boolean;
 	/** Only in the page. */
 	readonly shortcuts?: ToolShortcuts;
 };

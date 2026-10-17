@@ -537,8 +537,17 @@ describe('the page', () => {
 			recent: ['/utils/a', '/utils/a#water']
 		});
 
-		expect(tools.remove('/utils/a#water')).toBe(true);
+		// Renamed in place: same spot, same pin.
+		expect(tools.update(tool('water', { path: '/utils/a#water', name: 'Water intake' }))).toBe(
+			true
+		);
 		expect(calls).toBe(3);
+		expect(tools.get('/utils/a#water')?.name).toBe('Water intake');
+		expect(tools.shortcuts!.state.pins).toEqual(['/utils/a#water']);
+		expect(tools.update(tool('none', { path: '/utils/a#none' }))).toBe(false);
+
+		expect(tools.remove('/utils/a#water')).toBe(true);
+		expect(calls).toBe(4);
 		expect(tools.remove('/utils/a#water')).toBe(false);
 		expect(tools.shortcuts!.state).toEqual({ pins: [], recent: ['/utils/a'] });
 		expect(JSON.parse(app.sharedStorage.backing.get('app:tools:shortcuts')!)).toEqual({
@@ -644,5 +653,15 @@ describe('the page', () => {
 		// Without the shell there is no Home to add to.
 		const bare = await buildTestApp({ plugins: [[client, options]] });
 		expect(bare.shell).toBeUndefined();
+	});
+});
+
+describe('in Node', () => {
+	it('boots with apps and no document (#178)', async () => {
+		expect(typeof document).toBe('undefined');
+		const app = await buildTestApp({
+			plugins: [[client, { ...options, apps: [{ id: 'x', name: 'X', emoji: '❌', blurb: 'X.' }] }]]
+		});
+		expect(app.tools!.isOn('x')).toBe(true);
 	});
 });
