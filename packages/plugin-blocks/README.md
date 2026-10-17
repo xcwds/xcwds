@@ -5,9 +5,10 @@ log), defined as data rather than code (RFC 0001, decision 14).
 
 It holds the definition format and the logic of each block, from `@xcwds/plugin-blocks/model`;
 the plugin, which saves your apps and their data on the device (`app.blocks`) and adds each one to
-`@xcwds/plugin-tools` as a tool; and the pages: Your apps, with Add from a template, and the page
-that runs an app. `pnpm xcwds add blocks` adds it to an app. Still to come: building your own apps
-([#161](https://github.com/xcwds/xcwds/issues/161)) and sharing them
+`@xcwds/plugin-tools` as a tool; and the pages: Your apps, with New app and Add from a template,
+the page that runs an app, and the builder that makes or edits one. `pnpm xcwds add blocks` adds
+it to an app. Still to come: keeping a builder draft, a preview
+([#161](https://github.com/xcwds/xcwds/issues/161)), and sharing apps
 ([#162](https://github.com/xcwds/xcwds/issues/162)).
 
 ## The plugin
@@ -34,9 +35,10 @@ Options (all JSON):
 - **`app`**: the id of an app in `@xcwds/plugin-tools`' `apps` that your apps join as tools. The build
   fails when it isn't one of them (register this plugin after `tools()`).
 
-It declares `network: false`. Its build entry adds three pages to the route registry: Your apps at
-`path` (under the tools index, with plugin-tools), and `<path>/app` and `<path>/private` (private,
-so `@xcwds/plugin-lock` locks it, its cover applies and Share skips it).
+It declares `network: false`. Its build entry adds five pages to the route registry: Your apps at
+`path` (under the tools index, with plugin-tools), `<path>/app` and `<path>/private` that run an
+app, and the builder at `<path>/edit` and `<path>/private-edit`. The private ones are private
+routes, so `@xcwds/plugin-lock` locks them, its cover applies and Share skips them.
 
 ### The pages
 
@@ -57,6 +59,14 @@ Add each page's route file, and the components' styles after Tailwind and the sh
 </script>
 
 <main class="page-narrow"><BlocksApp /></main>
+
+<!-- src/routes/my-apps/edit/+page.svelte, and the same with <AppBuilder private /> in
+     src/routes/my-apps/private-edit/+page.svelte -->
+<script lang="ts">
+	import AppBuilder from '@xcwds/plugin-blocks/AppBuilder.svelte';
+</script>
+
+<main class="page-narrow"><AppBuilder /></main>
 ```
 
 ```css
@@ -64,9 +74,9 @@ Add each page's route file, and the components' styles after Tailwind and the sh
 @import '@xcwds/plugin-blocks/styles.css';
 ```
 
-- **`<YourApps>`**: your apps, each with its size and Delete (it asks with the app's name, then
-  offers Undo); how much they take up together, with a warning near the browser's limit; and Add
-  from a template, which saves a copy and opens it.
+- **`<YourApps>`**: New app; your apps, each with its size and Delete (it asks with the app's
+  name, then offers Undo); how much they take up together, with a warning near the browser's
+  limit; and Add from a template, which saves a copy and opens it.
 - **`<BlocksApp>`**: runs the app whose id is in the fragment. The header shows its name
   (`app.shell.setTitle`; a private page's `<title>` stays "Private app"). An app opened on the
   wrong one of the two pages goes to the right one, and an id that isn't on this device says so
@@ -75,10 +85,18 @@ Add each page's route file, and the components' styles after Tailwind and the sh
   90 days (an inline SVG with a text summary, and Show as table), and lists the entries newest
   first (Edit fills the form and keeps the entry's time; Delete offers Undo), and notes save as you type. Each change saves from
   what's stored now, so another tab's change isn't lost; while `app.lock` is locked a private
-  app shows nothing.
+  app shows nothing. Edit app opens the builder on it.
+- **`<AppBuilder>`**: with no fragment, a new app; with `#<id>`, that app (a private one on the
+  private page, which redirects like `<BlocksApp>`). Name, emoji (common ones to tap, or type
+  one), Private, and the blocks: add any of the four, set each up (a checklist's items and
+  repeats, a counter's goal, unit and reset, a log's fields with their type and options), Move
+  up / Move down for blocks, items and fields, and Remove with Undo for blocks and fields. The
+  limits show as you go ("3 of 12 fields"). Save checks the app with `parseApp` and shows the
+  problem next to Save; if the change drops saved data, it lists what (`dataLoss`) and asks
+  first, then saves (removing that data) and opens the app.
 
-With `@xcwds/plugin-share`, add `path` to its `exclude`: a link to `<path>/app` opens nothing on
-another device.
+With `@xcwds/plugin-share`, add `path` to its `exclude`: a link to `<path>/app` or `<path>/edit`
+opens nothing on another device.
 
 ### `app.blocks`
 
@@ -90,6 +108,7 @@ const data = app.blocks.data(added.app.id); // read against the app's definition
 
 - **`list()`**: your apps (`{ id, name, emoji, private, path }`), normal ones first.
   **`get(id)`**: an app's definition. **`pathOf(app)`**: the page that runs it.
+  **`editPathOf(app?)`**: the builder's page for it, or for a new app.
 - **`save(input)`**: adds an app or replaces the one with its id, after checking it with
   `parseApp`: `{ ok: true, app }`, or `{ ok: false, error }` with a sentence to show next to
   the control (invalid, or storage full or blocked). Replacing an app removes the data its new

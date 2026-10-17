@@ -255,7 +255,7 @@ export const changelog: ChangelogEntry[] = [
 		id: 'blocks',
 		package: '@xcwds/plugin-blocks',
 		recommended: false,
-		summary: 'Small apps people add from templates: checklists, counters, logs, notes',
+		summary: 'Small apps people make or add from templates: checklists, counters, logs, notes',
 		requires: ['shell'],
 		call: 'blocks()',
 		css: '@xcwds/plugin-blocks/styles.css',
@@ -280,6 +280,20 @@ export const changelog: ChangelogEntry[] = [
 				content: page(
 					'<main class="page-narrow pt-2 pb-6">\n\t<BlocksApp private />\n</main>',
 					"\timport BlocksApp from '@xcwds/plugin-blocks/BlocksApp.svelte';"
+				)
+			},
+			{
+				path: 'src/routes/my-apps/edit/+page.svelte',
+				content: page(
+					'<main class="page-narrow pt-2 pb-6">\n\t<AppBuilder />\n</main>',
+					"\timport AppBuilder from '@xcwds/plugin-blocks/AppBuilder.svelte';"
+				)
+			},
+			{
+				path: 'src/routes/my-apps/private-edit/+page.svelte',
+				content: page(
+					'<main class="page-narrow pt-2 pb-6">\n\t<AppBuilder private />\n</main>',
+					"\timport AppBuilder from '@xcwds/plugin-blocks/AppBuilder.svelte';"
 				)
 			}
 		]
