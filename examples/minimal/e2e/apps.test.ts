@@ -127,16 +127,17 @@ test.describe('at the root', () => {
 
 		await gotoHydrated(other, url('/settings'));
 		const link = other.getByTestId('apps-link');
-		await expect(link).toContainText('1 of 2 on');
+		await expect(link).toContainText('2 of 3 on');
 		await toggle(page, 'Kitchen').click();
-		await expect(link).toContainText('2 of 2 on');
+		await expect(link).toContainText('3 of 3 on');
 		await link.click();
 		await expect(other).toHaveURL(url('/apps'));
 	});
 
 	test('the prerendered Apps page shows the apps that start on as on', async ({ page }) => {
 		const html = await (await page.request.get(url('/apps'))).text();
-		expect(html.match(/role="switch" aria-checked="true"/g)).toHaveLength(2);
+		// Kitchen, Hello and Your apps.
+		expect(html.match(/role="switch" aria-checked="true"/g)).toHaveLength(3);
 	});
 
 	test("an app's tab hides while it's off, from first paint, and comes back from another tab", async ({

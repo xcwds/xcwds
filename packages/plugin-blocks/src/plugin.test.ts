@@ -89,6 +89,15 @@ describe('options', () => {
 		expect(withCatalog.blocks?.list()).toEqual([]);
 		const app = await buildTestApp({ plugins: [blocksFactory()] }, { import: importer });
 		expect(app.blocks?.list()).toEqual([]);
+		// Its pages: the list, and the two that run an app (the private one locked and never shared).
+		expect(withCatalog.routes.get('/my-apps')).toMatchObject({
+			title: 'Your apps',
+			parent: '/utils'
+		});
+		expect(app.routes.get('/my-apps')?.parent).toBeUndefined();
+		expect(app.routes.get('/my-apps/app')).toMatchObject({ parent: '/my-apps', width: 'narrow' });
+		expect(app.routes.get('/my-apps/app')?.private).toBeUndefined();
+		expect(app.routes.get('/my-apps/private')).toMatchObject({ parent: '/my-apps', private: true });
 		expect(pluginMeta(build).network).toBe(false);
 		expect(pluginMeta(client).network).toBe(false);
 	});

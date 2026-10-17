@@ -14,6 +14,7 @@
 	"dependencies": {
 		"@xcwds-example/plugin-hello": "workspace:*",
 		"@xcwds/core": "workspace:*",
+		"@xcwds/plugin-blocks": "workspace:*",
 		"@xcwds/plugin-camera": "workspace:*",
 		"@xcwds/plugin-changelog": "workspace:*",
 		"@xcwds/plugin-install": "workspace:*",

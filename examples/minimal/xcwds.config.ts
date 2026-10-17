@@ -1,5 +1,6 @@
 import hello from '@xcwds-example/plugin-hello';
 import { defineConfig } from '@xcwds/core';
+import blocks from '@xcwds/plugin-blocks';
 import camera from '@xcwds/plugin-camera';
 import qr from '@xcwds/plugin-qr';
 import changelog from '@xcwds/plugin-changelog';
@@ -46,6 +47,14 @@ export default defineConfig({
 					blurb: 'The example plugin.',
 					routes: ['/hello'],
 					groups: ['hello']
+				},
+				{
+					id: 'yours',
+					name: 'Your apps',
+					emoji: '🧩',
+					blurb: 'Trackers and checklists you add.',
+					routes: ['/my-apps'],
+					groups: ['blocks', 'blocks-private']
 				}
 			],
 			items: [
@@ -79,13 +88,16 @@ export default defineConfig({
 				}
 			]
 		}),
+		// Apps people add from templates at /my-apps (#160), each one a tool in the Your apps app.
+		blocks({ app: 'yours' }),
 		// The base-path build (HELLO_ORIGIN in `build:base`) declares an origin from the options (#103).
 		hello({
 			greeting: 'hi',
 			...(process.env.HELLO_ORIGIN ? { origin: process.env.HELLO_ORIGIN } : {})
 		}),
-		// What others share arrives at /inbox; it stays private, so it has no Share button.
-		share({ target: '/inbox', exclude: ['/inbox', '/settings'] }),
+		// What others share arrives at /inbox; it stays private, so it has no Share button. Your apps'
+		// pages run apps that are only on this device, so a link to one would open nothing elsewhere.
+		share({ target: '/inbox', exclude: ['/inbox', '/settings', '/my-apps'] }),
 		settings({
 			source: 'https://github.com/xcwds/xcwds',
 			backupName: 'minimal-backup',
