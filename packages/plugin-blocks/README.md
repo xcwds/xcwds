@@ -8,8 +8,7 @@ install yet.
 So far it holds the definition format and the logic of each block, from
 `@xcwds/plugin-blocks/model`; the plugin, which saves your apps and their data on the device
 (`app.blocks`) and adds each one to `@xcwds/plugin-tools` as a tool; and the pages: Your apps, with
-Add from a template, and the page that runs an app. Still to come: how much storage your apps
-use, then building your own apps (#161) and sharing them
+Add from a template, and the page that runs an app. Still to come: `xcwds add` support and publishing, then building your own apps (#161) and sharing them
 (#162).
 
 ## The plugin
@@ -66,8 +65,9 @@ Add each page's route file, and the components' styles after Tailwind and the sh
 @import '@xcwds/plugin-blocks/styles.css';
 ```
 
-- **`<YourApps>`**: your apps, each with Delete (it asks with the app's name, then offers Undo),
-  and Add from a template, which saves a copy and opens it.
+- **`<YourApps>`**: your apps, each with its size and Delete (it asks with the app's name, then
+  offers Undo); how much they take up together, with a warning near the browser's limit; and Add
+  from a template, which saves a copy and opens it.
 - **`<BlocksApp>`**: runs the app whose id is in the fragment. The header shows its name
   (`app.shell.setTitle`; a private page's `<title>` stays "Private app"). An app opened on the
   wrong one of the two pages goes to the right one, and an id that isn't on this device says so
@@ -99,6 +99,9 @@ const data = app.blocks.data(added.app.id); // read against the app's definition
   saved).
 - **`remove(id)`**: removes an app and its data, and returns `{ ok, restore }`; `restore()`
   puts both back in their place, for an Undo.
+- **`usage()`**: about how much your apps take up, `{ total, apps, nearLimit }`, counted as
+  storage counts it (characters of keys and values); `nearLimit` is past `NEAR_LIMIT`, 80% of
+  the 5 million characters most browsers give a site.
 - **`onChange(listener)`**: your apps or their data changed, here, in another tab, or by
   clearing or importing data.
 

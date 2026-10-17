@@ -7,28 +7,34 @@
 	 * <YourApps />
 	 * ```
 	 *
-	 * Adding a template saves a copy with a new id and opens it.
+	 * Adding a template saves a copy with a new id and opens it. Under the list: how much storage
+	 * your apps take up, with a warning near the browser's limit.
 	 */
 	import { useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
 	import type {} from './client.js';
 	import type { AppDefinition } from './format.js';
 	import { go, href } from './navigate.js';
-	import type { AppSummary, Removed } from './store.js';
+	import type { AppSummary, Removed, Usage } from './store.js';
 	import { button, card, muted } from './ui.js';
+	import { sizeText } from './view.js';
 
 	const app = useApp();
 	const blocks = app.blocks;
 
 	/** Undefined until listed, so the prerendered page matches the first render. */
 	let list = $state.raw<AppSummary[]>();
+	let usage = $state.raw<Usage>();
 	let error = $state('');
 	/** The last deleted app, until Undo times out. */
 	let undo = $state.raw<{ name: string; removed: Removed; timer: ReturnType<typeof setTimeout> }>();
 
 	onMount(() => {
 		if (!blocks) return;
-		const load = () => (list = blocks.list());
+		const load = () => {
+			list = blocks.list();
+			usage = blocks.usage();
+		};
 		load();
 		const stop = blocks.onChange(load);
 		return () => {
@@ -89,7 +95,11 @@
 								<span aria-hidden="true" class="text-2xl">{summary.emoji ?? '🧩'}</span>
 								<span class="flex flex-col">
 									<span class="font-medium">{summary.name}</span>
-									{#if summary.private}<span class={muted}>Private</span>{/if}
+									<span class={muted}
+										>{[summary.private ? 'Private' : '', sizeText(usage?.apps[summary.id] ?? 0)]
+											.filter(Boolean)
+											.join(' · ')}</span
+									>
 								</span>
 							</a>
 							<button
@@ -101,6 +111,17 @@
 						</li>
 					{/each}
 				</ul>
+			{/if}
+			{#if usage && list?.length}
+				<p class={muted} data-testid="your-apps-usage">
+					Your apps use about {sizeText(usage.total)} on this device.
+				</p>
+				{#if usage.nearLimit}
+					<p class="text-sm font-medium text-red-700 dark:text-red-400" role="alert">
+						That's close to the space browsers give an app (about 5 MB). Delete apps or entries you
+						don't need, or new entries may not save.
+					</p>
+				{/if}
 			{/if}
 			<p class="flex min-h-11 items-center gap-3 text-sm" aria-live="polite">
 				{#if undo}

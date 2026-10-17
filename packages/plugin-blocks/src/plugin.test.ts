@@ -3,7 +3,7 @@ import toolsFactory from '@xcwds/plugin-tools';
 import toolsClient from '@xcwds/plugin-tools/client';
 import { buildTestApp, type Importer } from '@xcwds/testing';
 import { describe, expect, it } from 'vitest';
-import client, { DEFAULT_EMOJI } from './client.js';
+import client, { DEFAULT_EMOJI, NEAR_LIMIT } from './client.js';
 import type { AppData } from './data.js';
 import type { AppDefinition } from './format.js';
 import blocksFactory, { build } from './index.js';
@@ -226,6 +226,33 @@ describe('app.blocks', () => {
 		expect(removed.restore()).toBe(true);
 		expect(blocks.list()).toHaveLength(2);
 		expect(blocks.remove('nope').ok).toBe(false);
+	});
+
+	it('counts what your apps take up, and says when it nears the limit', async () => {
+		const app = await withTools();
+		const blocks = app.blocks!;
+		expect(blocks.usage()).toEqual({ total: 0, apps: {}, nearLimit: false });
+		const a = blocks.addFromTemplate(water);
+		const b = blocks.addFromTemplate(mood);
+		if (!a.ok || !b.ok) throw new Error('not saved');
+		blocks.saveData(a.app.id, counted(3));
+		const raw = app.sharedStorage.backing;
+		const keys = [...raw.keys()].filter((k) => k.startsWith('app:blocks:'));
+		const stored = keys.reduce((n, k) => n + k.length + raw.get(k)!.length, 0);
+		const usage = blocks.usage();
+		// What's saved, as storage counts it.
+		expect(usage.total).toBe(stored);
+		expect(Object.keys(usage.apps)).toEqual([a.app.id, b.app.id]);
+		// Each app counts its own definition and data; the lists add their brackets and commas.
+		const apps = Object.values(usage.apps).reduce((n, v) => n + v, 0);
+		expect(apps).toBeGreaterThan(0);
+		expect(apps).toBeLessThan(usage.total);
+		expect(usage.nearLimit).toBe(false);
+
+		// Saved data near the limit (written straight to storage: notes alone can't get there).
+		const big: AppData = { format: 1, blocks: { notes: { text: 'x'.repeat(NEAR_LIMIT) } } };
+		raw.set(`app:blocks:private:${b.app.id}`, JSON.stringify(big));
+		expect(blocks.usage().nearLimit).toBe(true);
 	});
 
 	it('keeps the valid apps when one saved definition is broken', async () => {

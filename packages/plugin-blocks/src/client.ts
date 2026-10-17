@@ -9,7 +9,8 @@ import { definePlugin } from '@xcwds/core';
 import { CORE, NAME, resolveOptions, type BlocksPluginOptions } from './options.js';
 import { createBlocks, registerEntries, type AppSummary, type Blocks } from './store.js';
 
-export type { AppSummary, Blocks, Removed, Saved } from './store.js';
+export type { AppSummary, Blocks, Removed, Saved, Usage } from './store.js';
+export { NEAR_LIMIT } from './store.js';
 export type { BlocksPluginOptions } from './options.js';
 
 declare module '@xcwds/core' {

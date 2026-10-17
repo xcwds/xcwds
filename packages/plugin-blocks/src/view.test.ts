@@ -6,6 +6,7 @@ import {
 	dueText,
 	periodText,
 	repeatText,
+	sizeText,
 	valueText,
 	whenText
 } from './view.js';
@@ -106,4 +107,13 @@ it('chartPoints places points by time across the days, and by value up the box',
 		{ x: 60.7, y: 5 },
 		{ x: 5, y: 5 }
 	]);
+});
+
+it('sizeText counts in bytes, KB and MB', () => {
+	expect(sizeText(1)).toBe('1 byte');
+	expect(sizeText(999)).toBe('999 bytes');
+	expect(sizeText(4_210)).toBe('4.2 KB');
+	expect(sizeText(123_456)).toBe('123 KB');
+	expect(sizeText(999_999)).toBe('1 MB');
+	expect(sizeText(4_200_000)).toBe('4.2 MB');
 });

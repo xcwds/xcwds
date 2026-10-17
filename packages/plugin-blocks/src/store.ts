@@ -27,6 +27,21 @@ export interface Removed {
 	restore(): boolean;
 }
 
+/** How much your apps take up, in UTF-16 code units of keys and values (what browsers count). */
+export interface Usage {
+	total: number;
+	/** By app id: its definition and its data. */
+	apps: Record<string, number>;
+	/** True when `total` is past `NEAR_LIMIT`. */
+	nearLimit: boolean;
+}
+
+/**
+ * Where Your apps warns: 4 million characters, 80% of the 5 million most browsers give a site's
+ * `localStorage` (and the rest of the app shares it).
+ */
+export const NEAR_LIMIT = 4_000_000;
+
 export interface Blocks {
 	/** Where Your apps lives, e.g. `/my-apps`. */
 	readonly path: string;
@@ -51,6 +66,8 @@ export interface Blocks {
 	addFromTemplate(template: AppDefinition): Saved;
 	/** Removes an app and its data. `restore` undoes it while the Undo shows. */
 	remove(id: string): Removed;
+	/** About how much storage your apps and their data take up. */
+	usage(): Usage;
 	/** Your apps or their data changed: saved here, by another tab, cleared or imported. */
 	onChange(listener: () => void): () => void;
 }
@@ -232,6 +249,24 @@ export function createBlocks(
 					);
 				}
 			};
+		},
+		usage() {
+			const size = (key: string, value: unknown) =>
+				value === undefined ? 0 : key.length + JSON.stringify(value).length;
+			const apps: Record<string, number> = {};
+			let total = 0;
+			for (const priv of [false, true]) {
+				const list = read(priv);
+				if (list.length) total += size(listOf(priv).key, list);
+				for (const app of list) {
+					const entry = dataOf(priv, app.id);
+					const own = size(listOf(priv).key, app) - listOf(priv).key.length;
+					const data = size(entry.key, storage.read(entry));
+					apps[app.id] = (apps[app.id] ?? 0) + own + data;
+					total += data;
+				}
+			}
+			return { total, apps, nearLimit: total > NEAR_LIMIT };
 		},
 		onChange(listener) {
 			const keys = [entries.apps.key, entries.privateApps.key];
