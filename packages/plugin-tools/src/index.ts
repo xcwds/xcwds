@@ -110,6 +110,7 @@ export const build = definePlugin(
 			get: (path) => list.all().find((t) => t.path === path),
 			add: (tool) => add(checkTool(tool)),
 			remove: () => false,
+			update: () => false,
 			list: () => list.all(),
 			all: () => list.all(),
 			apps: () => apps,

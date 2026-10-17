@@ -12,6 +12,14 @@
 		"directory": "packages/plugin-blocks"
 	},
 	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./client": {
+			"types": "./dist/client.d.ts",
+			"default": "./dist/client.js"
+		},
 		"./model": {
 			"types": "./dist/model.d.ts",
 			"default": "./dist/model.js"
@@ -28,6 +36,9 @@
 		"publint": "publint"
 	},
 	"devDependencies": {
+		"@xcwds/core": "workspace:^",
+		"@xcwds/plugin-tools": "workspace:^",
+		"@xcwds/testing": "workspace:*",
 		"typescript": "^5.9.3",
 		"vitest": "^5.0.0"
 	},
@@ -41,5 +52,9 @@
 	],
 	"engines": {
 		"node": ">=22.18"
+	},
+	"types": "./dist/index.d.ts",
+	"peerDependencies": {
+		"@xcwds/core": "workspace:^"
 	}
 }

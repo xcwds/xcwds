@@ -161,6 +161,11 @@ export default definePlugin(
 				list.add(checkTool(tool));
 				toolsChanged();
 			},
+			update(tool) {
+				if (!list.replace(checkTool(tool))) return false;
+				toolsChanged();
+				return true;
+			},
 			remove(path) {
 				if (!list.remove(path)) return false;
 				toolsChanged();
@@ -198,7 +203,8 @@ export default definePlugin(
 		let stops: (() => void)[] = [];
 		let closed = false;
 		app.addHook('onBoot', async () => {
-			if (apps.length) {
+			// Marks <html> for the CSS that hides apps that are off; there's none in Node (#178).
+			if (apps.length && typeof document !== 'undefined') {
 				const root = document.documentElement;
 				const mark = () => root.setAttribute('data-apps-off', appsOff(apps, setting()).join(' '));
 				mark();

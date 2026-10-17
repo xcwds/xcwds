@@ -151,7 +151,8 @@ Some tools share one page and come and go with the person's data, like the apps 
 letters, digits, `-`, `_`, `.` or `~`), which tells them apart in pins and Recently used:
 opening `/my-apps/app#k3f9` records that tool, and any other fragment records the page. The
 build adds no route for them (the plugin that owns the page registers it), and the page entry can
-`add()` them at any time; lists, Home and `subscribe` follow. `remove(path)` takes one away
-with its pin and its place under Recently used. Since such tools may be added after the saved
+`add()` them at any time; lists, Home and `subscribe` follow. `update(tool)` replaces the one at
+the same path (a new name or emoji) and keeps its pin; `remove(path)` takes one away with its pin
+and its place under Recently used. Since such tools may be added after the saved
 shortcuts load (once the data is read, or after an unlock), pins and recents with a fragment
 are kept while their tool is missing, and Home shows only the ones that are there.
