@@ -1,15 +1,15 @@
 /**
- * The decoding Worker: gets pixels, answers with the text (or `null`), so a large image never
- * holds up the page. One per scan; whoever made it terminates it.
+ * The decoding Worker: gets pixels, answers with the text (or `null`), so decoding never holds
+ * up the page. `createDecoder()` starts one and terminates it on `close()`.
  */
 import { decodeQr, type Pixels } from './decode.js';
 
-self.onmessage = (event: MessageEvent<Pixels>) => {
+self.onmessage = (event: MessageEvent<Pixels & { id: number }>) => {
 	let text: string | null = null;
 	try {
 		text = decodeQr(event.data);
 	} catch {
 		// Unreadable pixels are no code.
 	}
-	self.postMessage(text);
+	self.postMessage({ id: event.data.id, text });
 };
