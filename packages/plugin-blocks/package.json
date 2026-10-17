@@ -1,8 +1,7 @@
 {
 	"name": "@xcwds/plugin-blocks",
 	"version": "0.0.0",
-	"private": true,
-	"description": "Small apps people add to an @xcwds app (checklists, counters, logs, notes), defined as data rather than code. Work in progress (#160), not published yet.",
+	"description": "Small apps people add to an @xcwds app (checklists, counters, logs, notes), defined as data rather than code.",
 	"license": "MIT",
 	"type": "module",
 	"sideEffects": [

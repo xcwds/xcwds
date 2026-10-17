@@ -353,6 +353,9 @@ importers:
       '@xcwds/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@xcwds/plugin-blocks':
+        specifier: workspace:*
+        version: link:../../packages/plugin-blocks
       '@xcwds/plugin-camera':
         specifier: workspace:*
         version: link:../../packages/plugin-camera

@@ -4,7 +4,7 @@
  * and refreshes the files the starter manages (`src/xcwds.css`, `src/lib/Notices.svelte`).
  */
 import { join } from 'node:path';
-import { CATALOG, PLUGIN_IDS, withRequirements, type PluginId } from './catalog.js';
+import { CATALOG, PLUGIN_IDS, callOf, withRequirements, type PluginId } from './catalog.js';
 import { addImport, appendToArray, readText, writeFile } from './files.js';
 import {
 	MANAGED,
@@ -69,7 +69,7 @@ export function addPlugins(root: string, requested: readonly string[]): AddResul
 	let config = configName ? readText(join(root, configName))! : undefined;
 	for (const id of added) {
 		const info = CATALOG[id];
-		const call = info.call;
+		const call = callOf(id, all);
 		const next = config && appendToArray(config, /\bplugins\s*:\s*\[/, call);
 		if (!config || !next) {
 			result.manual.push(
@@ -97,6 +97,11 @@ export function addPlugins(root: string, requested: readonly string[]): AddResul
 				);
 		}
 	}
+	// Share was there already, so its call is the app's own: say what to add to it.
+	if (added.includes('blocks') && installed.includes('share'))
+		result.manual.push(
+			"Add '/my-apps' to `share({ exclude })` in your xcwds config: a link to a page that runs one of your apps opens nothing on another device."
+		);
 	if (config !== undefined && configName) {
 		writeFile(join(root, configName), config);
 		result.changed.push(configName);
