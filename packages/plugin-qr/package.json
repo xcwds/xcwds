@@ -15,7 +15,12 @@
 		"url": "git+https://github.com/xcwds/xcwds.git",
 		"directory": "packages/plugin-qr"
 	},
+	"types": "./dist/index.d.ts",
 	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
 		"./make": {
 			"types": "./dist/make.d.ts",
 			"default": "./dist/make.js"

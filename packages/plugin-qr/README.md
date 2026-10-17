@@ -9,6 +9,19 @@ It makes codes (`<QrCode>` and `qrSvg()`, from its own encoder), reads them from
 (`scan()`) and from the camera (`<QrScanner>`). No WASM anywhere, so the app's Content Security
 Policy stays as it is. What each browser allows is in [Camera support](../../docs/camera.md).
 
+## The plugin
+
+```ts
+// xcwds.config.ts
+import camera from '@xcwds/plugin-camera';
+import qr from '@xcwds/plugin-qr';
+export default defineConfig({ brand, plugins: [camera(), qr()] });
+```
+
+It takes no options yet and declares `network: false`, so the build and Settings → Privacy list
+it as talking to no server. `<QrScanner>` needs `@xcwds/plugin-camera` too; making codes and
+`scan()` don't.
+
 ## `<QrCode>`
 
 ```svelte
@@ -46,6 +59,19 @@ const { size, modules } = encodeQr('https://example.com'); // modules[y * size +
 elsewhere: `{ size, version, errorCorrection, modules }`. Both encode text as UTF-8 in byte mode,
 in the smallest of the 40 versions that holds it, and throw `QrTooLongError` (a `RangeError`)
 when it doesn't fit. `boost: false` keeps the error correction level you asked for.
+
+## Downloading a code: `saveQr()` and `qrPng()`
+
+```ts
+import { saveQr } from '@xcwds/plugin-qr/make';
+
+button.onclick = () => saveQr(text, { format: 'png' }); // qr-code.png
+```
+
+`saveQr(text, { format, name })` downloads `qr-code.svg` (the default: sharp at any size) or
+`qr-code.png` (`name` replaces `qr-code`), made on the device from a `blob:` URL; call it from a
+tap. `qrPng(text, { scale, margin, errorCorrection })` returns the PNG as a `Blob`, `scale` pixels
+per module (default 8).
 
 ## Reading a code from an image: `scan()`
 

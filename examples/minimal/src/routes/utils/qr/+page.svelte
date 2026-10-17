@@ -1,6 +1,7 @@
 <script lang="ts">
 	import QrCode from '@xcwds/plugin-qr/QrCode.svelte';
 	import QrScanner from '@xcwds/plugin-qr/QrScanner.svelte';
+	import { saveQr } from '@xcwds/plugin-qr/make';
 	import { scan, type ScanResult } from '@xcwds/plugin-qr/scan';
 
 	// Drawn and read on the device: the text never leaves it.
@@ -40,6 +41,20 @@
 		<textarea class="min-h-11 rounded-xl border p-2" rows="3" bind:value={text}></textarea>
 	</label>
 	<QrCode value={text} class="w-full max-w-xs self-center" />
+	{#if text && new TextEncoder().encode(text).length <= 2331}
+		<div class="flex gap-3 self-center">
+			<button
+				type="button"
+				class="min-h-11 rounded-xl border px-3"
+				onclick={() => saveQr(text, { format: 'svg' })}>Download SVG</button
+			>
+			<button
+				type="button"
+				class="min-h-11 rounded-xl border px-3"
+				onclick={() => saveQr(text, { format: 'png' })}>Download PNG</button
+			>
+		</div>
+	{/if}
 
 	<input
 		bind:this={picker}
