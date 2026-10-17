@@ -1,4 +1,5 @@
 import { memoryStorage, pluginMeta } from '@xcwds/core';
+import toolsFactory from '@xcwds/plugin-tools';
 import toolsClient from '@xcwds/plugin-tools/client';
 import { buildTestApp, type Importer } from '@xcwds/testing';
 import { describe, expect, it } from 'vitest';
@@ -12,7 +13,9 @@ import { chores, mood, templates, water } from './templates.js';
 const importer: Importer = async (id) => {
 	const entries: Record<string, () => Promise<Record<string, unknown>>> = {
 		'@xcwds/plugin-blocks': () => import('./index.js'),
-		'@xcwds/plugin-blocks/client': () => import('./client.js')
+		'@xcwds/plugin-blocks/client': () => import('./client.js'),
+		'@xcwds/plugin-tools': () => import('@xcwds/plugin-tools'),
+		'@xcwds/plugin-tools/client': () => import('@xcwds/plugin-tools/client')
 	};
 	const load = entries[id];
 	if (!load) throw Object.assign(new Error(id), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
@@ -69,6 +72,21 @@ describe('options', () => {
 		await expect(
 			buildTestApp({ plugins: [blocksFactory({ path: 'nope' })] }, { import: importer })
 		).rejects.toThrow(/@xcwds\/plugin-blocks: `path`/);
+		// The catalog app must be one of plugin-tools' apps.
+		await expect(
+			buildTestApp({ plugins: [blocksFactory({ app: 'yours' })] }, { import: importer })
+		).rejects.toThrow(/needs `@xcwds\/plugin-tools`/);
+		await expect(
+			buildTestApp(
+				{ plugins: [toolsFactory(tools), blocksFactory({ app: 'yourz' })] },
+				{ import: importer }
+			)
+		).rejects.toThrow(/"yourz", which isn't in/);
+		const withCatalog = await buildTestApp(
+			{ plugins: [toolsFactory(tools), blocksFactory({ app: 'yours' })] },
+			{ import: importer }
+		);
+		expect(withCatalog.blocks?.list()).toEqual([]);
 		const app = await buildTestApp({ plugins: [blocksFactory()] }, { import: importer });
 		expect(app.blocks?.list()).toEqual([]);
 		expect(pluginMeta(build).network).toBe(false);

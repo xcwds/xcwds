@@ -28,7 +28,7 @@ export type ResolvedBlocksOptions = {
 
 const KEYS = ['path', 'templates', 'app'];
 
-function fail(message: string): never {
+export function fail(message: string): never {
 	throw new XcwdsError(codes.CONFIG_INVALID, `${NAME}: ${message}`, { plugin: NAME });
 }
 

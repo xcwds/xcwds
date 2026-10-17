@@ -184,8 +184,10 @@ export function createBlocks(
 	return {
 		path,
 		templates,
-		list: () =>
-			[...read(false).filter((a) => !read(true).some((p) => p.id === a.id)), ...read(true)].map(
+		list() {
+			const normal = read(false);
+			const personal = read(true);
+			return [...normal.filter((a) => !personal.some((p) => p.id === a.id)), ...personal].map(
 				(a) => ({
 					id: a.id,
 					name: a.name,
@@ -193,7 +195,8 @@ export function createBlocks(
 					private: a.private,
 					path: pathOf(a)
 				})
-			),
+			);
+		},
 		get: find,
 		pathOf,
 		data(id) {

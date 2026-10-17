@@ -31,7 +31,8 @@ Options (all JSON):
   server.
 - **`templates`**: what "Add from a template" offers (default: the built-in `templates`, below).
   Each is checked with `parseApp` when the config loads.
-- **`app`**: the id of an app in `@xcwds/plugin-tools`' `apps` that your apps join as tools.
+- **`app`**: the id of an app in `@xcwds/plugin-tools`' `apps` that your apps join as tools. The build
+  fails when it isn't one of them (register this plugin after `tools()`).
 
 It declares `network: false`.
 
