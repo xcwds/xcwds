@@ -183,3 +183,83 @@ export function move<T>(list: readonly T[], index: number, by: number): T[] {
 	next.splice(to, 0, item as T);
 	return next;
 }
+
+/** An app being built or edited, kept until it's saved or discarded (#161). */
+export interface Draft {
+	/** The id of the app it edits, or `''` for a new app. */
+	for: string;
+	/** The definition as it stands: not checked yet, so a name or label can still be empty. */
+	app: AppDefinition;
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+	typeof v === 'object' && v !== null && !Array.isArray(v);
+const isText = (v: unknown) => typeof v === 'string';
+const isList = (v: unknown, each: (item: unknown) => boolean) => Array.isArray(v) && v.every(each);
+const optional = (v: unknown, check: (v: unknown) => boolean) => v === undefined || check(v);
+const isNumber = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+const hasId = (v: unknown): v is Record<string, unknown> =>
+	isObject(v) && isText(v.id) && isText(v.label);
+
+function isRepeat(v: unknown): boolean {
+	if (!isObject(v)) return false;
+	if (v.repeat === 'daily') return true;
+	if (v.repeat === 'weekly') return isList(v.weekdays, (d) => Number.isInteger(d));
+	return v.repeat === 'every' && isNumber(v.days);
+}
+
+function isField(v: unknown): boolean {
+	if (!hasId(v)) return false;
+	switch (v.type) {
+		case 'number':
+			return optional(v.unit, isText) && optional(v.min, isNumber) && optional(v.max, isNumber);
+		case 'scale':
+			return (v.max === 5 || v.max === 10) && optional(v.low, isText) && optional(v.high, isText);
+		case 'choice':
+			return isList(v.options, hasId);
+		case 'yesno':
+		case 'text':
+		case 'time':
+			return true;
+		default:
+			return false;
+	}
+}
+
+function isBlock(v: unknown): boolean {
+	if (!hasId(v)) return false;
+	switch (v.type) {
+		case 'checklist':
+			return isList(v.items, (i) => hasId(i) && optional(i.repeat, isRepeat));
+		case 'counter':
+			return (
+				(v.reset === 'never' || v.reset === 'daily' || v.reset === 'weekly') &&
+				optional(v.goal, isNumber) &&
+				optional(v.unit, isText)
+			);
+		case 'log':
+			return isList(v.fields, isField);
+		case 'notes':
+			return true;
+		default:
+			return false;
+	}
+}
+
+/**
+ * Reads a saved draft back. Unlike `parseApp` it allows what a builder can hold mid-edit (an
+ * empty name or label, a goal that isn't whole yet), but only shapes the builder can show; a
+ * draft that isn't one is dropped. `parseApp` still checks it at Save.
+ */
+export function parseDraft(raw: unknown): Draft | undefined {
+	if (!isObject(raw) || !isText(raw.for) || !isObject(raw.app)) return undefined;
+	const app = raw.app;
+	const ok =
+		app.format === 1 &&
+		isText(app.id) &&
+		isText(app.name) &&
+		optional(app.emoji, isText) &&
+		typeof app.private === 'boolean' &&
+		isList(app.blocks, isBlock);
+	return ok ? { for: raw.for as string, app: app as unknown as AppDefinition } : undefined;
+}

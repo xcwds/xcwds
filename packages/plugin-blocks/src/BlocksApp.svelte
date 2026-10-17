@@ -15,18 +15,12 @@
 	 */
 	import { useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
-	import Checklist from './blocks/Checklist.svelte';
-	import Counter from './blocks/Counter.svelte';
-	import Log from './blocks/Log.svelte';
-	import Notes from './blocks/Notes.svelte';
-	import type { ChecklistData } from './checklist.js';
-	import type { CounterData } from './counter.js';
-	import type { AppData, BlockData, NotesData } from './data.js';
+	import BlockList from './blocks/BlockList.svelte';
+	import type { AppData, BlockData } from './data.js';
 	import type { AppDefinition } from './format.js';
 	import type {} from './client.js';
-	import type { LogData } from './log.js';
 	import { go, href } from './navigate.js';
-	import { button, muted } from './ui.js';
+	import { button } from './ui.js';
 
 	let { private: personal = false }: { private?: boolean } = $props();
 
@@ -115,43 +109,12 @@
 		<!-- Keyed: another app gets new blocks, never this one's (or its pending saves). -->
 		{#key definition.id}
 			<div class="flex flex-col gap-6" data-testid="blocks-app" data-app-id={definition.id}>
-				{#each definition.blocks as block (block.id)}
-					{@const saved = data?.blocks[block.id]}
-					<section class="flex flex-col gap-2" aria-labelledby="block-{block.id}">
-						<h2 id="block-{block.id}" class="text-lg font-semibold">{block.label}</h2>
-						{#if block.type === 'checklist'}
-							<Checklist
-								{block}
-								{now}
-								data={saved as ChecklistData | undefined}
-								update={updater<ChecklistData>(definition.id, block.id)}
-							/>
-						{:else if block.type === 'counter'}
-							<Counter
-								{block}
-								{now}
-								data={saved as CounterData | undefined}
-								update={updater<CounterData>(definition.id, block.id)}
-							/>
-						{:else if block.type === 'log'}
-							<Log
-								{block}
-								{now}
-								data={saved as LogData | undefined}
-								update={updater<LogData>(definition.id, block.id)}
-							/>
-						{:else}
-							<Notes
-								{block}
-								data={saved as NotesData | undefined}
-								update={updater<NotesData>(definition.id, block.id)}
-							/>
-						{/if}
-					</section>
-				{/each}
-				{#if !definition.blocks.length}
-					<p class={muted}>This app has no blocks yet.</p>
-				{/if}
+				<BlockList
+					app={definition}
+					{data}
+					{now}
+					update={(blockId) => updater(definition!.id, blockId)}
+				/>
 				<a
 					href={href(blocks.editPathOf(definition))}
 					class="{button} flex items-center self-start"

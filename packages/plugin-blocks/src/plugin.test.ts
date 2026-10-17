@@ -184,6 +184,31 @@ describe('app.blocks', () => {
 		expect(blocks.data(id).blocks.glasses).toMatchObject({ value: 4 });
 	});
 
+	it("keeps the builder's draft, private ones in the private group, never backed up", async () => {
+		const app = await withTools();
+		const blocks = app.blocks!;
+		expect(blocks.draft()).toBeUndefined();
+		const draft = { for: '', app: { ...water, name: '' } };
+		expect(blocks.saveDraft(draft)).toBe(true);
+		expect(blocks.draft()).toEqual(draft);
+		expect(has(app, 'app:blocks:draft')).toBe(true);
+		expect(app.storage.exportData().data['app:blocks:draft']).toBeUndefined();
+		// Made private while editing: it moves to the private group.
+		const secret = { for: '', app: { ...water, private: true } };
+		expect(blocks.saveDraft(secret)).toBe(true);
+		expect(has(app, 'app:blocks:draft')).toBe(false);
+		expect(has(app, 'app:blocks:private-draft')).toBe(true);
+		expect(blocks.draft()).toEqual(secret);
+		// A draft of a private app stays private even if it's being made normal.
+		const mood = blocks.addFromTemplate(templates.find((t) => t.private)!);
+		if (!mood.ok) throw new Error('not saved');
+		expect(blocks.saveDraft({ for: mood.app.id, app: { ...mood.app, private: false } })).toBe(true);
+		expect(has(app, 'app:blocks:private-draft')).toBe(true);
+		expect(blocks.saveDraft(undefined)).toBe(true);
+		expect(blocks.draft()).toBeUndefined();
+		expect(has(app, 'app:blocks:private-draft')).toBe(false);
+	});
+
 	it('refuses an invalid app with a sentence, and saves nothing', async () => {
 		const app = await withTools();
 		const result = app.blocks!.save({ ...water, name: '' });
