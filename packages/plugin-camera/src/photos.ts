@@ -8,7 +8,8 @@
  * it.
  */
 import type { BlobInfo, BlobScope, Collection } from '@xcwds/core';
-import { encode, fitSize } from './clean.js';
+import { cleanImage, encode, fitSize, type CleanOptions } from './clean.js';
+import { noMetadata, type ImageMetadata } from './metadata.js';
 
 /** What a photo's blob carries in `meta`. */
 export interface PhotoMeta {
@@ -69,6 +70,8 @@ export interface PhotoCollectionOptions {
 	label?: string;
 	/** Default `photos`. Clearing the group clears both. */
 	group?: string;
+	/** How `add` re-encodes picked files (the camera plugin passes its own options). */
+	image?: CleanOptions;
 }
 
 /**
@@ -95,6 +98,18 @@ export type BlobsLike = Pick<
 export interface PhotoEnv {
 	createImageBitmap?: (source: ImageBitmapSource) => Promise<ImageBitmap>;
 	now?: () => number;
+	/** Stands in for `cleanImage` in tests. */
+	clean?: typeof cleanImage;
+}
+
+/** What `add` did with the files it was given. */
+export interface AddResult {
+	/** How many were kept. */
+	added: number;
+	/** The ones that weren't, with why. */
+	failed: { name: string; error: string }[];
+	/** What the kept files carried that their copies don't (all of them together). */
+	removed: ImageMetadata;
 }
 
 export interface Photos {
@@ -105,6 +120,11 @@ export interface Photos {
 	 * (`persist`): Firefox asks the person, so it follows the shutter tap; a refusal changes nothing.
 	 */
 	save(photo: PhotoInput): Promise<SaveResult>;
+	/**
+	 * Keeps picked image files ("Add from files"): each is re-encoded from its pixels
+	 * (`cleanImage`), so nothing it carried (location, camera, dates) is kept. Never rejects.
+	 */
+	add(files: Iterable<File>): Promise<AddResult>;
 	/** The photos, newest first. */
 	list(): Promise<SavedPhoto[]>;
 	/** A photo's file. */
@@ -115,6 +135,45 @@ export interface Photos {
 	delete(id: string): Promise<boolean>;
 	/** Calls `listener` when the photos change: saved or deleted here or in another tab, or cleared. */
 	onChange(listener: () => void): () => void;
+}
+
+/**
+ * When an EXIF date (`2026:10:16 08:12:00`, local time with no zone) was, in ms since the epoch,
+ * read as this device's local time. Undefined when there's none or it doesn't parse.
+ */
+export function takenAtOf(taken: string | undefined): number | undefined {
+	const m = taken?.match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+	if (!m) return undefined;
+	const [y, mo, d, h, mi, se] = m.slice(1).map(Number) as [
+		number,
+		number,
+		number,
+		number,
+		number,
+		number
+	];
+	const date = new Date(y, mo - 1, d, h, mi, se);
+	// `new Date` rolls an impossible date over (month 13, say); refuse it instead.
+	if (date.getFullYear() !== y || date.getMonth() !== mo - 1 || date.getDate() !== d)
+		return undefined;
+	return date.getTime();
+}
+
+const join = (items: string[]) =>
+	items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
+
+/** A sentence for what cleaning removed: `Removed the location, the camera (Google Pixel 8) and…`. */
+export function describeRemoved(removed: ImageMetadata): string {
+	const parts: string[] = [];
+	if (removed.gps) parts.push('the location');
+	if (removed.camera) parts.push(`the camera (${removed.camera})`);
+	if (removed.taken) parts.push('the date taken');
+	if (removed.exif && !removed.camera && !removed.taken && !removed.gps)
+		parts.push('camera details');
+	else if (removed.exif) parts.push('other camera details');
+	if (removed.xmp) parts.push('editing history');
+	if (removed.other) parts.push('embedded text');
+	return parts.length ? `Removed ${join(parts)}.` : 'No hidden details were found.';
 }
 
 /** Makes a small JPEG of `blob`, or null when the browser can't. */
@@ -167,7 +226,7 @@ export function createPhotos(
 		};
 	};
 
-	return {
+	const photos: Photos = {
 		collection,
 		thumbs,
 		async save(photo) {
@@ -191,6 +250,45 @@ export function createPhotos(
 				await blobs.persist().catch(() => 'denied');
 			}
 			return { ok: true, id };
+		},
+		async add(files) {
+			const result: AddResult = { added: 0, failed: [], removed: noMetadata() };
+			const cameras = new Set<string>();
+			const list = [...files];
+			for (const [i, file] of list.entries()) {
+				const cleaned = await (env.clean ?? cleanImage)(file, options.image).catch(() => ({
+					ok: false as const,
+					error: "This browser can't open this image. Try a JPEG, PNG or WebP file."
+				}));
+				if (!cleaned.ok) {
+					result.failed.push({ name: file.name, error: cleaned.error });
+					continue;
+				}
+				const saved = await photos.save({
+					blob: cleaned.blob,
+					width: cleaned.width,
+					height: cleaned.height,
+					takenAt: takenAtOf(cleaned.removed.taken) ?? (file.lastModified || undefined)
+				});
+				if (!saved.ok) {
+					// Storage is full: the rest won't fit either, and each says so.
+					for (const rest of list.slice(i))
+						result.failed.push({ name: rest.name, error: saved.error });
+					break;
+				}
+				result.added++;
+				const r = cleaned.removed;
+				result.removed.exif ||= r.exif;
+				result.removed.gps ||= r.gps;
+				result.removed.xmp ||= r.xmp;
+				result.removed.other ||= r.other;
+				if (r.taken) result.removed.taken ??= r.taken;
+				if (r.camera) cameras.add(r.camera);
+			}
+			// One camera's name says something; several are just "camera details".
+			if (cameras.size === 1) result.removed.camera = [...cameras][0];
+			else if (cameras.size > 1) result.removed.exif = true;
+			return result;
 		},
 		async list() {
 			const all = await blobs.list(collection);
@@ -229,4 +327,5 @@ export function createPhotos(
 			};
 		}
 	};
+	return photos;
 }

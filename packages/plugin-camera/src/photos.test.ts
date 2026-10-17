@@ -1,12 +1,16 @@
 import { createBlobs, memoryBlobs } from '@xcwds/core';
 import { buildTestApp } from '@xcwds/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { CleanResult } from './clean.js';
 import { cameraPlugin } from './client.js';
+import { noMetadata } from './metadata.js';
 import {
 	PHOTO_MESSAGES,
 	THUMB_SIDE,
 	createPhotos,
+	describeRemoved,
 	makeThumbnail,
+	takenAtOf,
 	parsePhotoMeta,
 	photoCollections,
 	type PhotoEnv
@@ -206,5 +210,93 @@ describe('the plugin', () => {
 		await app.blobs.clear();
 		expect(await app.photos!.list()).toEqual([]);
 		await app.close();
+	});
+});
+
+describe('add (from files)', () => {
+	const cleaned = (removed = {}, extra: Partial<CleanResult> = {}): CleanResult =>
+		({
+			ok: true,
+			blob: jpeg('clean'),
+			width: 40,
+			height: 30,
+			type: 'image/jpeg',
+			removed: { ...noMetadata(), ...removed },
+			...extra
+		}) as CleanResult;
+
+	it('keeps the cleaned copies, dated from the photo, and says what was removed', async () => {
+		const clean = vi.fn(async (file: Blob) =>
+			(await file.text()) === 'heic'
+				? ({ ok: false, error: "Can't open it." } as const)
+				: cleaned({ exif: true, gps: true, camera: 'Pixel 8', taken: '2026:10:16 08:12:00' })
+		);
+		const backend = memoryBlobs();
+		const blobs = createBlobs({ backend }).scope('camera');
+		vi.spyOn(blobs, 'persist').mockResolvedValue('granted');
+		const photos = createPhotos(blobs, { image: { maxSide: 2048 } }, { ...env(), clean });
+		const result = await photos.add([
+			new File(['a'], 'a.jpg', { type: 'image/jpeg' }),
+			new File(['heic'], 'b.heic', { type: 'image/heic' })
+		]);
+		expect(clean).toHaveBeenCalledWith(expect.any(File), { maxSide: 2048 });
+		expect(result.added).toBe(1);
+		expect(result.failed).toEqual([{ name: 'b.heic', error: "Can't open it." }]);
+		expect(describeRemoved(result.removed)).toBe(
+			'Removed the location, the camera (Pixel 8), the date taken and other camera details.'
+		);
+		const [kept] = await photos.list();
+		expect(kept!.takenAt).toBe(new Date(2026, 9, 16, 8, 12, 0).getTime());
+		// What's kept is the clean copy, never the picked file.
+		expect(await (await photos.get(kept!.id))?.text()).toBe('clean');
+	});
+
+	it('dates a file without EXIF by its modified time, and names no camera for several', async () => {
+		const cams = ['A', 'B'];
+		const clean = vi.fn(async () => cleaned({ exif: true, camera: cams.shift() }));
+		const { photos } = store({ ...env(), clean });
+		const result = await photos.add([
+			new File(['a'], 'a.png', { lastModified: 5000 }),
+			new File(['b'], 'b.png', { lastModified: 6000 })
+		]);
+		expect(result.added).toBe(2);
+		expect(result.removed.camera).toBeUndefined();
+		expect((await photos.list()).map((p) => p.takenAt)).toEqual([6000, 5000]);
+	});
+
+	it('stops at full storage, and never rejects', async () => {
+		const clean = vi.fn(async () => cleaned());
+		const { photos, blobs } = store({ ...env(), clean });
+		vi.spyOn(blobs, 'put').mockResolvedValue(false);
+		const result = await photos.add([new File(['a'], 'a.jpg'), new File(['b'], 'b.jpg')]);
+		// Nothing is dropped silently: every file not kept is named.
+		expect(result).toMatchObject({
+			added: 0,
+			failed: [
+				{ name: 'a.jpg', error: PHOTO_MESSAGES.full },
+				{ name: 'b.jpg', error: PHOTO_MESSAGES.full }
+			]
+		});
+		expect(clean).toHaveBeenCalledTimes(1);
+		const throwing = store({ ...env(), clean: () => Promise.reject(new Error('boom')) });
+		expect((await throwing.photos.add([new File(['a'], 'a.jpg')])).failed).toHaveLength(1);
+	});
+});
+
+describe('takenAtOf and describeRemoved', () => {
+	it('reads an EXIF date as local time, and refuses nonsense', () => {
+		expect(takenAtOf('2026:10:16 08:12:00')).toBe(new Date(2026, 9, 16, 8, 12).getTime());
+		expect(takenAtOf('2026:13:40 08:12:00')).toBeUndefined();
+		expect(takenAtOf('0000:00:00 00:00:00')).toBeUndefined();
+		expect(takenAtOf('yesterday')).toBeUndefined();
+		expect(takenAtOf(undefined)).toBeUndefined();
+	});
+
+	it('says what was removed in plain words', () => {
+		expect(describeRemoved(noMetadata())).toBe('No hidden details were found.');
+		expect(describeRemoved({ ...noMetadata(), exif: true })).toBe('Removed camera details.');
+		expect(describeRemoved({ ...noMetadata(), xmp: true, other: true })).toBe(
+			'Removed editing history and embedded text.'
+		);
 	});
 });

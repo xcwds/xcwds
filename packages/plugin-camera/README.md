@@ -8,7 +8,7 @@ So far it holds the plugin, which hands the app a camera controller as `app.came
 `<Camera>` viewfinder, the controller itself, from `@xcwds/plugin-camera/camera`, and the image
 cleaning, from `@xcwds/plugin-camera/image`, and the start of keeping photos in the app
 ([#146](https://github.com/xcwds/xcwds/issues/146)): `app.photos` and the `<Photos>` grid,
-with Share and Save. Selecting several photos and importing one come next.
+with Share, Save and Add from files. Selecting several photos comes next.
 
 ## The plugin
 
@@ -84,6 +84,12 @@ group), so a list never decodes full photos.
   storage is full or blocked (no thumbnail is left behind). The first save in a session also
   asks the browser not to evict the app's data (`app.blobs.persist()`); Firefox asks the person,
   so it follows the shutter tap, and a refusal changes nothing.
+- **`add(files)`**: keeps picked image files. Each is re-encoded from its pixels with
+  `cleanImage` (below, with the plugin's `maxSide`, `type` and `quality`), so nothing it carried
+  is kept, and dated from its EXIF date (read as local time) or else its modified time. Resolves
+  to `{ added, failed: [{ name, error }], removed }`, never rejecting; it stops at full storage.
+  `describeRemoved(removed)` (from `@xcwds/plugin-camera/photos`) puts `removed` in a sentence:
+  "Removed the location, the camera (Google Pixel 8) and the date taken."
 - **`list()`**: `{ id, width, height, takenAt, size, type, thumb }` for each photo.
 - **`get(id)`**, **`thumbnail(photo)`** (the photo itself when it has none): the `Blob`.
 - **`delete(id)`**: the photo and its thumbnail; false if it couldn't.
@@ -120,6 +126,9 @@ const notes = createPhotos(app.blobs, { label: 'Note photos', group: 'notes' });
   downloads it, named for when it was taken (`photo-20261017-083005.jpg`). The first time a
   photo leaves the app on a page load, the viewer says so: it's now outside the app, and wherever
   it went may keep or back it up. What leaves is the clean file, with no metadata.
+- **Add from files** picks images from the device (several at once) and keeps clean copies
+  (`app.photos.add`), then says how many it added and what it removed, and names a file it
+  couldn't open (HEIC outside Safari, say). App updates wait while it works.
 - While the app is locked ([`@xcwds/plugin-lock`](../plugin-lock/README.md)), nothing is rendered
   and no object URL exists; the lock's cover handles the app switcher.
 - `photos` takes another store instead of `app.photos`; `text` replaces any of the labels.

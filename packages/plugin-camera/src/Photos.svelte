@@ -19,7 +19,12 @@
 	 */
 	import { useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
-	import type { PhotoInput, Photos as PhotoStore, SavedPhoto } from './photos.js';
+	import {
+		describeRemoved,
+		type PhotoInput,
+		type Photos as PhotoStore,
+		type SavedPhoto
+	} from './photos.js';
 	import { SHARE_MESSAGES, canShareFiles, sharePhoto } from './share.js';
 
 	type Text = {
@@ -38,6 +43,10 @@
 		undo: string;
 		failed: string;
 		missing: string;
+		add: string;
+		adding: string;
+		added: (count: number) => string;
+		notAdded: (count: number) => string;
 	};
 	const defaults: Text = {
 		label: 'Photos',
@@ -54,7 +63,11 @@
 		deleted: 'Photo deleted.',
 		undo: 'Undo',
 		failed: "The photo couldn't be deleted. Try again.",
-		missing: "This app doesn't keep photos (no camera plugin)."
+		missing: "This app doesn't keep photos (no camera plugin).",
+		add: 'Add from files',
+		adding: 'Adding…',
+		added: (n) => (n === 1 ? 'Added 1 photo.' : `Added ${n} photos.`),
+		notAdded: (n) => (n === 1 ? "1 file wasn't added:" : `${n} files weren't added:`)
 	};
 
 	let {
@@ -267,8 +280,36 @@
 		if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) step(dx < 0 ? 1 : -1);
 	}
 
+	/** Picked files being cleaned and saved; app updates wait (they'd lose them). */
+	let adding = $state(false);
+	let picker: HTMLInputElement | undefined = $state();
+	async function addFiles(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const files = [...(input.files ?? [])];
+		// Cleared at once, so picking the same files again still fires `change`.
+		input.value = '';
+		if (!store || !files.length || adding) return;
+		adding = true;
+		message = '';
+		try {
+			const result = await store.add(files);
+			const lines: string[] = [];
+			if (result.added) lines.push(`${t.added(result.added)} ${describeRemoved(result.removed)}`);
+			if (result.failed.length) {
+				const [first] = result.failed;
+				lines.push(`${t.notAdded(result.failed.length)} ${first!.name}: ${first!.error}`);
+			}
+			message = lines.join(' ');
+		} finally {
+			adding = false;
+		}
+	}
+
 	onMount(() => {
 		shares = canShareFiles();
+		const update = (app as { update?: { markBusy(name: string, busy: () => boolean): () => void } })
+			.update;
+		const unmark = update?.markBusy('photos being added', () => adding);
 		const stopLock = lock?.subscribe((state) => {
 			if (state.locked === locked) return;
 			locked = state.locked;
@@ -284,6 +325,7 @@
 		void refresh();
 		const stop = store?.onChange(() => void refresh());
 		return () => {
+			unmark?.();
 			stopLock?.();
 			stop?.();
 			if (undo) clearTimeout(undo.timer);
@@ -294,6 +336,23 @@
 
 {#if !locked}
 	<div class="flex flex-col gap-3" data-testid="photos">
+		{#if store}
+			<input
+				bind:this={picker}
+				type="file"
+				accept="image/*"
+				multiple
+				class="hidden"
+				aria-label={t.add}
+				onchange={addFiles}
+			/>
+			<button
+				type="button"
+				class="min-h-11 w-fit rounded-xl bg-(--xcwds-shell-card) px-4 font-medium hover:not-disabled:bg-(--xcwds-shell-hover-bg) active:bg-(--xcwds-shell-hover-bg) disabled:opacity-40"
+				onclick={() => picker?.click()}
+				disabled={adding}>{adding ? t.adding : t.add}</button
+			>
+		{/if}
 		{#if !store}
 			<p>{t.missing}</p>
 		{:else if list && list.length === 0}

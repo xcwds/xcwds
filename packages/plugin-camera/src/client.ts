@@ -60,10 +60,13 @@ export const SAVING = 'photo being saved';
 export function cameraPlugin(env: CameraEnv = {}) {
 	return definePlugin(
 		(app, input: CameraPluginOptions) => {
-			const camera = createCamera(resolveOptions(input), env);
+			const options = resolveOptions(input);
+			const camera = createCamera(options, env);
 			app.decorate('camera', camera);
 			// Photos kept in the app: personal (a lock's reset clears them), never in backups.
-			app.decorate('photos', createPhotos(app.blobs, {}, env));
+			// Picked files are re-encoded like the camera's own photos.
+			const { maxSide, type, quality } = options;
+			app.decorate('photos', createPhotos(app.blobs, { image: { maxSide, type, quality } }, env));
 
 			const lock = () => (app as { lock?: LockLike }).lock;
 			let unsubscribe: (() => void) | undefined;
