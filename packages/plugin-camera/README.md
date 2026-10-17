@@ -10,6 +10,9 @@ cleaning, from `@xcwds/plugin-camera/image`, and the start of keeping photos in 
 ([#146](https://github.com/xcwds/xcwds/issues/146)): `app.photos` and the `<Photos>` grid,
 with Share, Save, Add from files and Select.
 
+What each browser lets the camera do (zoom, torch, Web Share with files, and the rest) is in
+[Camera support](../../docs/camera.md).
+
 ## The plugin
 
 ```ts
