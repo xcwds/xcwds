@@ -121,6 +121,65 @@ test('a private app logs entries and notes, deletes with Undo, and stays out of 
 	await expect(page.getByTestId('recent').getByRole('link', { name: /Mood/ })).toHaveCount(0);
 });
 
+test('a log charts its numbers, as a table too, and edits an entry in place', async ({ page }) => {
+	await add(page, 'Mood');
+	const form = page.getByTestId('log-form');
+	const sleep = form.getByLabel('Sleep (h)');
+	for (const [mood, hours] of [
+		['3', '6'],
+		['5', '8']
+	] as const) {
+		await form.getByText(mood, { exact: true }).click();
+		await sleep.fill(hours);
+		await form.getByRole('button', { name: 'Add entry' }).click();
+		await expect(sleep).toHaveValue('');
+	}
+	const entries = page.getByTestId('log-entry');
+	await expect(entries).toHaveCount(2);
+
+	const chart = page.locator('[data-testid="log-chart"][data-field="mood"]');
+	await expect(chart.getByTestId('log-summary')).toHaveText(
+		'Mood, last 7 days: latest 5, average 4, lowest 3, highest 5 (2 entries).'
+	);
+	await expect(chart.getByRole('img')).toHaveAttribute('aria-label', /latest 5/);
+	await expect(chart.locator('circle')).toHaveCount(2);
+	await chart.getByRole('button', { name: '30 days' }).click();
+	await expect(chart.getByRole('button', { name: '30 days' })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await expect(chart.getByTestId('log-summary')).toContainText('last 30 days');
+	await chart.getByRole('button', { name: 'Show as table' }).click();
+	await expect(chart.locator('tbody tr')).toHaveCount(2);
+	await expect(chart.locator('tbody tr').first()).toContainText('5 of 5');
+	await expect(page.locator('[data-testid="log-chart"][data-field="slept"]')).toContainText(
+		'latest 8 h'
+	);
+
+	// Edit the older entry: the form fills in, saving keeps its place and time.
+	const older = entries.nth(1);
+	const time = await older.locator('p').first().textContent();
+	await older.getByRole('button', { name: /^Edit/ }).click();
+	await expect(page.getByTestId('log-editing')).toBeVisible();
+	await expect(sleep).toHaveValue('6');
+	await expect(form.getByRole('radio', { name: '3' })).toBeChecked();
+	await form.getByText('4', { exact: true }).click();
+	await form.getByRole('button', { name: 'Save changes' }).click();
+	await expect(page.getByTestId('log-editing')).toHaveCount(0);
+	await expect(entries).toHaveCount(2);
+	await expect(entries.nth(1)).toContainText(/Mood\s*4 of 5/);
+	await expect(entries.nth(1).locator('p').first()).toHaveText(time!);
+	await expect(chart.getByTestId('log-summary')).toContainText('lowest 4');
+
+	// Cancel leaves it as it was.
+	await entries.nth(0).getByRole('button', { name: /^Edit/ }).click();
+	await sleep.fill('1');
+	await form.getByRole('button', { name: 'Cancel' }).click();
+	await expect(sleep).toHaveValue('');
+	await expect(entries.nth(0)).toContainText(/Sleep\s*8 h/);
+	expect(await auditTapTargets(page)).toEqual([]);
+});
+
 test('notes typed in one app stay there when another app opens straight after', async ({
 	page
 }) => {

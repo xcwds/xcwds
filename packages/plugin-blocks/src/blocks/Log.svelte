@@ -1,12 +1,21 @@
 <script lang="ts">
 	/**
-	 * A log block: a form that adds a timestamped entry, and the entries, newest first, each
+	 * A log block: a form that adds a timestamped entry, a chart for each number or scale field,
+	 * and the entries, newest first, each editable (in the same form, keeping its time) and
 	 * deletable with Undo.
 	 */
 	import { newId, LIMITS, type LogBlock } from '../format.js';
-	import { addEntry, parseValues, removeEntry, type LogData, type LogEntry } from '../log.js';
+	import {
+		addEntry,
+		parseValues,
+		removeEntry,
+		updateEntry,
+		type LogData,
+		type LogEntry
+	} from '../log.js';
 	import { button, card, field, muted, primary } from '../ui.js';
 	import { valueText, whenText } from '../view.js';
+	import LogChart from './LogChart.svelte';
 	import type { UpdateBlock } from './types.js';
 
 	let {
@@ -44,17 +53,51 @@
 		return out;
 	}
 
-	function add(event: SubmitEvent) {
+	/** The entry the form is editing, by id; null when it adds a new one. */
+	let editing = $state<string | null>(null);
+	let formElement = $state<HTMLFormElement>();
+	const charted = $derived(block.fields.filter((f) => f.type === 'number' || f.type === 'scale'));
+
+	function submit(event: SubmitEvent) {
 		event.preventDefault();
 		const parsed = parseValues(block, values());
 		if (!parsed.ok) {
 			error = parsed.error;
 			return;
 		}
-		const entry: LogEntry = { id: newId(), at: Date.now(), values: parsed.value };
-		if (!update((saved) => addEntry(saved ?? { entries: [] }, entry))) return;
+		const id = editing;
+		const saved = update((current) => {
+			const latest = current ?? { entries: [] };
+			const before = id ? latest.entries.find((e) => e.id === id) : undefined;
+			// Edited: same id and time. Gone meanwhile (another tab deleted it): added back as edited.
+			if (before) return updateEntry(latest, { ...before, values: parsed.value });
+			return addEntry(latest, { id: id ?? newId(), at: Date.now(), values: parsed.value });
+		});
+		if (!saved) return;
+		reset();
+	}
+
+	function reset() {
 		error = '';
 		form = {};
+		editing = null;
+	}
+
+	/** Puts an entry's values in the form, as its inputs hold them. */
+	function edit(entry: LogEntry) {
+		const next: typeof form = {};
+		for (const f of block.fields) {
+			const v = entry.values[f.id];
+			if (v === undefined) continue;
+			if (f.type === 'number') next[f.id] = v as number;
+			else if (f.type === 'yesno') next[f.id] = v ? 'yes' : 'no';
+			else next[f.id] = String(v);
+		}
+		form = next;
+		error = '';
+		editing = entry.id;
+		formElement?.scrollIntoView({ block: 'nearest' });
+		formElement?.querySelector<HTMLElement>('input, select')?.focus();
 	}
 
 	/** The last deleted entry, until Undo times out. */
@@ -68,6 +111,7 @@
 			return result.data;
 		});
 		if (!saved || !removed) return;
+		if (editing === id) reset();
 		if (undo) clearTimeout(undo.timer);
 		undo = { entry: removed, timer: setTimeout(() => (undo = null), 8000) };
 	}
@@ -88,7 +132,19 @@
 </script>
 
 <div class="flex flex-col gap-4">
-	<form class="{card} flex flex-col gap-3" onsubmit={add} novalidate>
+	<form
+		bind:this={formElement}
+		class="{card} flex flex-col gap-3"
+		onsubmit={submit}
+		novalidate
+		data-testid="log-form"
+	>
+		{#if editing}
+			{@const entry = entries.find((e) => e.id === editing)}
+			<p class="text-sm font-medium" data-testid="log-editing">
+				Editing the entry from {entry ? whenText(entry.at, now) : 'earlier'}
+			</p>
+		{/if}
 		{#each block.fields as f (f.id)}
 			{#if f.type === 'scale'}
 				<fieldset class="flex flex-col gap-1">
@@ -173,8 +229,17 @@
 		{#if error}
 			<p class="text-sm text-red-700 dark:text-red-400" role="alert">{error}</p>
 		{/if}
-		<button type="submit" class="{primary} self-start">Add entry</button>
+		<div class="flex gap-2">
+			<button type="submit" class={primary}>{editing ? 'Save changes' : 'Add entry'}</button>
+			{#if editing}
+				<button type="button" class={button} onclick={reset}>Cancel</button>
+			{/if}
+		</div>
 	</form>
+
+	{#each charted as f (f.id)}
+		<LogChart field={f} {data} {now} />
+	{/each}
 
 	{#if entries.length}
 		<ul class="flex flex-col gap-2" aria-label="Entries: {block.label}">
@@ -194,12 +259,20 @@
 							{/each}
 						</dl>
 					</div>
-					<button
-						type="button"
-						class={button}
-						aria-label="Delete the entry from {when}"
-						onclick={() => remove(entry.id)}>Delete</button
-					>
+					<div class="flex flex-col gap-2">
+						<button
+							type="button"
+							class={button}
+							aria-label="Edit the entry from {when}"
+							onclick={() => edit(entry)}>Edit</button
+						>
+						<button
+							type="button"
+							class={button}
+							aria-label="Delete the entry from {when}"
+							onclick={() => remove(entry.id)}>Delete</button
+						>
+					</div>
 				</li>
 			{/each}
 		</ul>
