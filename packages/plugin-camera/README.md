@@ -7,7 +7,8 @@ camera on only while it's being used. **Work in progress**
 So far it holds the plugin, which hands the app a camera controller as `app.camera`, the
 `<Camera>` viewfinder, the controller itself, from `@xcwds/plugin-camera/camera`, and the image
 cleaning, from `@xcwds/plugin-camera/image`, and the start of keeping photos in the app
-([#146](https://github.com/xcwds/xcwds/issues/146)): `app.photos`. The photo grid comes next.
+([#146](https://github.com/xcwds/xcwds/issues/146)): `app.photos` and the `<Photos>` grid.
+Sharing and saving a photo out of the app, and importing one, come next.
 
 ## The plugin
 
@@ -86,7 +87,7 @@ group), so a list never decodes full photos.
 - **`list()`**: `{ id, width, height, takenAt, size, type, thumb }` for each photo.
 - **`get(id)`**, **`thumbnail(photo)`** (the photo itself when it has none): the `Blob`.
 - **`delete(id)`**: the photo and its thumbnail; false if it couldn't.
-- **`onChange(listener)`**: another tab changed them, or they were cleared.
+- **`onChange(listener)`**: they were saved or deleted, here or in another tab, or cleared.
 
 For photos that belong to one tool (a private one, say) in a group of their own, make a store over
 collections of your own:
@@ -97,6 +98,26 @@ import { createPhotos } from '@xcwds/plugin-camera/photos';
 // In your plugin's setup (it registers the collections, so once): app:<namespace>:photos
 const notes = createPhotos(app.blobs, { label: 'Note photos', group: 'notes' });
 ```
+
+## The photo grid
+
+```svelte
+<script>
+	import Photos from '@xcwds/plugin-camera/Photos.svelte';
+</script>
+
+<Photos />
+```
+
+- A grid of thumbnails, newest first, that follows saves and deletes in any tab. Thumbnails load
+  as they scroll into view; their object URLs are revoked when they leave it, when the photo is
+  deleted and when the grid goes.
+- Tapping one opens the viewer (a modal `<dialog>`): **Previous** and **Next**, the arrow keys
+  or a swipe step through the photos, Escape or **Close** closes it, and **Delete** deletes the
+  photo and opens the next one. **Undo** brings a deleted photo back for 8 seconds.
+- While the app is locked ([`@xcwds/plugin-lock`](../plugin-lock/README.md)), nothing is rendered
+  and no object URL exists; the lock's cover handles the app switcher.
+- `photos` takes another store instead of `app.photos`; `text` replaces any of the labels.
 
 ## The camera controller
 

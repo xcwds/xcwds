@@ -113,7 +113,7 @@ export interface Photos {
 	thumbnail(photo: SavedPhoto): Promise<Blob | undefined>;
 	/** Deletes a photo and its thumbnail. False if it couldn't. */
 	delete(id: string): Promise<boolean>;
-	/** Calls `listener` when the photos change in another tab, or are cleared. */
+	/** Calls `listener` when the photos change: saved or deleted here or in another tab, or cleared. */
 	onChange(listener: () => void): () => void;
 }
 
@@ -145,6 +145,11 @@ export function createPhotos(
 	const collection = blobs.register(described.photos);
 	const thumbs = blobs.register(described.thumbs);
 	let persisted = false;
+	/** This tab's own saves and deletes; `app.blobs` reports other tabs' and clears. */
+	const local = new Set<() => void>();
+	const changed = () => {
+		for (const listener of [...local]) listener();
+	};
 	const now = () => (env.now ?? Date.now)();
 
 	const toSaved = (info: BlobInfo<PhotoMeta>): SavedPhoto | null => {
@@ -180,6 +185,7 @@ export function createPhotos(
 				if (thumb) await blobs.delete(thumbs, thumb);
 				return { ok: false, error: PHOTO_MESSAGES.full };
 			}
+			changed();
 			if (!persisted) {
 				persisted = true;
 				await blobs.persist().catch(() => 'denied');
@@ -206,15 +212,21 @@ export function createPhotos(
 		async delete(id) {
 			const found = await blobs.get(collection, id);
 			if (!(await blobs.delete(collection, id))) return false;
+			if (found) changed();
 			// A thumbnail left behind is only wasted space: the photo is gone either way.
 			const thumb = found?.meta?.thumb;
 			if (thumb) await blobs.delete(thumbs, thumb);
 			return true;
 		},
 		onChange(listener) {
-			return blobs.onChange((key) => {
+			local.add(listener);
+			const stop = blobs.onChange((key) => {
 				if (key === null || key === collection.key) listener();
 			});
+			return () => {
+				local.delete(listener);
+				stop();
+			};
 		}
 	};
 }

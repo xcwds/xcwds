@@ -111,6 +111,85 @@ test('photos are kept in the app: they survive a reload and clear with their gro
 	await expect(page.getByTestId('kept')).toHaveText('0 photos kept');
 });
 
+test('the grid opens a photo in the viewer; delete can be undone; a locked app shows none (#146)', async ({
+	page
+}) => {
+	await gotoHydrated(page, url('/utils/camera'));
+	await expect(page.getByTestId('photos')).toContainText('No photos yet.');
+	await page.getByRole('button', { name: 'Turn on camera' }).click();
+	for (const n of [1, 2, 3]) {
+		await page.getByRole('button', { name: 'Take photo' }).click();
+		await expect(page.getByTestId('kept')).toHaveText(
+			n === 1 ? '1 photo kept' : `${n} photos kept`
+		);
+	}
+	await page.getByRole('button', { name: 'Turn off camera' }).click();
+	const tiles = page.getByRole('list', { name: 'Photos' }).getByRole('button');
+	await expect(tiles).toHaveCount(3);
+	// Each tile shows its thumbnail, from an object URL.
+	await expect(tiles.locator('img[src^="blob:"]')).toHaveCount(3);
+
+	// The newest first; arrow keys and buttons step through them.
+	await tiles.first().click();
+	const viewer = page.getByTestId('photo-viewer');
+	await expect(viewer).toBeVisible();
+	await expect(viewer.locator('img[src^="blob:"]')).toBeVisible();
+	await expect(viewer.getByRole('button', { name: 'Previous photo' })).toBeDisabled();
+	await page.keyboard.press('ArrowRight');
+	await expect(viewer.getByRole('button', { name: 'Previous photo' })).toBeEnabled();
+	await viewer.getByRole('button', { name: 'Next photo' }).click();
+	await expect(viewer.getByRole('button', { name: 'Next photo' })).toBeDisabled();
+	// A swipe right goes back one.
+	const picture = viewer.locator('[role="presentation"]');
+	await picture.dispatchEvent('pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 50 });
+	await picture.dispatchEvent('pointerup', { pointerId: 1, pointerType: 'touch', clientX: 250 });
+	await expect(viewer.getByRole('button', { name: 'Next photo' })).toBeEnabled();
+
+	// Delete: the next one opens in its place, and Undo brings it back.
+	await viewer.getByRole('button', { name: 'Delete' }).click();
+	await expect(page.getByTestId('kept')).toHaveText('2 photos kept');
+	await expect(viewer).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(viewer).toBeHidden();
+	await expect(tiles).toHaveCount(2);
+	await page.getByTestId('photos-status').getByRole('button', { name: 'Undo' }).click();
+	await expect(tiles).toHaveCount(3);
+	await expect(page.getByTestId('kept')).toHaveText('3 photos kept');
+
+	// Locked on this page (hidden with "Right away"): no grid and no object URLs.
+	await gotoHydrated(page, url('/settings'));
+	const lock = page.getByTestId('passcode-lock');
+	await lock.getByRole('button', { name: 'Set a passcode' }).click();
+	await lock.getByLabel('Passcode', { exact: true }).fill('246810');
+	await lock.getByLabel('Same again').fill('246810');
+	await lock.getByRole('button', { name: 'Save passcode' }).click();
+	await lock.getByRole('radio', { name: 'Right away' }).check();
+	const go = async (name: RegExp) => {
+		await page.getByRole('link', { name: /Utils/ }).first().click();
+		await page.getByRole('link', { name }).first().click();
+	};
+	await go(/Camera/);
+	await tiles.first().click();
+	await viewer.getByRole('button', { name: 'Delete' }).click();
+	await expect(page.getByTestId('kept')).toHaveText('2 photos kept');
+	await viewer.getByRole('button', { name: 'Close' }).click();
+	const undo = page.getByTestId('photos-status').getByRole('button', { name: 'Undo' });
+	await expect(undo).toBeVisible();
+	await setHidden(page, true);
+	await setHidden(page, false);
+	await expect(page).toHaveURL(url('/utils/camera'));
+	await expect(page.getByTestId('photos')).toHaveCount(0);
+	await expect(page.locator('img[src^="blob:"]')).toHaveCount(0);
+	// Unlocked again (through the Journal, a private page): the photos are back, with no stale Undo.
+	await go(/Journal/);
+	await page.getByTestId('unlock').getByLabel('Passcode').fill('246810');
+	await page.getByTestId('unlock').getByRole('button', { name: 'Unlock' }).click();
+	await expect(page).toHaveURL(/\/utils\/journal$/);
+	await go(/Camera/);
+	await expect(tiles).toHaveCount(2);
+	await expect(undo).toHaveCount(0);
+});
+
 test('leaving right after the shutter lets the photo finish before the camera turns off', async ({
 	page
 }) => {
