@@ -25,6 +25,8 @@ plugins to use. The recommended set is picked already:
 | `share`     | A Share button in the installed app (links only, never your data)             |
 | `changelog` | What's new in Settings, and a toast after an update                           |
 | `lock`      | A cover over private pages in the app switcher, no spellcheck in their fields |
+| `camera`    | Photos taken in the app, kept on the device with no metadata                  |
+| `qr`        | Make and scan QR codes on the device (adds `camera`)                          |
 
 Then it writes a SvelteKit project and installs it:
 

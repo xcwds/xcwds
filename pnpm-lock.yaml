@@ -353,6 +353,9 @@ importers:
       '@xcwds/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@xcwds/plugin-camera':
+        specifier: workspace:*
+        version: link:../../packages/plugin-camera
       '@xcwds/plugin-changelog':
         specifier: workspace:*
         version: link:../../packages/plugin-changelog
@@ -362,6 +365,9 @@ importers:
       '@xcwds/plugin-offline':
         specifier: workspace:*
         version: link:../../packages/plugin-offline
+      '@xcwds/plugin-qr':
+        specifier: workspace:*
+        version: link:../../packages/plugin-qr
       '@xcwds/plugin-settings':
         specifier: workspace:*
         version: link:../../packages/plugin-settings

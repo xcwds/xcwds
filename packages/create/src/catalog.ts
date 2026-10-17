@@ -52,7 +52,9 @@ export const PLUGIN_IDS = [
 	'timers',
 	'share',
 	'changelog',
-	'lock'
+	'lock',
+	'camera',
+	'qr'
 ] as const;
 export type PluginId = (typeof PLUGIN_IDS)[number];
 
@@ -220,8 +222,82 @@ export const changelog: ChangelogEntry[] = [
 `
 			}
 		]
+	},
+	camera: {
+		id: 'camera',
+		package: '@xcwds/plugin-camera',
+		recommended: false,
+		summary: 'Photos taken in the app, kept on the device with no metadata',
+		requires: ['shell'],
+		call: 'camera()',
+		css: '@xcwds/plugin-camera/styles.css',
+		section: { path: '/camera', label: 'Camera', emoji: '📷' },
+		files: () => [{ path: 'src/routes/camera/+page.svelte', content: CAMERA }]
+	},
+	qr: {
+		id: 'qr',
+		package: '@xcwds/plugin-qr',
+		recommended: false,
+		summary: 'Make and scan QR codes on the device',
+		requires: ['camera'],
+		call: 'qr()',
+		css: '@xcwds/plugin-qr/styles.css',
+		section: { path: '/qr', label: 'QR', emoji: '🔳' },
+		files: () => [{ path: 'src/routes/qr/+page.svelte', content: QR }]
 	}
 };
+
+const CAMERA = `<script lang="ts">
+	// Photos taken here are saved in the app (\`app.photos\`), never in the phone's gallery, and
+	// carry no location or camera details. <Photos /> lists them, to view, share or delete.
+	import Camera from '@xcwds/plugin-camera/Camera.svelte';
+	import Photos from '@xcwds/plugin-camera/Photos.svelte';
+	import type { Photo } from '@xcwds/plugin-camera/client';
+	import { useApp } from '@xcwds/sveltekit';
+
+	const app = useApp();
+	let error = $state('');
+
+	async function keep(photo: Photo) {
+		const saved = await app.photos?.save(photo);
+		error = saved && !saved.ok ? saved.error : '';
+	}
+</script>
+
+<main class="page-narrow flex flex-col gap-4 pt-2 pb-6">
+	<Camera onCapture={keep} />
+	{#if error}
+		<p class="text-sm text-red-700 dark:text-red-400">{error}</p>
+	{/if}
+	<Photos />
+</main>
+`;
+
+const QR = `<script lang="ts">
+	// QR codes made and read on the device: what you type, or what a code says, never leaves it.
+	// A scanned link is shown, not opened.
+	import QrCode from '@xcwds/plugin-qr/QrCode.svelte';
+	import QrScanner from '@xcwds/plugin-qr/QrScanner.svelte';
+	import type { ScanResult } from '@xcwds/plugin-qr/scan';
+
+	let text = $state('');
+	let found = $state<ScanResult>();
+</script>
+
+<main class="page-narrow flex flex-col gap-4 pt-2 pb-6">
+	<QrScanner onResult={(result) => (found = result)} />
+	{#if found}
+		<p class="break-all" data-testid="qr-found">{found.text}</p>
+	{/if}
+	<label class="flex flex-col gap-1">
+		Text or link
+		<textarea class="min-h-11 rounded-xl border p-2" rows="3" bind:value={text}></textarea>
+	</label>
+	{#if text}
+		<QrCode value={text} class="w-64 max-w-full self-center rounded-xl" />
+	{/if}
+</main>
+`;
 
 const DICE = `<script lang="ts">
 	// A tool is just a page: this one rolls a die. Add yours to \`tools({ items })\` in
