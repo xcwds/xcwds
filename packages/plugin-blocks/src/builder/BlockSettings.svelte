@@ -139,8 +139,15 @@
 									aria-label="Days between, item {i + 1}"
 									value={item.repeat.days}
 									oninput={(e) => {
+										// Only a whole number from 1 counts; while the box is cleared to retype, the
+										// days stay as they were.
+										const days = Number(e.currentTarget.value);
+										if (item.repeat?.repeat === 'every' && Number.isInteger(days) && days >= 1)
+											item.repeat.days = days;
+									}}
+									onchange={(e) => {
 										if (item.repeat?.repeat === 'every')
-											item.repeat.days = Number(e.currentTarget.value) || 1;
+											e.currentTarget.value = String(item.repeat.days);
 									}}
 								/>
 								days

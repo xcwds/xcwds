@@ -291,6 +291,12 @@ test('an app built from all four blocks works, and edits keep or drop its data a
 	await checklist.getByRole('button', { name: 'Add item' }).click();
 	await checklist.getByLabel('Item 1', { exact: true }).fill('Water the ferns');
 	await checklist.getByLabel('Item 1 repeats').selectOption('daily');
+	await checklist.getByRole('button', { name: 'Add item' }).click();
+	await checklist.getByLabel('Item 2 repeats').selectOption('every');
+	// Cleared and retyped, the number is what was typed.
+	await checklist.getByLabel('Days between, item 2').fill('');
+	await checklist.getByLabel('Days between, item 2').pressSequentially('4');
+	await expect(checklist.getByLabel('Days between, item 2')).toHaveValue('4');
 
 	const counter = blocks.nth(1);
 	await counter.getByLabel('Heading').fill('Coffee');
@@ -330,6 +336,7 @@ test('an app built from all four blocks works, and edits keep or drop its data a
 		'Health',
 		'Notes'
 	]);
+	await expect(app.getByText('Every 4 days')).toBeVisible();
 	await app.getByRole('checkbox', { name: /Water the ferns/ }).check();
 	await app.getByRole('button', { name: 'One more: Coffee' }).click();
 	await expect(app.getByTestId('counter-value')).toHaveText('1 / 3');

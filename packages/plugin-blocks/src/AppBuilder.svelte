@@ -144,7 +144,9 @@
 			return;
 		}
 		if (before) {
-			const losses = dataLoss(before, parsed.value, blocks.data(before.id));
+			// As saved now: another tab may have changed it since the builder opened.
+			const current = blocks.get(before.id) ?? before;
+			const losses = dataLoss(current, parsed.value, blocks.data(before.id));
 			if (
 				losses.length &&
 				!confirm(`Saving removes:\n\n${losses.map((l) => `• ${lossText(l)}`).join('\n')}\n\nSave?`)
