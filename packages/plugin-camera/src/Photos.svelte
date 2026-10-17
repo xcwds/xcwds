@@ -93,6 +93,8 @@
 	let shares = $state(false);
 	/** What the viewer says: that a photo left the app, or that it couldn't. */
 	let notice = $state('');
+	/** The share sheet is open (a second `navigator.share` meanwhile would be refused). */
+	let sharing = $state(false);
 	let dialog: HTMLDialogElement | undefined = $state();
 	const index = $derived(list && current ? list.findIndex((p) => p.id === current) : -1);
 	const shown = $derived(index >= 0 ? list![index] : undefined);
@@ -231,9 +233,12 @@
 
 	/** The photo leaves the app only here, on the person's tap. */
 	async function share() {
-		if (!shown || file?.id !== shown.id) return;
+		if (!shown || file?.id !== shown.id || sharing) return;
 		notice = '';
-		const outcome = await sharePhoto({ blob: file.blob, takenAt: shown.takenAt });
+		sharing = true;
+		const outcome = await sharePhoto({ blob: file.blob, takenAt: shown.takenAt }).finally(
+			() => (sharing = false)
+		);
 		if (outcome === 'failed') notice = t.shareFailed;
 		else if (outcome !== 'cancelled' && !told) {
 			told = true;
@@ -374,7 +379,7 @@
 						type="button"
 						class="min-h-11 rounded-xl bg-white/15 px-4 font-medium hover:not-disabled:bg-white/25 active:bg-white/25 disabled:opacity-40"
 						onclick={share}
-						disabled={file?.id !== shown.id}>{shares ? t.share : t.save}</button
+						disabled={file?.id !== shown.id || sharing}>{shares ? t.share : t.save}</button
 					>
 					<button
 						type="button"

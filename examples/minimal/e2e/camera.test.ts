@@ -236,12 +236,17 @@ test('Share hands the clean photo to the share sheet; dismissing it says nothing
 		const w = window as unknown as {
 			shared: { name: string; type: string; size: number }[];
 			dismiss: boolean;
+			hold: boolean;
+			release: () => void;
 		};
 		w.shared = [];
 		w.dismiss = true;
 		Object.defineProperty(navigator, 'canShare', { value: () => true });
 		Object.defineProperty(navigator, 'share', {
 			value: async ({ files }: { files: File[] }) => {
+				// `hold`: the sheet stays open until the test calls `release`.
+				if (w.hold) await new Promise<void>((resolve) => (w.release = resolve));
+				w.hold = false;
 				if (w.dismiss) throw new DOMException('Share canceled', 'AbortError');
 				w.shared.push(...files.map((f) => ({ name: f.name, type: f.type, size: f.size })));
 			}
@@ -250,6 +255,14 @@ test('Share hands the clean photo to the share sheet; dismissing it says nothing
 	const viewer = await openNewest(page);
 	const notice = viewer.getByTestId('viewer-notice');
 	await viewer.getByRole('button', { name: 'Share' }).click();
+	await expect(notice).toHaveText('');
+	// While the share sheet is open, Share waits: a second tap can't make it fail.
+	await page.evaluate(() => ((window as unknown as { hold: boolean }).hold = true));
+	const button = viewer.getByRole('button', { name: 'Share' });
+	await button.click();
+	await expect(button).toBeDisabled();
+	await page.evaluate(() => (window as unknown as { release: () => void }).release());
+	await expect(button).toBeEnabled();
 	await expect(notice).toHaveText('');
 	await page.evaluate(() => ((window as unknown as { dismiss: boolean }).dismiss = false));
 	await viewer.getByRole('button', { name: 'Share' }).click();
