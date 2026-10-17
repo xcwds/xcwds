@@ -2,6 +2,7 @@
 // shows `<Camera>` over `app.camera`.
 import { expect, test, type Page } from '@playwright/test';
 import { gotoHydrated, serveStatic, type StaticServer } from '@xcwds/testing/playwright';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 // A per-file `launchOptions` replaces the config's, so this repeats its Chromium and flag.
@@ -275,6 +276,77 @@ test('Share hands the clean photo to the share sheet; dismissing it says nothing
 			size: expect.any(Number)
 		}
 	]);
+});
+
+/** A small TIFF (EXIF) block with a camera and a GPS latitude. */
+function exifWithLocation(): Buffer {
+	const b = Buffer.alloc(100);
+	b.write('II', 0, 'latin1');
+	b.writeUInt16LE(42, 2);
+	b.writeUInt32LE(8, 4);
+	b.writeUInt16LE(3, 8);
+	const entry = (at: number, tag: number, type: number, count: number, value: number) => {
+		b.writeUInt16LE(tag, at);
+		b.writeUInt16LE(type, at + 2);
+		b.writeUInt32LE(count, at + 4);
+		b.writeUInt32LE(value, at + 8);
+	};
+	entry(10, 0x010f, 2, 7, 50); // Make: "Pixcam" at 50
+	entry(22, 0x0110, 2, 2, 0x58); // Model: "X", inline
+	entry(34, 0x8825, 4, 1, 58); // GPS IFD at 58
+	b.write('Pixcam\0', 50, 'latin1');
+	b.writeUInt16LE(1, 58);
+	b.writeUInt16LE(0x0002, 60); // GPSLatitude: 3 rationals at 76
+	b.writeUInt16LE(5, 62);
+	b.writeUInt32LE(3, 64);
+	b.writeUInt32LE(76, 68);
+	for (let i = 0; i < 3; i++) {
+		b.writeUInt32LE(40 + i, 76 + i * 8);
+		b.writeUInt32LE(1, 80 + i * 8);
+	}
+	return b;
+}
+
+test('Add from files keeps a clean copy and says what it removed (#146)', async ({ page }) => {
+	await gotoHydrated(page, url('/utils/camera'));
+	// A real JPEG from the browser, with an EXIF block (camera and location) spliced in.
+	const plain = Buffer.from(
+		await page.evaluate(async () => {
+			const canvas = new OffscreenCanvas(64, 48);
+			canvas.getContext('2d')!.fillRect(0, 0, 32, 24);
+			const blob = await canvas.convertToBlob({ type: 'image/jpeg' });
+			return [...new Uint8Array(await blob.arrayBuffer())];
+		})
+	);
+	const tiff = exifWithLocation();
+	const app1 = Buffer.concat([Buffer.from('Exif\0\0', 'latin1'), tiff]);
+	const header = Buffer.from([0xff, 0xe1, (app1.length + 2) >> 8, (app1.length + 2) & 0xff]);
+	const tagged = Buffer.concat([plain.subarray(0, 2), header, app1, plain.subarray(2)]);
+
+	await page.getByLabel('Add from files').setInputFiles([
+		{ name: 'beach.jpg', mimeType: 'image/jpeg', buffer: tagged },
+		{ name: 'notes.heic', mimeType: 'image/heic', buffer: Buffer.from('not an image') }
+	]);
+	const status = page.getByTestId('photos-status');
+	await expect(status).toContainText('Added 1 photo. Removed the location, the camera (');
+	await expect(status).toContainText("1 file wasn't added: notes.heic:");
+	await expect(page.getByTestId('kept')).toHaveText('1 photo kept');
+
+	// What's kept has none of it: Save it and read the bytes.
+	await page.addInitScript(() => {
+		Object.defineProperty(navigator, 'canShare', { value: () => false });
+	});
+	await page.reload();
+	await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+	await page.getByRole('list', { name: 'Photos' }).getByRole('button').first().click();
+	const viewer = page.getByTestId('photo-viewer');
+	await expect(viewer.locator('img[src^="blob:"]')).toBeVisible();
+	const download = page.waitForEvent('download');
+	await viewer.getByRole('button', { name: 'Save' }).click();
+	const saved = await readFile((await (await download).path())!);
+	expect(saved.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
+	expect(saved.includes(Buffer.from('Exif'))).toBe(false);
+	expect(saved.includes(Buffer.from('Pixcam'))).toBe(false);
 });
 
 test('leaving right after the shutter lets the photo finish before the camera turns off', async ({
