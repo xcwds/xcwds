@@ -147,11 +147,34 @@ describe('app.blocks', () => {
 		expect(blocks.saveData(id, counted(3))).toBe(true);
 		expect(has(app, `app:blocks:data:${id}`)).toBe(true);
 		expect(blocks.data(id).blocks.glasses).toMatchObject({ value: 3 });
-		// Data for a block the app no longer has isn't shown.
+		// Data for a block the app no longer has is removed when it's saved, not kept hidden.
 		blocks.save({ ...added.app, blocks: [{ id: 'notes', type: 'notes', label: 'Notes' }] });
 		expect(blocks.data(id).blocks).toEqual({});
+		expect(app.sharedStorage.backing.get(`app:blocks:data:${id}`)).toBe(
+			JSON.stringify({ format: 1, blocks: {} })
+		);
 		expect(blocks.saveData('nope', counted(1))).toBe(false);
 		expect(blocks.data('nope')).toEqual({ format: 1, blocks: {} });
+	});
+
+	it("keeps an app's data when a save that would drop some of it fails", async () => {
+		const storage = memoryStorage();
+		const app = await withTools(storage);
+		const blocks = app.blocks!;
+		const added = blocks.addFromTemplate(water);
+		if (!added.ok) throw new Error('not saved');
+		const { id } = added.app;
+		blocks.saveData(id, counted(4));
+		const set = storage.set.bind(storage);
+		storage.set = (key, value) => {
+			if (key === 'app:blocks:apps') throw new Error('QuotaExceededError');
+			set(key, value);
+		};
+		app.storage.onSaveFailure(() => {});
+		const result = blocks.save({ ...added.app, blocks: [] });
+		expect(result).toEqual({ ok: false, error: expect.stringMatching(/Couldn't save/) });
+		expect(blocks.get(id)?.blocks).toHaveLength(1);
+		expect(blocks.data(id).blocks.glasses).toMatchObject({ value: 4 });
 	});
 
 	it('refuses an invalid app with a sentence, and saves nothing', async () => {
@@ -179,6 +202,13 @@ describe('app.blocks', () => {
 		expect(blocks.save({ ...added.app, private: false }).ok).toBe(true);
 		expect(has(app, `app:blocks:private:${id}`)).toBe(false);
 		expect(blocks.data(id).blocks.glasses).toMatchObject({ value: 5 });
+
+		// Moving and dropping a block at once: only what the new definition keeps moves.
+		const notes = { id: 'notes', type: 'notes', label: 'Notes' } as const;
+		expect(blocks.save({ ...added.app, private: true, blocks: [notes] }).ok).toBe(true);
+		expect(app.sharedStorage.backing.get(`app:blocks:private:${id}`)).toBe(
+			JSON.stringify({ format: 1, blocks: {} })
+		);
 	});
 
 	it("leaves an app where it was when the move can't be saved", async () => {

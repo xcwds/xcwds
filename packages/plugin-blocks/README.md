@@ -92,8 +92,9 @@ const data = app.blocks.data(added.app.id); // read against the app's definition
   **`get(id)`**: an app's definition. **`pathOf(app)`**: the page that runs it.
 - **`save(input)`**: adds an app or replaces the one with its id, after checking it with
   `parseApp`: `{ ok: true, app }`, or `{ ok: false, error }` with a sentence to show next to
-  the control (invalid, or storage full or blocked). **`addFromTemplate(t)`** saves a copy
-  with a new id.
+  the control (invalid, or storage full or blocked). Replacing an app removes the data its new
+  definition can't keep (see [Editing an app](#editing-an-app)); if the save fails, the data
+  stays as it was. **`addFromTemplate(t)`** saves a copy with a new id.
 - **`data(id)`** and **`saveData(id, data)`**: an app's data (false when it couldn't be
   saved).
 - **`remove(id)`**: removes an app and its data, and returns `{ ok, restore }`; `restore()`
@@ -176,6 +177,23 @@ blocks, items or fields, and values the fields no longer allow.
 - Counter: `current` (rolls over to the new day or week), `adjust`, `periodOf`.
 - Log: `parseValues` (checks a new or edited entry), `addEntry`, `updateEntry`, `removeEntry`
   (returns the removed entry for Undo), `series`, `summarize`, `summaryText`.
+
+## Editing an app
+
+Fields, items and options are matched by id, so renaming one keeps its data. What an edit drops
+(#161), from `@xcwds/plugin-blocks/model`:
+
+- **`dataLoss(before, after, data)`**: what saving `after` would remove, to ask first: a block
+  with data that's removed or becomes another type (`kind: 'block'`), a log field removed
+  (`'field'`), a field whose type changes (`'type'`, even when the old values would fit the new
+  type), values that no longer fit a field's options or limits (`'values'`), and a counter's
+  running total when it starts resetting daily or weekly (`'count'`), each with its number of
+  entries or values. Ticks of removed checklist items go without asking.
+  **`lossText(loss)`** says one as a sentence.
+- **`pruneData(before, after, data)`**: the data `after` keeps; `app.blocks.save` writes it, so
+  dropped data is removed, not hidden.
+- **`blankApp()`**, **`blankBlock(type)`**, **`blankField(type)`**: starting points for the
+  builder, with new ids. **`move(list, index, by)`**: Move up (`-1`) and Move down (`1`).
 
 ## Templates
 
