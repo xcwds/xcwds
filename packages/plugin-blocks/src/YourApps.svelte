@@ -16,7 +16,7 @@
 	import type { AppDefinition } from './format.js';
 	import { go, href } from './navigate.js';
 	import type { AppSummary, Removed, Usage } from './store.js';
-	import { button, card, muted } from './ui.js';
+	import { button, card, muted, primary } from './ui.js';
 	import { sizeText } from './view.js';
 
 	const app = useApp();
@@ -80,9 +80,10 @@
 	<div class="flex flex-col gap-6">
 		<section class="flex flex-col gap-3" aria-labelledby="your-apps-heading">
 			<h2 id="your-apps-heading" class="sr-only">Your apps</h2>
+			<a href={href(blocks.editPathOf())} class="{primary} flex items-center self-start">New app</a>
 			{#if list && !list.length}
 				<p class={muted} data-testid="your-apps-empty">
-					No apps yet. Add one from a template below.
+					No apps yet. Make one, or add one from a template below.
 				</p>
 			{:else if list}
 				<ul class="grid gap-2 md:grid-cols-2 lg:grid-cols-3" data-testid="your-apps">

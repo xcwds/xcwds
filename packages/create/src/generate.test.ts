@@ -131,6 +131,10 @@ describe('appFiles', () => {
 		expect(files.get('src/routes/my-apps/+page.svelte')).toContain('<YourApps />');
 		expect(files.get('src/routes/my-apps/app/+page.svelte')).toContain('<BlocksApp />');
 		expect(files.get('src/routes/my-apps/private/+page.svelte')).toContain('<BlocksApp private />');
+		expect(files.get('src/routes/my-apps/edit/+page.svelte')).toContain('<AppBuilder />');
+		expect(files.get('src/routes/my-apps/private-edit/+page.svelte')).toContain(
+			'<AppBuilder private />'
+		);
 		expect(JSON.parse(files.get('package.json')!).dependencies['@xcwds/plugin-blocks']).toMatch(
 			/^\^\d/
 		);

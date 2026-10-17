@@ -19,8 +19,9 @@ type ToolsLike = { index: string; apps(): readonly { id: string }[] };
 
 /**
  * Checks the options when the config loads, so a mistake fails the build, not the page, and adds
- * the pages to the route registry: Your apps at `path`, and the pages that run an app at
- * `<path>/app` and `<path>/private` (private, so it's locked, covered and never shared).
+ * the pages to the route registry: Your apps at `path`, the pages that run an app at
+ * `<path>/app` and `<path>/private`, and the builder at `<path>/edit` and `<path>/private-edit`
+ * (the private ones locked, covered and never shared).
  */
 export const build = definePlugin(
 	(app, input: BlocksPluginOptions) => {
@@ -39,6 +40,15 @@ export const build = definePlugin(
 		app.route({
 			path: `${path}/private`,
 			title: 'Private app',
+			parent: path,
+			width: 'narrow',
+			private: true
+		});
+		// The builder (#161): titled "Edit <name>" when it opens an app.
+		app.route({ path: `${path}/edit`, title: 'New app', parent: path, width: 'narrow' });
+		app.route({
+			path: `${path}/private-edit`,
+			title: 'Edit private app',
 			parent: path,
 			width: 'narrow',
 			private: true

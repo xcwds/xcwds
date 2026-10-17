@@ -36,6 +36,11 @@
 			"svelte": "./dist/BlocksApp.svelte",
 			"default": "./dist/BlocksApp.svelte"
 		},
+		"./AppBuilder.svelte": {
+			"types": "./dist/AppBuilder.svelte.d.ts",
+			"svelte": "./dist/AppBuilder.svelte",
+			"default": "./dist/AppBuilder.svelte"
+		},
 		"./styles.css": "./dist/styles.css",
 		"./package.json": "./package.json"
 	},

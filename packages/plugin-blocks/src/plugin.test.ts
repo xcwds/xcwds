@@ -98,6 +98,13 @@ describe('options', () => {
 		expect(app.routes.get('/my-apps/app')).toMatchObject({ parent: '/my-apps', width: 'narrow' });
 		expect(app.routes.get('/my-apps/app')?.private).toBeUndefined();
 		expect(app.routes.get('/my-apps/private')).toMatchObject({ parent: '/my-apps', private: true });
+		// The builder's two pages, the private one locked too.
+		expect(app.routes.get('/my-apps/edit')).toMatchObject({ title: 'New app', parent: '/my-apps' });
+		expect(app.routes.get('/my-apps/edit')?.private).toBeUndefined();
+		expect(app.routes.get('/my-apps/private-edit')).toMatchObject({
+			parent: '/my-apps',
+			private: true
+		});
 		expect(pluginMeta(build).network).toBe(false);
 		expect(pluginMeta(client).network).toBe(false);
 	});
@@ -197,6 +204,8 @@ describe('app.blocks', () => {
 		expect(has(app, `app:blocks:private:${id}`)).toBe(true);
 		expect(has(app, 'app:blocks:apps')).toBe(false);
 		expect(blocks.list()).toMatchObject([{ id, private: true, path: `/my-apps/private#${id}` }]);
+		expect(blocks.editPathOf(blocks.get(id))).toBe(`/my-apps/private-edit#${id}`);
+		expect(blocks.editPathOf()).toBe('/my-apps/edit');
 		expect(blocks.data(id).blocks.glasses).toMatchObject({ value: 5 });
 
 		expect(blocks.save({ ...added.app, private: false }).ok).toBe(true);

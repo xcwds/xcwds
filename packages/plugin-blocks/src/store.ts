@@ -53,6 +53,11 @@ export interface Blocks {
 	get(id: string): AppDefinition | undefined;
 	/** The page that runs an app. */
 	pathOf(app: Pick<AppDefinition, 'id' | 'private'>): string;
+	/**
+	 * The builder's page for an app: `<path>/edit#<id>`, or `<path>/private-edit#<id>` for a
+	 * private one; with no app, `<path>/edit`, which makes a new one.
+	 */
+	editPathOf(app?: Pick<AppDefinition, 'id' | 'private'>): string;
 	/** An app's data, read against its definition (empty when there's none or no app). */
 	data(id: string): AppData;
 	/** Saves an app's data; false if it couldn't be saved (or there's no such app). */
@@ -155,6 +160,9 @@ export function createBlocks(
 	const pathOf = (app: Pick<AppDefinition, 'id' | 'private'>) =>
 		`${path}/${app.private ? 'private' : 'app'}#${app.id}`;
 
+	const editPathOf = (app?: Pick<AppDefinition, 'id' | 'private'>) =>
+		app ? `${path}/${app.private ? 'private-edit' : 'edit'}#${app.id}` : `${path}/edit`;
+
 	/** Applies `change` to one list (from what's saved now, so another tab's change isn't lost). */
 	function updateList(priv: boolean, change: (list: AppDefinition[]) => AppDefinition[]): boolean {
 		const entry = listOf(priv);
@@ -232,6 +240,7 @@ export function createBlocks(
 		},
 		get: find,
 		pathOf,
+		editPathOf,
 		data(id) {
 			const app = find(id);
 			if (!app) return emptyData();

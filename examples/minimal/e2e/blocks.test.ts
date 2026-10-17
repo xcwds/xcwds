@@ -1,5 +1,6 @@
 // Your apps (@xcwds/plugin-blocks, #160) in examples/minimal: apps added from templates at
-// /my-apps, run at /my-apps/app#<id> or, private, /my-apps/private#<id>.
+// /my-apps, run at /my-apps/app#<id> or, private, /my-apps/private#<id>, and built or edited at
+// /my-apps/edit (#161).
 import { expect, test, type Page } from '@playwright/test';
 import {
 	auditTapTargets,
@@ -263,4 +264,130 @@ test('a private app waits behind the passcode lock', async ({ page }) => {
 	await screen.getByRole('button', { name: 'Unlock' }).click();
 	await expect(page).toHaveURL(/\/my-apps\/private#/);
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Mood$/);
+});
+
+test('an app built from all four blocks works, and edits keep or drop its data as they say', async ({
+	page
+}) => {
+	await gotoHydrated(page, url('/my-apps'));
+	await page.getByRole('link', { name: 'New app' }).click();
+	await expect(page).toHaveURL(url('/my-apps/edit'));
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText(/New app$/);
+	const builder = page.getByTestId('builder');
+	// A name comes first, inline.
+	await builder.getByRole('button', { name: 'Save' }).click();
+	await expect(builder.getByText('Give the app a name.')).toBeVisible();
+	await builder.getByLabel('Name').fill('Home');
+	await builder.getByRole('button', { name: 'Use 🌱' }).click();
+
+	for (const type of ['checklist', 'counter', 'log', 'notes'])
+		await builder.getByRole('button', { name: new RegExp(`^Add ${type}`) }).click();
+	const blocks = builder.getByTestId('builder-block');
+	await expect(blocks).toHaveCount(4);
+	await expect(builder.getByRole('heading', { name: /Blocks/ })).toContainText('4 of 20');
+
+	const checklist = blocks.nth(0);
+	await checklist.getByLabel('Heading').fill('Plants');
+	await checklist.getByRole('button', { name: 'Add item' }).click();
+	await checklist.getByLabel('Item 1', { exact: true }).fill('Water the ferns');
+	await checklist.getByLabel('Item 1 repeats').selectOption('daily');
+	await checklist.getByRole('button', { name: 'Add item' }).click();
+	await checklist.getByLabel('Item 2 repeats').selectOption('every');
+	// Cleared and retyped, the number is what was typed.
+	await checklist.getByLabel('Days between, item 2').fill('');
+	await checklist.getByLabel('Days between, item 2').pressSequentially('4');
+	await expect(checklist.getByLabel('Days between, item 2')).toHaveValue('4');
+
+	const counter = blocks.nth(1);
+	await counter.getByLabel('Heading').fill('Coffee');
+	await counter.getByLabel('Goal').fill('3');
+	await counter.getByLabel('Starts again').selectOption('daily');
+
+	const log = blocks.nth(2);
+	await log.getByLabel('Heading').fill('Health');
+	await log.getByLabel('Label').fill('Weight');
+	await log.getByLabel('Unit').fill('kg');
+	await log.getByRole('button', { name: 'Add field' }).click();
+	await expect(log.getByText('Fields (2 of 12)')).toBeVisible();
+	await log.getByLabel('Type').nth(1).selectOption('yesno');
+	await log.getByLabel('Label').nth(1).fill('Walked');
+	// Moving keeps each field's settings.
+	await log.getByRole('button', { name: 'Move field 2 up' }).click();
+	await expect(log.getByLabel('Label').first()).toHaveValue('Walked');
+	await expect(log.getByLabel('Unit')).toHaveValue('kg');
+
+	// Removing a block can be undone.
+	await blocks
+		.nth(3)
+		.getByRole('button', { name: /^Remove/ })
+		.click();
+	await expect(blocks).toHaveCount(3);
+	await builder.getByRole('button', { name: 'Undo' }).click();
+	await expect(blocks).toHaveCount(4);
+	expect(await auditTapTargets(page)).toEqual([]);
+
+	await builder.getByRole('button', { name: 'Save' }).click();
+	await expect(page).toHaveURL(/\/my-apps\/app#/);
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Home$/);
+	const app = page.getByTestId('blocks-app');
+	await expect(app.getByRole('heading', { level: 2 })).toHaveText([
+		'Plants',
+		'Coffee',
+		'Health',
+		'Notes'
+	]);
+	await expect(app.getByText('Every 4 days')).toBeVisible();
+	await app.getByRole('checkbox', { name: /Water the ferns/ }).check();
+	await app.getByRole('button', { name: 'One more: Coffee' }).click();
+	await expect(app.getByTestId('counter-value')).toHaveText('1 / 3');
+	await app.getByLabel('Weight (kg)').fill('70');
+	await app.getByRole('button', { name: 'Add entry' }).click();
+	const entries = app.getByTestId('log-entry');
+	await expect(entries.first()).toContainText(/Weight\s*70 kg/);
+
+	// Renaming a field keeps its values.
+	await app.getByTestId('blocks-edit').click();
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Edit Home$/);
+	const healthLog = blocks.nth(2);
+	await healthLog.getByLabel('Label').nth(1).fill('Body weight');
+	await builder.getByRole('button', { name: 'Save' }).click();
+	await expect(entries.first()).toContainText(/Body weight\s*70 kg/);
+
+	// Removing a field that has values says what goes, and keeps it if you say no.
+	const dialogs: string[] = [];
+	let answer = false;
+	page.on('dialog', (dialog) => {
+		dialogs.push(dialog.message());
+		void (answer ? dialog.accept() : dialog.dismiss());
+	});
+	await app.getByTestId('blocks-edit').click();
+	await healthLog.getByRole('button', { name: 'Remove field 2' }).click();
+	await builder.getByRole('button', { name: 'Save' }).click();
+	expect(dialogs).toEqual([
+		'Saving removes:\n\n• “Body weight” in “Health”, from 1 entry.\n\nSave?'
+	]);
+	await expect(page).toHaveURL(/\/my-apps\/edit#/);
+	answer = true;
+	await builder.getByRole('button', { name: 'Save' }).click();
+	await expect(page).toHaveURL(/\/my-apps\/app#/);
+	// The entry had nothing else, so it goes too; the rest is kept.
+	await expect(entries).toHaveCount(0);
+	await expect(app.getByTestId('counter-value')).toHaveText('1 / 3');
+	await expect(app.getByRole('checkbox', { name: /Water the ferns/ })).toBeChecked();
+});
+
+test('a private app is edited on its own page, behind the lock like the app', async ({ page }) => {
+	const id = await add(page, 'Mood');
+	await page.getByTestId('blocks-edit').click();
+	await expect(page).toHaveURL(url(`/my-apps/private-edit#${id}`));
+	await expect(page).toHaveTitle('Edit private app · Minimal');
+	// Opened on the normal builder page, it moves to the private one.
+	await gotoHydrated(page, url(`/my-apps/edit#${id}`));
+	await expect(page).toHaveURL(url(`/my-apps/private-edit#${id}`));
+	// Turning it back into a normal app moves it.
+	await page.getByTestId('builder').getByLabel('Private').uncheck();
+	await page.getByTestId('builder').getByRole('button', { name: 'Save' }).click();
+	await expect(page).toHaveURL(url(`/my-apps/app#${id}`));
+	await gotoHydrated(page, url('/my-apps/edit#nothing'));
+	await expect(page.getByTestId('blocks-missing')).toBeVisible();
 });
