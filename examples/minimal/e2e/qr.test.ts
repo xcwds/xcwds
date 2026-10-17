@@ -3,6 +3,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import jsQR from 'jsqr';
 import { gotoHydrated, serveStatic, type StaticServer } from '@xcwds/testing/playwright';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -129,4 +130,36 @@ test('reads a code on the page when the Worker file is out of reach (offline bef
 		.getByTestId('qr-file')
 		.setInputFiles({ name: 'code.png', mimeType: 'image/png', buffer: png });
 	await expect(page.getByTestId('qr-found')).toHaveText('https://example.com');
+});
+
+test('downloads the code as SVG or PNG, made on the device, that read back', async ({ page }) => {
+	await gotoHydrated(page, url('/utils/qr'));
+	await page.getByLabel('Text or link').fill('https://example.com/download');
+
+	const [svg] = await Promise.all([
+		page.waitForEvent('download'),
+		page.getByRole('button', { name: 'Download SVG' }).click()
+	]);
+	expect(svg.suggestedFilename()).toBe('qr-code.svg');
+	expect(new URL(svg.url()).protocol).toBe('blob:');
+	const markup = await readFile((await svg.path())!, 'utf8');
+	expect(markup).toMatch(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg"/);
+	expect(markup).toContain('aria-label="QR code: https://example.com/download"');
+
+	const [png] = await Promise.all([
+		page.waitForEvent('download'),
+		page.getByRole('button', { name: 'Download PNG' }).click()
+	]);
+	expect(png.suggestedFilename()).toBe('qr-code.png');
+	const bytes = await readFile((await png.path())!);
+	expect(bytes.subarray(1, 4).toString()).toBe('PNG');
+	// The PNG reads back through the page's own scan().
+	await page
+		.getByTestId('qr-file')
+		.setInputFiles({ name: 'qr-code.png', mimeType: 'image/png', buffer: bytes });
+	await expect(page.getByTestId('qr-found')).toHaveText('https://example.com/download');
+
+	// Nothing to download for nothing, or for text too long for a code.
+	await page.getByLabel('Text or link').fill('');
+	await expect(page.getByRole('button', { name: /Download/ })).toHaveCount(0);
 });

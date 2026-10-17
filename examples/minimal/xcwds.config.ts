@@ -1,6 +1,7 @@
 import hello from '@xcwds-example/plugin-hello';
 import { defineConfig } from '@xcwds/core';
 import camera from '@xcwds/plugin-camera';
+import qr from '@xcwds/plugin-qr';
 import changelog from '@xcwds/plugin-changelog';
 import install from '@xcwds/plugin-install';
 import lock from '@xcwds/plugin-lock';
@@ -101,6 +102,8 @@ export default defineConfig({
 		// in the app switcher and no spellcheck in their fields.
 		lock(),
 		// The camera as `app.camera`, off while hidden or locked; /utils/camera shows `<Camera>`.
-		camera({ maxSide: 2048 })
+		camera({ maxSide: 2048 }),
+		// QR codes made and read on the device; /utils/qr shows `<QrScanner>` and `<QrCode>`.
+		qr()
 	]
 });

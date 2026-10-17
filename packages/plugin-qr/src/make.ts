@@ -60,3 +60,76 @@ export function qrSvg(text: string, options: QrSvgOptions = {}): string {
 		`<path fill="#000" d="${qrPath(matrix, margin)}"/></svg>`
 	);
 }
+
+export interface QrPngOptions extends EncodeOptions {
+	/** Light modules around the code. Default 4. */
+	margin?: number;
+	/** Pixels per module: default 8, so a link-sized code is about 300 px. */
+	scale?: number;
+}
+
+/** `text` as a QR code in a PNG, black on white, `scale` pixels per module. Browser only. */
+export async function qrPng(text: string, options: QrPngOptions = {}): Promise<Blob> {
+	const margin = checkMargin(options.margin ?? 4);
+	const scale = options.scale ?? 8;
+	if (!Number.isInteger(scale) || scale < 1 || scale > 64)
+		throw new RangeError('`scale` must be a whole number of pixels from 1 to 64.');
+	const { size, modules } = encodeQr(text, options);
+	const side = (size + margin * 2) * scale;
+	const canvas =
+		typeof OffscreenCanvas === 'function'
+			? new OffscreenCanvas(side, side)
+			: Object.assign(document.createElement('canvas'), { width: side, height: side });
+	const context = canvas.getContext('2d') as
+		CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+	if (!context) throw new Error("This browser can't draw images here.");
+	context.fillStyle = '#fff';
+	context.fillRect(0, 0, side, side);
+	context.fillStyle = '#000';
+	for (let y = 0; y < size; y++)
+		for (let x = 0; x < size; x++)
+			if (modules[y * size + x])
+				context.fillRect((x + margin) * scale, (y + margin) * scale, scale, scale);
+	if ('convertToBlob' in canvas) return canvas.convertToBlob({ type: 'image/png' });
+	return new Promise((resolve, reject) =>
+		canvas.toBlob(
+			(blob) => (blob ? resolve(blob) : reject(new Error("The PNG couldn't be made."))),
+			'image/png'
+		)
+	);
+}
+
+export interface SaveQrOptions extends QrPngOptions {
+	/** `'svg'` (default: sharp at any size) or `'png'` (for apps that don't take SVG). */
+	format?: 'svg' | 'png';
+	/** The file name without its extension. Default `qr-code`. */
+	name?: string;
+	/** For `'svg'`: what a screen reader says, as in `qrSvg`. */
+	label?: string;
+}
+
+/**
+ * Downloads `text` as a QR code file (`qr-code.svg` or `qr-code.png`), made on the device.
+ * Call it from a tap. Throws `QrTooLongError` when the text doesn't fit.
+ */
+export async function saveQr(text: string, options: SaveQrOptions = {}): Promise<void> {
+	const format = options.format ?? 'svg';
+	const blob =
+		format === 'png'
+			? await qrPng(text, options)
+			: new Blob([qrSvg(text, options)], { type: 'image/svg+xml' });
+	const name = (options.name ?? 'qr-code').replace(/[\\/:*?"<>|]/g, '-') || 'qr-code';
+	const url = URL.createObjectURL(blob);
+	try {
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `${name}.${format}`;
+		link.rel = 'noopener';
+		document.body.append(link);
+		link.click();
+		link.remove();
+	} finally {
+		// After the click has started the download.
+		setTimeout(() => URL.revokeObjectURL(url), 1000);
+	}
+}
