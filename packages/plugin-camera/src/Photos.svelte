@@ -25,7 +25,7 @@
 		type Photos as PhotoStore,
 		type SavedPhoto
 	} from './photos.js';
-	import { SHARE_MESSAGES, canShareFiles, sharePhoto } from './share.js';
+	import { SHARE_MESSAGES, canShareFiles, sharePhoto, sharePhotos } from './share.js';
 
 	type Text = {
 		label: string;
@@ -39,8 +39,11 @@
 		save: string;
 		outside: string;
 		shareFailed: string;
-		deleted: string;
+		deleted: (count: number) => string;
 		undo: string;
+		select: string;
+		done: string;
+		selected: (count: number) => string;
 		failed: string;
 		missing: string;
 		add: string;
@@ -60,8 +63,11 @@
 		save: 'Save',
 		outside: SHARE_MESSAGES.outside,
 		shareFailed: SHARE_MESSAGES.failed,
-		deleted: 'Photo deleted.',
+		deleted: (n) => (n === 1 ? 'Photo deleted.' : `${n} photos deleted.`),
 		undo: 'Undo',
+		select: 'Select',
+		done: 'Done',
+		selected: (n) => (n === 1 ? '1 selected' : `${n} selected`),
 		failed: "The photo couldn't be deleted. Try again.",
 		missing: "This app doesn't keep photos (no camera plugin).",
 		add: 'Add from files',
@@ -112,8 +118,25 @@
 	const index = $derived(list && current ? list.findIndex((p) => p.id === current) : -1);
 	const shown = $derived(index >= 0 ? list![index] : undefined);
 
-	/** The last deleted photo, until Undo times out. */
-	let undo = $state.raw<{ photo: PhotoInput; timer: ReturnType<typeof setTimeout> } | null>(null);
+	/** The last deleted photos, until Undo times out. */
+	let undo = $state.raw<{ photos: PhotoInput[]; timer: ReturnType<typeof setTimeout> } | null>(
+		null
+	);
+	const offerUndo = (photos: PhotoInput[]) => {
+		if (undo) clearTimeout(undo.timer);
+		// Locked while deleting: the lock already dropped Undo, and it stays dropped.
+		undo =
+			photos.length && !locked ? { photos, timer: setTimeout(() => (undo = null), 8000) } : null;
+	};
+
+	/**
+	 * Select mode: tiles toggle instead of opening. Each selected photo's file loads as it's
+	 * picked (null until then), so Share runs straight from the tap.
+	 */
+	let selecting = $state(false);
+	let selected = $state.raw<Record<string, Blob | null>>({});
+	const chosen = $derived(list?.filter((p) => p.id in selected) ?? []);
+	const ready = $derived(chosen.length > 0 && chosen.every((p) => selected[p.id]));
 	let message = $state('');
 
 	const date = (ms: number) =>
@@ -129,6 +152,8 @@
 		// Drop thumbnails of photos that are gone.
 		const ids = new Set(next.map((p) => p.id));
 		for (const id of Object.keys(urls)) if (!ids.has(id)) forget(id);
+		if (Object.keys(selected).some((id) => !ids.has(id)))
+			selected = Object.fromEntries(Object.entries(selected).filter(([id]) => ids.has(id)));
 		if (current && current !== removing && !ids.has(current)) close();
 	}
 
@@ -223,25 +248,82 @@
 				if (next) void open(next.id);
 				else close();
 			}
-			if (undo) clearTimeout(undo.timer);
-			undo = blob
-				? {
-						photo: { blob, width: photo.width, height: photo.height, takenAt: photo.takenAt },
-						timer: setTimeout(() => (undo = null), 8000)
-					}
-				: null;
-			if (!undo) message = t.deleted;
+			offerUndo(
+				blob ? [{ blob, width: photo.width, height: photo.height, takenAt: photo.takenAt }] : []
+			);
+			if (!undo) message = t.deleted(1);
 		} finally {
 			removing = null;
 		}
 	}
 	async function restore() {
 		if (!store || !undo) return;
-		const { photo, timer } = undo;
+		const { photos, timer } = undo;
 		clearTimeout(timer);
 		undo = null;
-		const saved = await store.save(photo);
-		if (!saved.ok) message = saved.error;
+		for (const photo of photos) {
+			const saved = await store.save(photo);
+			if (!saved.ok) {
+				message = saved.error;
+				return;
+			}
+		}
+	}
+
+	function endSelect() {
+		selecting = false;
+		selected = {};
+	}
+	async function toggle(photo: SavedPhoto) {
+		if (!store) return;
+		if (photo.id in selected) {
+			const { [photo.id]: _, ...rest } = selected;
+			selected = rest;
+			return;
+		}
+		selected = { ...selected, [photo.id]: null };
+		const blob = await store.get(photo.id);
+		// Still selected (and still unlocked) once loaded.
+		if (blob && photo.id in selected && !locked) selected = { ...selected, [photo.id]: blob };
+	}
+	async function removeSelected() {
+		if (!store || !chosen.length || removingMany) return;
+		removingMany = true;
+		message = '';
+		const gone: PhotoInput[] = [];
+		let failed = 0;
+		// Snapshots: each delete refreshes the list, and with it `chosen` and `selected`.
+		const targets = [...chosen];
+		const files = { ...selected };
+		try {
+			for (const photo of targets) {
+				const blob = files[photo.id] ?? (await store.get(photo.id));
+				if (!(await store.delete(photo.id))) {
+					failed++;
+					continue;
+				}
+				if (blob)
+					gone.push({ blob, width: photo.width, height: photo.height, takenAt: photo.takenAt });
+			}
+		} finally {
+			removingMany = false;
+		}
+		endSelect();
+		offerUndo(gone);
+		if (failed) message = t.failed;
+	}
+	let removingMany = $state(false);
+	async function shareSelected() {
+		if (!ready || sharing) return;
+		message = '';
+		sharing = true;
+		const photos = chosen.map((p) => ({ blob: selected[p.id]!, takenAt: p.takenAt }));
+		const outcome = await sharePhotos(photos).finally(() => (sharing = false));
+		if (outcome === 'failed') message = t.shareFailed;
+		else if (outcome !== 'cancelled' && !told) {
+			told = true;
+			message = t.outside;
+		}
 	}
 
 	/** The photo leaves the app only here, on the person's tap. */
@@ -317,6 +399,7 @@
 				// A lock's reset may clear the photos: Undo must not bring one back.
 				if (undo) clearTimeout(undo.timer);
 				undo = null;
+				endSelect();
 				close();
 				forgetAll();
 				list = undefined;
@@ -346,12 +429,45 @@
 				aria-label={t.add}
 				onchange={addFiles}
 			/>
-			<button
-				type="button"
-				class="min-h-11 w-fit rounded-xl bg-(--xcwds-shell-card) px-4 font-medium hover:not-disabled:bg-(--xcwds-shell-hover-bg) active:bg-(--xcwds-shell-hover-bg) disabled:opacity-40"
-				onclick={() => picker?.click()}
-				disabled={adding}>{adding ? t.adding : t.add}</button
-			>
+			<div class="flex flex-wrap items-center gap-2" data-testid="photos-toolbar">
+				{#if selecting}
+					<span class="font-medium" aria-live="polite">{t.selected(chosen.length)}</span>
+					<button
+						type="button"
+						class="min-h-11 rounded-xl bg-(--xcwds-shell-card) px-4 font-medium hover:not-disabled:bg-(--xcwds-shell-hover-bg) active:bg-(--xcwds-shell-hover-bg) disabled:opacity-40"
+						onclick={shareSelected}
+						disabled={!ready || sharing}>{shares ? t.share : t.save}</button
+					>
+					<button
+						type="button"
+						class="min-h-11 rounded-xl bg-red-700 px-4 font-medium text-white hover:not-disabled:bg-red-800 active:bg-red-800 disabled:opacity-40"
+						onclick={removeSelected}
+						disabled={!chosen.length || removingMany}>{t.delete}</button
+					>
+					<button
+						type="button"
+						class="min-h-11 rounded-xl bg-(--xcwds-shell-card) px-4 font-medium hover:not-disabled:bg-(--xcwds-shell-hover-bg) active:bg-(--xcwds-shell-hover-bg) disabled:opacity-40"
+						onclick={endSelect}>{t.done}</button
+					>
+				{:else}
+					<button
+						type="button"
+						class="min-h-11 rounded-xl bg-(--xcwds-shell-card) px-4 font-medium hover:not-disabled:bg-(--xcwds-shell-hover-bg) active:bg-(--xcwds-shell-hover-bg) disabled:opacity-40"
+						onclick={() => picker?.click()}
+						disabled={adding}>{adding ? t.adding : t.add}</button
+					>
+					{#if list?.length}
+						<button
+							type="button"
+							class="min-h-11 rounded-xl bg-(--xcwds-shell-card) px-4 font-medium hover:not-disabled:bg-(--xcwds-shell-hover-bg) active:bg-(--xcwds-shell-hover-bg) disabled:opacity-40"
+							onclick={() => {
+								message = '';
+								selecting = true;
+							}}>{t.select}</button
+						>
+					{/if}
+				{/if}
+			</div>
 		{/if}
 		{#if !store}
 			<p>{t.missing}</p>
@@ -363,13 +479,22 @@
 					<li>
 						<button
 							type="button"
-							class="block aspect-square w-full overflow-hidden rounded-md bg-(--xcwds-shell-card)"
-							onclick={() => open(photo.id)}
+							class="relative block aspect-square w-full overflow-hidden rounded-md bg-(--xcwds-shell-card)"
+							class:ring-4={photo.id in selected}
+							class:ring-(--xcwds-shell-accent)={photo.id in selected}
+							onclick={() => (selecting ? toggle(photo) : open(photo.id))}
 							use:lazy={photo}
 							aria-label="{t.open} {date(photo.takenAt)}"
+							aria-pressed={selecting ? photo.id in selected : undefined}
 						>
 							{#if urls[photo.id]}
 								<img src={urls[photo.id]} alt="" class="size-full object-cover" />
+							{/if}
+							{#if photo.id in selected}
+								<span
+									class="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-(--xcwds-shell-accent) text-sm text-white"
+									aria-hidden="true">✓</span
+								>
 							{/if}
 						</button>
 					</li>
@@ -382,7 +507,7 @@
 			data-testid="photos-status"
 		>
 			{#if undo}
-				{t.deleted}
+				{t.deleted(undo.photos.length)}
 				<button
 					type="button"
 					class="min-h-11 rounded-xl bg-(--xcwds-shell-card) px-4 font-medium hover:not-disabled:bg-(--xcwds-shell-hover-bg) active:bg-(--xcwds-shell-hover-bg)"

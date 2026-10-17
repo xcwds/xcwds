@@ -8,7 +8,7 @@ So far it holds the plugin, which hands the app a camera controller as `app.came
 `<Camera>` viewfinder, the controller itself, from `@xcwds/plugin-camera/camera`, and the image
 cleaning, from `@xcwds/plugin-camera/image`, and the start of keeping photos in the app
 ([#146](https://github.com/xcwds/xcwds/issues/146)): `app.photos` and the `<Photos>` grid,
-with Share, Save and Add from files. Selecting several photos comes next.
+with Share, Save, Add from files and Select.
 
 ## The plugin
 
@@ -126,6 +126,9 @@ const notes = createPhotos(app.blobs, { label: 'Note photos', group: 'notes' });
   downloads it, named for when it was taken (`photo-20261017-083005.jpg`). The first time a
   photo leaves the app on a page load, the viewer says so: it's now outside the app, and wherever
   it went may keep or back it up. What leaves is the clean file, with no metadata.
+- **Select** turns taps into picks (each tile shows a check and `aria-pressed`): **Share** sends
+  the picked photos in one share sheet (or **Save** downloads each), **Delete** deletes them
+  together with one **Undo**, and **Done** leaves select mode.
 - **Add from files** picks images from the device (several at once) and keeps clean copies
   (`app.photos.add`), then says how many it added and what it removed, and names a file it
   couldn't open (HEIC outside Safari, say). App updates wait while it works.
@@ -137,7 +140,8 @@ const notes = createPhotos(app.blobs, { label: 'Note photos', group: 'notes' });
 
 `@xcwds/plugin-camera/share` has the pieces: `sharePhoto({ blob, takenAt })` shares or saves and
 resolves to `shared`, `saved`, `cancelled` (the share sheet was dismissed) or `failed`, never
-rejecting; `canShareFiles()` says which button to show; `fileName(photo)` and `saveFile(file)`.
+rejecting; `sharePhotos(photos)` does the same for several in one sheet (photos taken in the same
+second get `-2`, `-3`… names); `canShareFiles()` says which button to show; `fileName(photo)` and `saveFile(file)`.
 Call `sharePhoto` straight from the tap, with the file already loaded: Safari only opens the share
 sheet while the tap is fresh.
 
