@@ -14,6 +14,9 @@ export const MAX_LINK = 8 * 1024;
 /** Where a file's design ends: `<name>.xcwds-app.json`. */
 export const FILE_EXTENSION = '.xcwds-app.json';
 
+/** The biggest file `readDesignFile` reads: pretty-printed, a little larger than its definition. */
+export const MAX_FILE = LIMITS.bytes * 2;
+
 /** What every link or file that can't be opened says, whatever was wrong with it. */
 export const NOT_AN_APP = "This link doesn't contain an app this version can open.";
 export const NOT_AN_APP_FILE = "This file doesn't contain an app this version can open.";
@@ -143,8 +146,7 @@ export function designFile(app: AppDefinition): { name: string; text: string } {
 
 /** The design in a file's text, checked, with a new id; or why it can't be opened. */
 export function readDesignFile(text: string): Parsed<AppDefinition> {
-	// Pretty-printed with tabs, a file can be a little larger than the definition it holds.
-	if (new TextEncoder().encode(text).length > LIMITS.bytes * 2)
+	if (new TextEncoder().encode(text).length > MAX_FILE)
 		return { ok: false, error: NOT_AN_APP_FILE };
 	const parsed = readDesign(text);
 	return parsed.ok ? parsed : { ok: false, error: NOT_AN_APP_FILE };

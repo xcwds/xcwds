@@ -79,7 +79,8 @@ Add each page's route file, and the components' styles after Tailwind and the sh
 @import '@xcwds/plugin-blocks/styles.css';
 ```
 
-- **`<YourApps>`**: New app and Add from a file; your apps, each with its size, Share design and
+- **`<YourApps>`**: New app and Add from a file; your apps, each with its size, Share design (for a
+  private app, only while unlocked) and
   Delete (it asks with the app's name, then offers Undo); how much they take up together, with a warning near the browser's
   limit; and Add from a template, which saves a copy and opens it.
 - **`<BlocksApp>`**: runs the app whose id is in the fragment. The header shows its name

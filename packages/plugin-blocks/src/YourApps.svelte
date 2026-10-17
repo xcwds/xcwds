@@ -23,11 +23,18 @@
 
 	const app = useApp();
 	const blocks = app.blocks;
+	type LockLike = {
+		readonly state: { readonly locked: boolean };
+		subscribe(listener: (state: { readonly locked: boolean }) => void): () => void;
+	};
+	const lock = (app as { lock?: LockLike }).lock;
 
 	/** Undefined until listed, so the prerendered page matches the first render. */
 	let list = $state.raw<AppSummary[]>();
 	let usage = $state.raw<Usage>();
 	let error = $state('');
+	/** While `app.lock` is locked, a private app's design isn't shared (its name still shows). */
+	let locked = $state(true);
 	/** The last deleted app, until Undo times out. */
 	let undo = $state.raw<{ name: string; removed: Removed; timer: ReturnType<typeof setTimeout> }>();
 
@@ -39,8 +46,11 @@
 		};
 		load();
 		const stop = blocks.onChange(load);
+		locked = lock?.state.locked ?? false;
+		const stopLock = lock?.subscribe((s) => (locked = s.locked));
 		return () => {
 			stop();
+			stopLock?.();
 			if (undo) clearTimeout(undo.timer);
 		};
 	});
@@ -111,7 +121,7 @@
 									>
 								</span>
 							</a>
-							{#if design}
+							{#if design && !(design.private && locked)}
 								<ShareDesign {design} label="Share design of {summary.name}" />
 							{/if}
 							<button

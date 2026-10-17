@@ -14,7 +14,14 @@
 	import { useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
 	import type {} from './client.js';
-	import { FILE_EXTENSION, dataOf, decodeDesign, readDesignFile } from './design.js';
+	import {
+		FILE_EXTENSION,
+		MAX_FILE,
+		NOT_AN_APP_FILE,
+		dataOf,
+		decodeDesign,
+		readDesignFile
+	} from './design.js';
 	import type { AppDefinition, Block, LogField, Repeat } from './format.js';
 	import { go } from './navigate.js';
 	import { button, card, field as input, muted, primary } from './ui.js';
@@ -30,6 +37,8 @@
 	let design = $state.raw<AppDefinition>();
 	let error = $state('');
 	let saveError = $state('');
+	/** Counts what's being read, so a slower, older link or file can't replace a newer one. */
+	let reading = 0;
 
 	onMount(() => {
 		const read = async () => {
@@ -37,9 +46,11 @@
 			if (data === undefined) return;
 			// Don't leave the design in the address bar or history.
 			history.replaceState(history.state, '', location.pathname);
+			const at = ++reading;
 			design = undefined;
 			error = saveError = '';
 			const parsed = await decodeDesign(data);
+			if (at !== reading) return;
 			if (parsed.ok) design = parsed.value;
 			else error = parsed.error;
 		};
@@ -53,9 +64,15 @@
 		const file = e.currentTarget.files?.[0];
 		e.currentTarget.value = '';
 		if (!file) return;
+		const at = ++reading;
 		design = undefined;
 		error = saveError = '';
-		const parsed = readDesignFile(await file.text());
+		// Checked before reading, so a huge file chosen by mistake isn't loaded.
+		const parsed =
+			file.size > MAX_FILE
+				? ({ ok: false, error: NOT_AN_APP_FILE } as const)
+				: readDesignFile(await file.text());
+		if (at !== reading) return;
 		if (parsed.ok) design = parsed.value;
 		else error = parsed.error;
 	}

@@ -656,6 +656,15 @@ test('a design saved as a file is added from Your apps', async ({ page, browser 
 	await expect(theirs.getByTestId('import-error')).toHaveText(
 		"This file doesn't contain an app this version can open."
 	);
+	// Too big to be a design: not even read.
+	await theirs.getByLabel('Add an app from a file').setInputFiles({
+		name: 'huge.json',
+		mimeType: 'application/json',
+		buffer: Buffer.alloc(64 * 1024 + 1, 32)
+	});
+	await expect(theirs.getByTestId('import-error')).toHaveText(
+		"This file doesn't contain an app this version can open."
+	);
 	await theirs.getByLabel('Add an app from a file').setInputFiles(path);
 	await expect(theirs.getByTestId('import-preview')).toContainText('Water');
 	await theirs.getByRole('button', { name: 'Cancel' }).click();
@@ -685,4 +694,29 @@ test('sharing a private app asks first', async ({ page }) => {
 	await expect(
 		page.getByTestId('share-design').getByRole('button', { name: 'Copy link' })
 	).toBeVisible();
+});
+
+test("a locked private app's design can't be shared", async ({ page }) => {
+	await add(page, 'Mood');
+	await add(page, 'Water');
+	await gotoHydrated(page, url('/settings'));
+	const lock = page.getByTestId('passcode-lock');
+	await lock.getByRole('button', { name: 'Set a passcode' }).click();
+	await lock.getByLabel('Passcode', { exact: true }).fill('246810');
+	await lock.getByLabel('Same again').fill('246810');
+	await lock.getByRole('button', { name: 'Save passcode' }).click();
+	await lock.getByRole('button', { name: 'Lock now' }).click();
+
+	await gotoHydrated(page, url('/my-apps'));
+	await expect(page.getByRole('button', { name: 'Share design of Water' })).toBeVisible();
+	await expect(page.getByTestId('your-apps')).toContainText('Mood');
+	await expect(page.getByRole('button', { name: 'Share design of Mood' })).toHaveCount(0);
+
+	// Unlocked (opening it asks), it can be shared.
+	await page.getByRole('link', { name: /Mood/ }).click();
+	await page.getByTestId('unlock').getByLabel('Passcode').fill('246810');
+	await page.getByTestId('unlock').getByRole('button', { name: 'Unlock' }).click();
+	await page.locator('header [data-shell-back]').click();
+	await expect(page).toHaveURL(url('/my-apps'));
+	await expect(page.getByRole('button', { name: 'Share design of Mood' })).toBeVisible();
 });
