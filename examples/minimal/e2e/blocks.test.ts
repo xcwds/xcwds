@@ -518,3 +518,45 @@ test("a private app's unsaved draft only comes back behind the lock", async ({ p
 		await expect(page.getByTestId('builder')).toHaveCount(0);
 	}
 });
+
+test('a draft held back by the lock is kept, and comes back once unlocked', async ({ page }) => {
+	const mood = await add(page, 'Mood');
+	const water = await add(page, 'Water');
+	await page.getByTestId('blocks-edit').click();
+	const builder = page.getByTestId('builder');
+	await builder.getByLabel('Name').fill('Private water');
+	await builder.getByLabel('Private').check();
+	await expect
+		.poll(() => page.evaluate(() => localStorage.getItem('app:blocks:private-draft')))
+		.toContain('Private water');
+
+	await gotoHydrated(page, url('/settings'));
+	const lock = page.getByTestId('passcode-lock');
+	await lock.getByRole('button', { name: 'Set a passcode' }).click();
+	await lock.getByLabel('Passcode', { exact: true }).fill('246810');
+	await lock.getByLabel('Same again').fill('246810');
+	await lock.getByRole('button', { name: 'Save passcode' }).click();
+	await lock.getByRole('button', { name: 'Lock now' }).click();
+
+	// Locked, Water's builder shows Water as saved, and keeps the draft.
+	await gotoHydrated(page, url(`/my-apps/edit#${water}`));
+	await expect(builder.getByLabel('Name')).toHaveValue('Water');
+	await expect(page.getByTestId('builder-restored')).toHaveCount(0);
+	expect(await page.evaluate(() => localStorage.getItem('app:blocks:private-draft'))).toContain(
+		'Private water'
+	);
+
+	// Unlocked (opening a private app asks), it comes back.
+	await page.locator('header [data-shell-back]').click();
+	await page.getByRole('link', { name: /Mood/ }).click();
+	await page.getByTestId('unlock').getByLabel('Passcode').fill('246810');
+	await page.getByTestId('unlock').getByRole('button', { name: 'Unlock' }).click();
+	await expect(page).toHaveURL(url(`/my-apps/private#${mood}`));
+	await page.locator('header [data-shell-back]').click();
+	await expect(page).toHaveURL(url('/my-apps'));
+	await page.locator('main').getByRole('link', { name: /Water/ }).first().click();
+	await expect(page).toHaveURL(url(`/my-apps/app#${water}`));
+	await page.getByTestId('blocks-edit').click();
+	await expect(page.getByTestId('builder-restored')).toBeVisible();
+	await expect(builder.getByLabel('Name')).toHaveValue('Private water');
+});

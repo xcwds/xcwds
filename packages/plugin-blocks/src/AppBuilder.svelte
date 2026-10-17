@@ -56,6 +56,8 @@
 	let pristine = '';
 	/** Unsaved changes from before were picked up. */
 	let restored = $state(false);
+	/** The stored draft is this page's (restored or written here), so it may clear it. */
+	let ours = false;
 	/** The app as Preview shows it, with data that lives only on this page. */
 	let preview = $state.raw<{ app: AppDefinition; data: AppData }>();
 	let now = $state(Date.now());
@@ -100,7 +102,7 @@
 			}
 			kept = undefined;
 		}
-		restored = !!kept;
+		restored = ours = !!kept;
 		draft = kept ? kept.app : start;
 		preview = undefined;
 		nameError = error = '';
@@ -119,14 +121,17 @@
 		};
 	});
 
-	// Keeps the changes as they're made. Back to the app as it was, its draft goes; another
-	// app's draft stays until this one has changes of its own (there's one draft at a time).
+	// Keeps the changes as they're made. Back to the app as it was, its draft goes; a draft
+	// this page didn't show (another app's, or one held back behind the lock) stays until this
+	// page has changes of its own (there's one draft at a time).
 	$effect(() => {
 		const json = JSON.stringify(draft);
 		if (!loaded || missing || !blocks) return;
 		const target = before?.id ?? '';
-		if (json !== pristine) blocks.saveDraft({ for: target, app: JSON.parse(json) });
-		else if (blocks.draft()?.for === target) blocks.saveDraft(undefined);
+		if (json !== pristine) {
+			ours = true;
+			blocks.saveDraft({ for: target, app: JSON.parse(json) });
+		} else if (ours && blocks.draft()?.for === target) blocks.saveDraft(undefined);
 	});
 
 	function removed(label: string, restore: () => void) {
@@ -209,7 +214,7 @@
 	/** Stops keeping changes: the draft goes, and the page stops saving one. */
 	function finish() {
 		loaded = false;
-		blocks?.saveDraft(undefined);
+		if (ours) blocks?.saveDraft(undefined);
 	}
 
 	function discard() {
