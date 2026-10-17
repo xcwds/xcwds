@@ -93,7 +93,9 @@ Add each page's route file, and the components' styles after Tailwind and the sh
   problem next to Save; if the change drops saved data, it lists what (`dataLoss`) and asks
   first, then saves (removing that data), says Saved (`app.toast`) and opens the app. Changes
   are kept as you make them (`saveDraft`), so leaving and coming back, or a reload, brings them
-  back until Save or Discard changes; one draft at a time. Preview shows the app as it will
+  back until Save or Discard changes; one draft at a time. A private draft only comes back where the
+  lock covers it: on the normal page while unlocked, or on the private page (a new private app's
+  draft goes there). Preview shows the app as it will
   look, working on data that's thrown away ("Preview, nothing saved").
 
 With `@xcwds/plugin-share`, add `path` to its `exclude`: a link to `<path>/app` or `<path>/edit`

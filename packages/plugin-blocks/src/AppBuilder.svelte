@@ -86,10 +86,22 @@
 		const start = found ? (JSON.parse(JSON.stringify(found)) as AppDefinition) : blankApp();
 		if (!found && personal) start.private = true;
 		pristine = JSON.stringify(start);
-		// Unsaved changes to this app (or to a new one, on the page for new apps) come back.
-		const kept = missing ? undefined : blocks.draft();
-		restored = !!kept && kept.for === (found?.id ?? '') && (!!found || !id);
-		draft = restored && kept ? kept.app : start;
+		// Unsaved changes to this app (or to a new one, on the page for new apps) come back. A
+		// private one (in the private group) only where the lock covers it: here while unlocked,
+		// or on the private page, which a new private app's draft goes to.
+		let kept = missing ? undefined : blocks.draft();
+		if (kept && kept.for !== (found?.id ?? '')) kept = undefined;
+		if (kept && !found && id) kept = undefined;
+		if (kept && !personal && kept.app.private && lock?.state.locked) {
+			if (!found) {
+				// After this navigation has finished, so the lock's guard sees the next one.
+				setTimeout(() => void go(`${blocks.path}/private-edit`, true));
+				return;
+			}
+			kept = undefined;
+		}
+		restored = !!kept;
+		draft = kept ? kept.app : start;
 		preview = undefined;
 		nameError = error = '';
 		loaded = true;

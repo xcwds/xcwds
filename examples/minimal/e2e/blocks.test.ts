@@ -477,3 +477,44 @@ test('an app can be built with the keyboard alone', async ({ page }) => {
 	await page.keyboard.press('Space');
 	await expect(page.getByTestId('checklist-progress')).toHaveText('1 of 1 done');
 });
+
+test("a private app's unsaved draft only comes back behind the lock", async ({ page }) => {
+	const id = await add(page, 'Mood');
+	await gotoHydrated(page, url('/my-apps/edit'));
+	const builder = page.getByTestId('builder');
+	await builder.getByLabel('Name').fill('Secret plan');
+	await builder.getByLabel('Private').check();
+	await expect
+		.poll(() => page.evaluate(() => localStorage.getItem('app:blocks:private-draft')))
+		.toContain('Secret plan');
+
+	await gotoHydrated(page, url('/settings'));
+	const lock = page.getByTestId('passcode-lock');
+	await lock.getByRole('button', { name: 'Set a passcode' }).click();
+	await lock.getByLabel('Passcode', { exact: true }).fill('246810');
+	await lock.getByLabel('Same again').fill('246810');
+	await lock.getByRole('button', { name: 'Save passcode' }).click();
+	await lock.getByRole('button', { name: 'Lock now' }).click();
+
+	// The page for new apps isn't locked, so the draft goes to the private one, which is.
+	await page.getByRole('link', { name: /Utils/ }).first().click();
+	await page.getByTestId('your-apps-link').click();
+	await page.getByRole('link', { name: 'New app' }).click();
+	await expect(page).toHaveURL(/\/unlock$/);
+	await expect(page.getByText('Secret plan')).toHaveCount(0);
+	const screen = page.getByTestId('unlock');
+	await screen.getByLabel('Passcode').fill('246810');
+	await screen.getByRole('button', { name: 'Unlock' }).click();
+	await expect(page).toHaveURL(url('/my-apps/private-edit'));
+	await expect(page.getByTestId('builder-restored')).toBeVisible();
+	await expect(builder.getByLabel('Name')).toHaveValue('Secret plan');
+
+	// A private app opened on a normal page (each load starts locked) shows nothing of itself
+	// and goes to the unlock screen.
+	for (const path of [`/my-apps/app#${id}`, `/my-apps/edit#${id}`]) {
+		await gotoHydrated(page, url(path));
+		await expect(page, path).toHaveURL(/\/unlock$/);
+		await expect(page.getByTestId('blocks-app')).toHaveCount(0);
+		await expect(page.getByTestId('builder')).toHaveCount(0);
+	}
+});
