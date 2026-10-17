@@ -1,5 +1,11 @@
 # @xcwds/create
 
+## 0.2.3
+
+### Patch Changes
+
+- New apps and `xcwds add` use the @xcwds versions released with this one.
+
 ## 0.2.2
 
 ### Patch Changes
