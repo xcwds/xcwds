@@ -8,8 +8,8 @@ install yet.
 So far it holds the definition format and the logic of each block, from
 `@xcwds/plugin-blocks/model`; the plugin, which saves your apps and their data on the device
 (`app.blocks`) and adds each one to `@xcwds/plugin-tools` as a tool; and the pages: Your apps, with
-Add from a template, and the page that runs an app. Still to come: log charts and editing
-entries, how much storage your apps use, then building your own apps (#161) and sharing them
+Add from a template, and the page that runs an app. Still to come: how much storage your apps
+use, then building your own apps (#161) and sharing them
 (#162).
 
 ## The plugin
@@ -72,8 +72,9 @@ Add each page's route file, and the components' styles after Tailwind and the sh
   (`app.shell.setTitle`; a private page's `<title>` stays "Private app"). An app opened on the
   wrong one of the two pages goes to the right one, and an id that isn't on this device says so
   with a link back. A checklist ticks items off (a repeating one says when it's back), a counter
-  has − and + with its goal and past days or weeks, a log adds entries from its fields and lists
-  them newest first (Delete offers Undo), and notes save as you type. Each change saves from
+  has − and + with its goal and past days or weeks, a log adds entries from its fields, charts each number or scale field over 7, 30 or
+  90 days (an inline SVG with a text summary, and Show as table), and lists the entries newest
+  first (Edit fills the form and keeps the entry's time; Delete offers Undo), and notes save as you type. Each change saves from
   what's stored now, so another tab's change isn't lost; while `app.lock` is locked a private
   app shows nothing.
 

@@ -4,7 +4,7 @@
  */
 import { daysBetween, type DayKey } from './calendar.js';
 import type { ChecklistItem, LogField } from './format.js';
-import type { LogValue } from './log.js';
+import type { LogValue, Point } from './log.js';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -77,4 +77,51 @@ export function periodText(period: string, weekly: boolean, locale?: string): st
 	return weekly
 		? `Week of ${day}`
 		: `${date.toLocaleDateString(locale, { weekday: 'short' })} ${day}`;
+}
+
+/** Where a chart's points go in an SVG `width` × `height`, with `pad` kept clear on each side. */
+export interface ChartBox {
+	width: number;
+	height: number;
+	pad: number;
+}
+
+/**
+ * The y range a field's chart shows: a scale's own 1 to max; a number's min and max when it has
+ * them, otherwise the values' own range (widened by one each way when they're all the same).
+ */
+export function chartRange(field: LogField, values: number[]): { low: number; high: number } {
+	if (field.type === 'scale') return { low: 1, high: field.max };
+	const low = field.type === 'number' && field.min !== undefined ? field.min : Math.min(...values);
+	const high = field.type === 'number' && field.max !== undefined ? field.max : Math.max(...values);
+	if (!Number.isFinite(low) || !Number.isFinite(high)) return { low: 0, high: 1 };
+	return low === high ? { low: low - 1, high: high + 1 } : { low, high };
+}
+
+/**
+ * The points of a chart over the last `days` local calendar days (today included), placed by
+ * time from the start of the first day to the end of today.
+ */
+export function chartPoints(
+	points: Point[],
+	days: number,
+	now: number,
+	range: { low: number; high: number },
+	box: ChartBox
+): { x: number; y: number }[] {
+	const today = new Date(now);
+	const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).getTime();
+	const start = new Date(
+		today.getFullYear(),
+		today.getMonth(),
+		today.getDate() - (days - 1)
+	).getTime();
+	const w = box.width - 2 * box.pad;
+	const h = box.height - 2 * box.pad;
+	const round = (n: number) => Math.round(n * 10) / 10;
+	return points.map((p) => {
+		const t = Math.min(1, Math.max(0, (p.at - start) / (end - start)));
+		const v = Math.min(1, Math.max(0, (p.value - range.low) / (range.high - range.low)));
+		return { x: round(box.pad + t * w), y: round(box.pad + (1 - v) * h) };
+	});
 }

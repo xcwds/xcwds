@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { LogField } from './format.js';
-import { dueText, periodText, repeatText, valueText, whenText } from './view.js';
+import {
+	chartPoints,
+	chartRange,
+	dueText,
+	periodText,
+	repeatText,
+	valueText,
+	whenText
+} from './view.js';
 
 describe('repeatText', () => {
 	it('says how often an item comes back, weeks starting on Monday', () => {
@@ -61,4 +69,41 @@ it('periodText names a past day or week', () => {
 	expect(periodText('2026-10-13', false, 'en-GB')).toBe('Tue 13 Oct');
 	expect(periodText('2026-10-12', true, 'en-GB')).toBe('Week of 12 Oct');
 	expect(periodText('all', false)).toBe('all');
+});
+
+it('chartRange uses the scale, the field limits, or the values', () => {
+	expect(chartRange({ id: 's', type: 'scale', label: 'Mood', max: 10 }, [3])).toEqual({
+		low: 1,
+		high: 10
+	});
+	expect(chartRange({ id: 'n', type: 'number', label: 'Sleep', min: 0, max: 24 }, [7])).toEqual({
+		low: 0,
+		high: 24
+	});
+	expect(chartRange({ id: 'n', type: 'number', label: 'Weight' }, [70, 72.5])).toEqual({
+		low: 70,
+		high: 72.5
+	});
+	expect(chartRange({ id: 'n', type: 'number', label: 'Weight' }, [70])).toEqual({
+		low: 69,
+		high: 71
+	});
+});
+
+it('chartPoints places points by time across the days, and by value up the box', () => {
+	const now = new Date(2026, 9, 17, 12, 0).getTime();
+	const box = { width: 70, height: 50, pad: 5 };
+	const points = [
+		// The very start of the first of 7 days, at the bottom.
+		{ at: new Date(2026, 9, 11, 0, 0).getTime(), value: 1 },
+		// Noon today, at the top.
+		{ at: now, value: 5 },
+		// Out of range is held to the edge.
+		{ at: new Date(2026, 9, 1).getTime(), value: 9 }
+	];
+	expect(chartPoints(points, 7, now, { low: 1, high: 5 }, box)).toEqual([
+		{ x: 5, y: 45 },
+		{ x: 60.7, y: 5 },
+		{ x: 5, y: 5 }
+	]);
 });
