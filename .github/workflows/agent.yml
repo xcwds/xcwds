@@ -88,7 +88,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           {
             echo "AGENT_TOKEN_SOCKET=$RUNNER_TEMP/agent-token.sock"
-            echo "AGENT_BIN=$GITHUB_WORKSPACE/.agent/.github/agents/bin"
+            echo "AGENT_BIN=/opt/xcwds-agent/bin"
             echo "AGENT_OWNER=$GITHUB_REPOSITORY_OWNER"
           } >> "$GITHUB_ENV"
 
@@ -100,6 +100,16 @@ jobs:
           path: .agent
           sparse-checkout: .github/agents
           persist-credentials: false
+
+      # Root-owned and outside the workspace, so a run can't rewrite merge-pr, the gh wrapper or the
+      # credential helper once sudo is gone.
+      - name: Install the agent's scripts
+        run: |
+          sudo -n rm -rf "$(dirname "$AGENT_BIN")"
+          sudo -n install -d -o root -g root -m 0755 "$(dirname "$AGENT_BIN")"
+          sudo -n cp -R .agent/.github/agents/bin "$AGENT_BIN"
+          sudo -n chown -R root:root "$AGENT_BIN"
+          sudo -n chmod -R go-w "$AGENT_BIN"
 
       # First, before anything else runs: the key goes in on stdin and only the helper (as root)
       # holds it. sudo is taken away from the runner user below, so the agent can't read it back.
@@ -220,7 +230,10 @@ jobs:
         run: |
           user=$(id -un)
           sudo -n systemctl stop docker.socket docker.service 2> /dev/null || true
-          echo "$user ALL=(ALL) !ALL" | sudo -n install -m 0440 -o root -g root /dev/stdin /etc/sudoers.d/zz-agent-no-sudo
+          rule="$RUNNER_TEMP/zz-agent-no-sudo"
+          echo "$user ALL=(ALL) !ALL" > "$rule"
+          sudo -n install -m 0440 -o root -g root "$rule" /etc/sudoers.d/zz-agent-no-sudo
+          rm -f "$rule"
           if sudo -n true 2> /dev/null; then
             echo "::error::sudo still works for $user, so the agent could read the app's key. Not running."
             exit 1
@@ -269,7 +282,7 @@ jobs:
               printf '\n## Context\n\n%s\n' "$CONTEXT"
             fi
           } > "$file"
-          args="$(node .agent/.github/agents/bin/tool-args.mjs "$PROFILE") --max-turns $MAX_TURNS"
+          args="$(node "$AGENT_BIN/tool-args.mjs" "$PROFILE") --max-turns $MAX_TURNS"
           [ -n "$MODEL" ] && args="$args --model $MODEL"
           delimiter="EOF_$(openssl rand -hex 16)"
           {
