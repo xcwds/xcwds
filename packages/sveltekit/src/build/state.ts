@@ -19,7 +19,7 @@ export type BuildState = {
 	root: string;
 	/** SvelteKit's `paths.base`. */
 	base: string;
-	/** SvelteKit's static files directory (`kit.files.assets`), absolute. */
+	/** SvelteKit's static files directory (`files.assets`), absolute. */
 	assetsDir: string;
 	configFile: string;
 	/** Files the config imports (watched by `vite dev`). */
@@ -36,19 +36,3 @@ export type BuildState = {
 	/** The Web App Manifest, after `onManifest` hooks and `config.manifest`. */
 	manifest: Record<string, unknown>;
 };
-
-// `withXcwds()` (in svelte.config.js) and `xcwds()` (in vite.config.ts) are separate modules
-// loaded in the same process, SvelteKit's config first. The state passes between them here.
-const KEY = Symbol.for('xcwds.sveltekit.builds');
-const registry = ((globalThis as Record<symbol, unknown>)[KEY] ??= new Map()) as Map<
-	string,
-	BuildState
->;
-
-export function remember(state: BuildState): void {
-	registry.set(state.root, state);
-}
-
-export function recall(root: string): BuildState | undefined {
-	return registry.get(root);
-}

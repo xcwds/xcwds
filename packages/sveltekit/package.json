@@ -1,7 +1,7 @@
 {
 	"name": "@xcwds/sveltekit",
-	"version": "0.4.0",
-	"description": "Binds the @xcwds kernel to SvelteKit: a Vite plugin, svelte.config and server hooks, the <App> component, Svelte 5 persist() and reactive settings, and a route registry.",
+	"version": "0.5.0",
+	"description": "Binds the @xcwds kernel to SvelteKit: a Vite plugin that sets up SvelteKit, server hooks, the <App> component, Svelte 5 persist() and reactive settings, and a route registry.",
 	"license": "MIT",
 	"type": "module",
 	"sideEffects": [
@@ -23,10 +23,6 @@
 		"./vite": {
 			"types": "./dist/vite.d.ts",
 			"default": "./dist/vite.js"
-		},
-		"./config": {
-			"types": "./dist/config.d.ts",
-			"default": "./dist/config.js"
 		},
 		"./hooks": {
 			"types": "./dist/hooks.d.ts",
@@ -56,24 +52,24 @@
 		"publint": "publint"
 	},
 	"dependencies": {
-		"@sveltejs/adapter-static": "^3.0.10"
+		"@sveltejs/adapter-static": "^4.0.0"
 	},
 	"devDependencies": {
-		"@sveltejs/kit": "^2.70.3",
+		"@sveltejs/kit": "^3.1.0",
 		"@sveltejs/package": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@xcwds/core": "workspace:^",
-		"svelte": "^5.45.6",
+		"svelte": "^5.57.2",
 		"svelte-check": "^4.3.4",
 		"typescript": "~6.0.3",
 		"vite": "^8.3.4",
 		"vitest": "^5.0.0"
 	},
 	"peerDependencies": {
-		"@sveltejs/kit": "^2.20.0",
+		"@sveltejs/kit": "^3.0.0",
 		"@xcwds/core": "workspace:^",
 		"svelte": "^5.0.0",
-		"vite": "^6.1.0 || ^7.0.0 || ^8.0.0"
+		"vite": "^8.0.12"
 	},
 	"keywords": [
 		"pwa",

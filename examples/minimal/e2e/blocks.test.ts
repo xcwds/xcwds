@@ -510,12 +510,18 @@ test("a private app's unsaved draft only comes back behind the lock", async ({ p
 	await expect(builder.getByLabel('Name')).toHaveValue('Secret plan');
 
 	// A private app opened on a normal page (each load starts locked) shows nothing of itself
-	// and goes to the unlock screen.
-	for (const path of [`/my-apps/app#${id}`, `/my-apps/edit#${id}`]) {
+	// and goes to the unlock screen, then on to its private page once unlocked (#219).
+	for (const [path, unlocked] of [
+		[`/my-apps/app#${id}`, `/my-apps/private#${id}`],
+		[`/my-apps/edit#${id}`, `/my-apps/private-edit#${id}`]
+	]) {
 		await gotoHydrated(page, url(path));
 		await expect(page, path).toHaveURL(/\/unlock$/);
 		await expect(page.getByTestId('blocks-app')).toHaveCount(0);
 		await expect(page.getByTestId('builder')).toHaveCount(0);
+		await screen.getByLabel('Passcode').fill('246810');
+		await screen.getByRole('button', { name: 'Unlock' }).click();
+		await expect(page, path).toHaveURL(url(unlocked));
 	}
 });
 

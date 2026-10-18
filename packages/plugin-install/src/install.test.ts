@@ -1,8 +1,11 @@
+import { definePlugin } from '@xcwds/core';
 import { buildTestApp, type Importer } from '@xcwds/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import client from './client.js';
 import install from './index.js';
 import { CATCH_PROMPT, PROMPT_GLOBAL, isIos, isStandalone, resolveOptions } from './options.js';
+
+vi.mock('./InstallCard.svelte', () => ({ default: () => {} }));
 
 afterEach(() => void vi.unstubAllGlobals());
 
@@ -41,8 +44,17 @@ describe('platform detection', () => {
 
 describe('options', () => {
 	it('has none, and says so', async () => {
-		expect(resolveOptions()).toEqual({});
+		expect(resolveOptions()).toEqual({ text: {} });
 		expect(() => resolveOptions({ name: 'x' })).toThrow(/unknown option `name`/);
+		const steps = ['Open <strong>Safari</strong>.', 'Add it.'];
+		const text = { heading: 'Install xcwds', iosSteps: steps };
+		expect(resolveOptions({ text })).toEqual({ text });
+		expect(resolveOptions({ text }).text.iosSteps).not.toBe(steps);
+		expect(() => resolveOptions({ text: 'Install' })).toThrow(/`text`/);
+		expect(() => resolveOptions({ text: { title: 'x' } })).toThrow(/unknown `text` key `title`/);
+		expect(() => resolveOptions({ text: { heading: '' } })).toThrow(/`text.heading`/);
+		expect(() => resolveOptions({ text: { iosSteps: [] } })).toThrow(/`text.iosSteps`/);
+		expect(() => resolveOptions({ text: { iosSteps: ['ok', 3] } })).toThrow(/`text.iosSteps`/);
 		await expect(
 			buildTestApp({ plugins: [install({ nope: 1 } as never)] }, { import: importer })
 		).rejects.toThrow(/@xcwds\/plugin-install: unknown option `nope`/);
@@ -78,6 +90,29 @@ function fakeBrowser({ userAgent = ANDROID, standalone = false, touch = 5 } = {}
 }
 
 describe('the page', () => {
+	it('leads the settings page with its card, in the words the config gives', async () => {
+		fakeBrowser();
+		const sections: unknown[] = [];
+		const settingsPage = definePlugin(
+			(app) =>
+				void app.decorate('settingsPage', {
+					add(component: unknown, options: unknown) {
+						const section = { component, options };
+						sections.push(section);
+						return () => void sections.splice(sections.indexOf(section), 1);
+					}
+				} as never),
+			{ name: 'settings-page', encapsulate: false }
+		);
+		const text = { heading: 'Install xcwds' };
+		const app = await buildTestApp({ plugins: [settingsPage, [client, { text }]] });
+		expect(app.install!.text).toEqual(text);
+		await vi.waitFor(() => expect(sections).toHaveLength(1));
+		expect(sections[0]).toMatchObject({ options: { order: -100 } });
+		await app.close();
+		expect(sections).toEqual([]);
+	});
+
 	it('checks the platform once it boots', async () => {
 		fakeBrowser({ userAgent: IPHONE });
 		const app = await buildTestApp({ plugins: [[client, {}]] });

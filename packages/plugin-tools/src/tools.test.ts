@@ -87,11 +87,13 @@ describe('options', () => {
 		expect(() => resolveOptions({ items: [{ ...tool('a'), recents: false }] })).toThrow(
 			/unknown key `recents`/
 		);
-		expect(() => resolveOptions({ items: [tool('a', { width: 'wide' } as never)] })).toThrow(
+		expect(() => resolveOptions({ items: [tool('a', { width: 'full' } as never)] })).toThrow(
 			/`width`/
 		);
-		expect(resolveOptions({ items: [tool('a', { width: 'split' })] }).items[0]!.width).toBe(
-			'split'
+		for (const width of ['wide', 'split'] as const)
+			expect(resolveOptions({ items: [tool('a', { width })] }).items[0]!.width).toBe(width);
+		expect(resolveOptions({ items: [tool('a', { width: 'narrow' })] }).items[0]!.width).toBe(
+			undefined
 		);
 		expect(() => resolveOptions({ tools: [] })).toThrow(/unknown option `tools`/);
 		expect(resolveOptions({ storageKey: 'app:home:shortcuts' }).storageKey).toBe(
@@ -365,16 +367,18 @@ describe('tools on a shared page (#160)', () => {
 
 describe('the build', () => {
 	it('adds the index page and each tool to the route registry, and shortcuts to the manifest', async () => {
+		const wide = tool('list', { width: 'wide' });
 		const app = await buildTestApp(
 			{
 				plugins: [
-					toolsFactory({ ...options, emoji: '🧰' }),
+					toolsFactory({ ...options, emoji: '🧰', items: [...items, wide] }),
 					// Another plugin adds its own tool, in its build entry and its page entry.
 					definePlugin((a) => a.tools!.add(tool('extra', { shortcut: true })))
 				]
 			},
 			{ import: importer }
 		);
+		expect(app.routes.get('/utils/list')?.width).toBe('wide');
 		expect(app.routes.get('/utils')).toMatchObject({ title: 'Utils', emoji: '🧰', width: 'wide' });
 		expect(app.routes.get('/utils/a')).toMatchObject({
 			title: 'A',
@@ -386,6 +390,7 @@ describe('the build', () => {
 		expect(app.routes.get('/utils/private')?.private).toBe(true);
 		expect(app.tools!.list().map((t) => t.path)).toEqual([
 			...items.map((t) => t.path),
+			'/utils/list',
 			'/utils/extra'
 		]);
 

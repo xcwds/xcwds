@@ -86,8 +86,10 @@ function packageJson(plan: AppPlan, options: GenerateOptions): string {
 		version: '0.0.1',
 		private: true,
 		type: 'module',
+		// `#lib/...` imports src/lib (SvelteKit 3 has no `$lib`).
+		imports: { '#lib/*': './src/lib/*' },
 		scripts: {
-			// Writes .svelte-kit/tsconfig.json, which tsconfig.json extends, on install.
+			// Writes the tsconfig that tsconfig.json extends ($app/tsconfig), on install.
 			prepare: "svelte-kit sync || echo ''",
 			dev: 'vite dev',
 			build: 'vite build',
@@ -342,41 +344,27 @@ export default defineConfig(
 );
 `;
 
-const TSCONFIG = `${JSON.stringify(
-	{
-		extends: './.svelte-kit/tsconfig.json',
-		compilerOptions: {
-			allowJs: true,
-			checkJs: true,
-			esModuleInterop: true,
-			forceConsistentCasingInFileNames: true,
-			resolveJsonModule: true,
-			skipLibCheck: true,
-			sourceMap: true,
-			strict: true,
-			moduleResolution: 'bundler'
-		}
+// `.xcwds/types.d.ts` tells TypeScript what the plugins add to the app and its settings.
+const TSCONFIG = `{
+	"extends": "$app/tsconfig",
+	"compilerOptions": {
+		"sourceMap": true,
+		"strict": true
 	},
-	null,
-	'\t'
-)}\n`;
-
-const SVELTE_CONFIG = `import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
-import { withXcwds } from '@xcwds/sveltekit/config';
-
-// A GitHub Pages project site is served under /<repo>: the deploy workflow sets BASE_PATH.
-const base = /** @type {'' | \`/\${string}\`} */ (process.env.BASE_PATH ?? '');
-
-/** @type {import('@sveltejs/kit').Config} */
-export default await withXcwds({ preprocess: vitePreprocess(), kit: { paths: { base } } });
+	"include": ["src", "e2e", "*", ".xcwds/types.d.ts"],
+	"exclude": ["src/service-worker.ts"]
+}
 `;
 
-const VITE_CONFIG = `import { sveltekit } from '@sveltejs/kit/vite';
-import tailwindcss from '@tailwindcss/vite';
+const VITE_CONFIG = `import tailwindcss from '@tailwindcss/vite';
 import { xcwds } from '@xcwds/sveltekit/vite';
 import { defineConfig } from 'vite';
 
-export default defineConfig({ plugins: [xcwds(), sveltekit(), tailwindcss()] });
+// A GitHub Pages project site is served under /<repo>: the deploy workflow sets BASE_PATH.
+const base = (process.env.BASE_PATH ?? '') as '' | \`/\${string}\`;
+
+// xcwds() takes SvelteKit's config and adds SvelteKit's plugin.
+export default defineConfig({ plugins: [xcwds({ paths: { base } }), tailwindcss()] });
 `;
 
 const VITEST_CONFIG = `import { defineConfig } from 'vitest/config';
@@ -423,7 +411,7 @@ export {};
 `;
 
 const LAYOUT = `<script lang="ts">
-	import Notices from '$lib/Notices.svelte';
+	import Notices from '#lib/Notices.svelte';
 	import Shell from '@xcwds/plugin-shell/Shell.svelte';
 	import { App } from '@xcwds/sveltekit';
 	import '../app.css';
@@ -637,7 +625,6 @@ export function appFiles(options: GenerateOptions): Map<string, string> {
 		['.prettierignore', PRETTIERIGNORE],
 		['eslint.config.js', ESLINT],
 		['tsconfig.json', TSCONFIG],
-		['svelte.config.js', SVELTE_CONFIG],
 		['vite.config.ts', VITE_CONFIG],
 		['vitest.config.ts', VITEST_CONFIG],
 		['playwright.config.ts', PLAYWRIGHT_CONFIG],

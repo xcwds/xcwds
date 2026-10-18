@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { base, resolve } from '$app/paths';
+	import { resolve } from '$app/paths';
 	import Home from '@xcwds/plugin-shell/Home.svelte';
 	import NavPicker from '@xcwds/plugin-shell/NavPicker.svelte';
 	import InstallCard from '@xcwds/plugin-install/InstallCard.svelte';
@@ -27,6 +27,8 @@
 		'/hello?once',
 		'/hello?bounce'
 	];
+	// They aren't routes, so the app's route types don't know them.
+	const href = resolve as unknown as (path: string) => string;
 </script>
 
 <Home>
@@ -40,7 +42,7 @@
 		<ul>
 			{#each guarded as path (path)}
 				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-				<li><a href={`${base}${path}`}>Guarded {path}</a></li>
+				<li><a href={href(path)}>Guarded {path}</a></li>
 			{/each}
 		</ul>
 	{/if}

@@ -1,5 +1,5 @@
-// `pnpm install`'s prepare step: `svelte-kit sync` writes `.svelte-kit/`, whose tsconfig the
-// site's extends (Vitest needs it). On a fresh clone the packages aren't built yet, so loading the
+// `pnpm install`'s prepare step: `svelte-kit sync` writes `$app/tsconfig`, which the site's
+// tsconfig extends (Vitest needs it). On a fresh clone the packages aren't built yet, so loading the
 // Vite config (which imports `@xcwds/sveltekit/dist`) fails after the tsconfig is written. Its
 // stack traces look broken to a new contributor, so they're kept quiet until `pnpm build`.
 import { execSync } from 'node:child_process';

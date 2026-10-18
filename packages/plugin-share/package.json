@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-share",
-	"version": "0.4.0",
+	"version": "0.5.0",
 	"description": "Sharing for @xcwds apps: a Share button in the installed app that never shares what you typed, and a private share target whose shared content never reaches a server.",
 	"license": "MIT",
 	"type": "module",
@@ -38,21 +38,21 @@
 		"publint": "publint"
 	},
 	"peerDependencies": {
-		"@sveltejs/kit": "^2.20.0",
+		"@sveltejs/kit": "^3.0.0",
 		"@xcwds/core": "workspace:^",
 		"@xcwds/plugin-shell": "workspace:^",
 		"@xcwds/sveltekit": "workspace:^",
 		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
-		"@sveltejs/kit": "^2.70.3",
+		"@sveltejs/kit": "^3.1.0",
 		"@sveltejs/package": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@xcwds/core": "workspace:^",
 		"@xcwds/plugin-shell": "workspace:^",
 		"@xcwds/sveltekit": "workspace:^",
 		"@xcwds/testing": "workspace:*",
-		"svelte": "^5.45.6",
+		"svelte": "^5.57.2",
 		"svelte-check": "^4.3.4",
 		"typescript": "~6.0.3",
 		"vite": "^8.3.4",

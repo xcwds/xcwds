@@ -6,7 +6,7 @@
 	 * wide screens with `width: 'split'`. Render it from the settings route; `about` adds the
 	 * app's own lines to About.
 	 */
-	import { version } from '$app/environment';
+	import { version } from '$app/env';
 	import type { FieldInfo } from '@xcwds/core';
 	import { brand, useApp } from '@xcwds/sveltekit';
 	import type { Snippet } from 'svelte';
@@ -14,7 +14,7 @@
 	import DataSection from './DataSection.svelte';
 	import FieldControl from './FieldControl.svelte';
 	import PrivacySection from './PrivacySection.svelte';
-	import { sectionOrder, sectionTitle } from './options.js';
+	import { orderFields, sectionOrder, sectionTitle } from './options.js';
 
 	let { about }: { about?: Snippet } = $props();
 	const uid = $props.id();
@@ -32,7 +32,7 @@
 		})
 	);
 
-	const fields = app.settings.fields();
+	const fields = orderFields(app.settings.fields(), page?.options.fields ?? []);
 	const shown = $derived(fields.filter((f) => f.control || controls.has(f.name)));
 	const groups = $derived.by(() => {
 		// Fields in the `privacy` section go in the built-in Privacy card instead.

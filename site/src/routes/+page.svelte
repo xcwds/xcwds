@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import PageList from '$lib/PageList.svelte';
+	import PageList from '#lib/PageList.svelte';
 	import Home from '@xcwds/plugin-shell/Home.svelte';
 
 	const start = [
@@ -57,8 +57,9 @@
 				>npm create @xcwds my-app</code
 			></pre>
 		<p class="text-sm text-(--xcwds-shell-muted)">
-			<a class="underline" href={resolve('/docs/getting-started')}>Getting started</a> takes it from there
-			to an app on your phone.
+			<a class="underline" href={resolve('/docs/[slug]', { slug: 'getting-started' })}
+				>Getting started</a
+			> takes it from there to an app on your phone.
 		</p>
 	</section>
 	<PageList pages={start} />

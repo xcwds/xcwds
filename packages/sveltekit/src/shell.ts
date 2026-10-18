@@ -3,8 +3,9 @@
  * turns SvelteKit's navigation and page-visibility events into runtime hooks (RFC 0001,
  * decision 7).
  */
-import { dev } from '$app/environment';
+import { dev } from '$app/env';
 import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
+import { match } from '$app/paths';
 import { savedDataInQuery, type App, type Route } from '@xcwds/core';
 import { getContext, onMount, setContext } from 'svelte';
 import { data } from 'virtual:xcwds/client';
@@ -76,6 +77,9 @@ function checkQuery(app: App, url: URL) {
 		);
 }
 
+/** What a navigation the app starts carries to `beforeNavigate` (see `next` in `startApp`). */
+type Carried = { href: string; allowed: boolean; redirects: number; replace: boolean };
+
 /** Sets up the app for `<App>`. Call during component initialisation. */
 export function startApp(): void {
 	const app = getApp();
@@ -91,18 +95,39 @@ export function startApp(): void {
 	 * allowed (so it isn't checked twice) and how many redirects led to it. Read and cleared by
 	 * the next `beforeNavigate`, whatever it is.
 	 */
-	let next: { href: string; allowed: boolean; redirects: number; replace: boolean } | null = null;
+	let next: Carried | null = null;
+
+	/**
+	 * Navigates to `url` (with the base path), carrying `carried` to the navigation it starts.
+	 * SvelteKit's `goto` refuses paths it has no route for, so those are loaded instead (`404.html`
+	 * boots the app), once the guards a link to them would have run allow it. Registered routes
+	 * are pages (they are prerendered), so they go straight to `goto`.
+	 */
+	async function navigate(url: URL, carried: Carried) {
+		const to = route(url);
+		if ((to && app.routes.get(to.path)) || (await match(url))) {
+			next = carried;
+			// The URL has the base path.
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			return void goto(url, { replace: carried.replace });
+		}
+		const load = () => (carried.replace ? location.replace(url) : location.assign(url));
+		if (carried.allowed || !to) return load();
+		const current = ++token;
+		const answer = await askGuards(app, to, route(new URL(location.href)));
+		if (!active || current !== token) return;
+		const decision = decide(answer, { target: url, base: data.base, redirects: carried.redirects });
+		if (decision.action === 'allow') return load();
+		follow(decision, carried.replace);
+	}
 
 	/** Navigates to a guard's redirect, whose own hooks then run (or reports a loop). */
-	function follow(decision: GuardDecision, replaceState = false) {
+	function follow(decision: GuardDecision, replace = false) {
 		if (decision.action === 'stop') return void app.reportError(decision.error);
 		if (decision.action !== 'redirect') return;
 		const { url, redirects } = decision;
 		// The whole chain replaces or pushes like its first hop: one entry at most.
-		next = { href: key(url), allowed: false, redirects, replace: replaceState };
-		// The URL has the base path.
-		// eslint-disable-next-line svelte/no-navigation-without-resolve
-		void goto(url, { replaceState });
+		void navigate(url, { href: key(url), allowed: false, redirects, replace });
 	}
 
 	beforeNavigate((nav) => {
@@ -138,16 +163,17 @@ export function startApp(): void {
 			if (decision.action !== 'allow') return follow(decision, replace);
 			// An async hook held it and allows it: repeat it, marked so it isn't checked again.
 			const marker = { href: key(target), allowed: true, redirects, replace };
-			next = marker;
 			// Should the repeat never reach beforeNavigate, the mark mustn't let a later visit skip
 			// the guards.
 			setTimeout(() => {
 				if (next === marker) next = null;
 			}, 1000);
-			if (delta) history.go(delta);
+			if (delta) {
+				next = marker;
+				history.go(delta);
+			}
 			// `goto` can't know the original link's options (e.g. `data-sveltekit-replacestate`).
-			// eslint-disable-next-line svelte/no-navigation-without-resolve
-			else void goto(target, { replaceState: replace });
+			else void navigate(target, marker);
 		});
 	});
 
@@ -177,9 +203,12 @@ export function startApp(): void {
 				}
 				await loaded.ready();
 				// A redirect replaces the first page in history; `false` can't take back a page that is
-				// already showing. Either is dropped once the user has navigated elsewhere.
+				// already showing. Either is dropped once the user (or the page itself, on load) has
+				// navigated elsewhere, and then the guards don't hear of the first page at all: it isn't
+				// where the app is going any more (#219).
 				const first = route(initial);
-				if (first) {
+				const still = () => active && token === initialToken && sameDocument(location, initial);
+				if (first && still()) {
 					const answer = await askGuards(loaded, first, null);
 					const decision = decide(answer, {
 						target: initial,
@@ -187,8 +216,7 @@ export function startApp(): void {
 						redirects: 0,
 						first: true
 					});
-					if (active && token === initialToken && sameDocument(location, initial))
-						follow(decision, true);
+					if (still()) follow(decision, true);
 				}
 				return loaded;
 			})

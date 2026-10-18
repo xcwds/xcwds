@@ -31,6 +31,6 @@
 	"devDependencies": {
 		"@xcwds/core": "workspace:^",
 		"@xcwds/sveltekit": "workspace:^",
-		"svelte": "^5.45.6"
+		"svelte": "^5.57.2"
 	}
 }

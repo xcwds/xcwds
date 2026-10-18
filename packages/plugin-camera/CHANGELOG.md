@@ -1,5 +1,12 @@
 # @xcwds/plugin-camera
 
+## 0.2.0
+
+### Patch Changes
+
+- Updated dependencies [5775a2b]
+  - @xcwds/sveltekit@0.5.0
+
 ## 0.1.0
 
 ### Minor Changes

@@ -58,7 +58,8 @@ The index page and each tool are thin route files in your app (RFC 0001, decisio
 - **`path`** (default `/tools`), **`title`** (default `Tools`) and **`emoji`**: the index page.
 - **`items`**: the tools, each `{ path, name, emoji, blurb, private?, shortcut?, width?, app? }`. A
   tool's route gets its name as the title and the index page as its back target. Its `width` is
-  `narrow` (the default) or `split`, for a tool laid out in two columns on wide screens.
+  `narrow` (the default), `wide` for a list-style tool (a grid of cards), or `split` for a tool
+  laid out in two columns on wide screens.
 - **`private: true`** keeps a tool out of Recently used, the Share button (its route is marked
   `private`) and the manifest. Use it for personal tools, and keep their names and emoji
   discreet: the index page and pinned tools still show them, and the app may be open on a

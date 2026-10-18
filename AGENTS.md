@@ -9,7 +9,7 @@ How AI coding agents (Claude Code and others) should work in this repo. The file
 | [`CLAUDE.md`](CLAUDE.md)                                         | The agent rules: pre-push checks, PR and merge flow, kernel limits, docs duties                     |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md)                             | Setup, every script, Playwright, workflow pinning, the Node 22.18 job                               |
 | [`docs/rfc/0001-architecture.md`](docs/rfc/0001-architecture.md) | The design decisions (1–14). Follow them, and change the RFC in the same PR when a decision changes |
-| [`.changeset/README.md`](.changeset/README.md)                   | Changesets, the release workflow and the 1.0.0 hand edit                                            |
+| [`.changeset/README.md`](.changeset/README.md)                   | Changesets, the release workflow and peer-dependent bumps                                           |
 | [`.github/labels.md`](.github/labels.md)                         | Issue labels (same file in xcwds.github.io; keep the two identical)                                 |
 | [`docs/`](docs)                                                  | User-facing guides: getting started, concepts, plugin guide, privacy, ecosystem                     |
 
@@ -43,13 +43,12 @@ How AI coding agents (Claude Code and others) should work in this repo. The file
 5. Review it adversarially (what's broken, unsafe or missing, not just style) and post that review on GitHub. Fix, push, and review again, for at most 3 rounds.
 6. Squash-merge once CI is green and the review is clean, unless the owner says not to. Never merge a Version packages PR this way (see above).
 
-## Releases and the 1.0.0 trap
+## Releases and peer dependents
 
-The plugins, `sveltekit` and `testing` peer on `@xcwds/core` with a `^0.x` range. A core (or sveltekit) minor leaves that range, and changesets then bumps every peer dependent to **1.0.0**. The owner keeps everything on 0.x, so the Version packages PR is hand-edited before merging: each would-be 1.0.0 goes to the next minor in `package.json`, `CHANGELOG.md` headings ("Major" → "Minor"), the "Updated dependencies" lines, and the PR description. The exact steps are in [`.changeset/README.md`](.changeset/README.md#when-core-or-sveltekit-gets-a-minor) ([#90](https://github.com/xcwds/xcwds/issues/90), [#137](https://github.com/xcwds/xcwds/issues/137)).
+The plugins, `sveltekit` and `testing` peer on `@xcwds/core` (and the plugins on `sveltekit`, some on `plugin-shell` or `plugin-camera`) with a `^0.x` range. A minor of a peer leaves that range, so its dependents must be released again as a breaking change, which the owner wants as the next **minor** on 0.x, never 1.0.0. `pnpm version-packages` writes those minors as `generated-peer-*.md` changesets (`scripts/peer-dependent-changesets.js`) and then checks the result (`scripts/check-release-plan.js`), failing on any unasked 1.0.0 or a peer bump released as a patch ([#229](https://github.com/xcwds/xcwds/issues/229)). Since changesets 3 ([#230](https://github.com/xcwds/xcwds/issues/230)) the Version packages PR needs no hand edits; the old 1.0.0 hand edit ([#90](https://github.com/xcwds/xcwds/issues/90)) is gone.
 
-- The bot rewrites the Version packages PR whenever something merges to `main`, which wipes the edits. Make them last, right before the merge.
 - Check the latest Release run before reviewing a Version packages PR. Runs have failed silently before ([#176](https://github.com/xcwds/xcwds/issues/176), [#177](https://github.com/xcwds/xcwds/issues/177)).
-- Preview a release with `pnpm changeset status --verbose`, or a full `pnpm version-packages` on a throwaway copy of `main`.
+- Preview a release with a full `pnpm version-packages` on a throwaway copy of `main`; `pnpm changeset status` doesn't run the peer-dependent script, so it under-reports bumps.
 
 ## Package gotchas
 
@@ -79,3 +78,27 @@ The plugins, `sveltekit` and `testing` peer on `@xcwds/core` with a `^0.x` range
 - Label new issues with one type and one priority from `.github/labels.md`. Never invent labels.
 - Automated work skips `needs decision` and `tracking` issues.
 - People-only labels (`human requested`, `refinement requested`, `answered in comments`, `branding`, …) are never added by agents. The two exceptions they may remove are described in `labels.md`.
+
+## Agent workflows
+
+The routines that run as scheduled tasks today are moving to GitHub Actions ([#199](https://github.com/xcwds/xcwds/issues/199)). Everything runs on one reusable workflow; nothing is scheduled yet.
+
+- [`.github/workflows/agent.yml`](.github/workflows/agent.yml) (`workflow_call`): checks out the repos side by side with full history, starts the token helper, installs dependencies and Playwright's Chromium, takes away sudo and Docker, then runs `anthropics/claude-code-action` with `.github/agents/common.md` plus the routine's prompt. Inputs: `prompt`, `context`, `repos` (`xcwds`, `xcwds.github.io` or `both`), `tools` (`read`, `label` or `pr`), `dry_run` (forces `read`), `timeout`, `max_turns`, `agents_ref`. Callers in xcwds.github.io use it as `xcwds/xcwds/.github/workflows/agent.yml@main`.
+- Routines take their prompts and scripts from xcwds/xcwds `main` (the `agents_ref` default), never from a PR's branch; only the smoke test passes its own commit, to test a branch. The scripts are copied to a root-owned `/opt/xcwds-agent/bin` so a run can't change them.
+- [`.github/agents/bin/`](.github/agents/bin): `token-helper.mjs` (runs as root with the app's key, serves installation tokens on a socket; they last an hour and runs can be longer), `agent-token`, the `gh` wrapper and git credential helper that ask it for a token on every call, `merge-pr` (the only way a run merges: it refuses Version packages PRs, authors other than the bot, Renovate or the owner, red or pending CI, drafts and conflicts) and `tool-args.mjs` (the tool profiles). Their unit tests are in `.github/agents/test/` (the `agents` vitest project).
+- Tool profiles are a guardrail, not a sandbox: the app's tokens can do more. Branch rulesets on `main` and `changeset-release/main` (owner step 3) are what makes "never push to `main`" hold.
+- A PR from a fork gets its base branch only, no installs and the `read` profile, because `issue_comment` runs have the secrets.
+- [`agent-smoke.yml`](.github/workflows/agent-smoke.yml) is a manual dry run that proves the setup: bot identity, `gh` in both repos and a token refresh.
+- Run logs: routines report as comments on [#232](https://github.com/xcwds/xcwds/issues/232) (Issue to PR), [#233](https://github.com/xcwds/xcwds/issues/233) (Renovate) and [#234](https://github.com/xcwds/xcwds/issues/234) (labeling), never in new issues.
+- Each scheduled caller sets its own concurrency group (`agent-<routine>`, `cancel-in-progress: false`) and a plain UTC cron. `@claude` mentions use no group, since GitHub keeps only one pending run per group.
+
+### Owner setup
+
+1. Create a GitHub App under your account (Settings → Developer settings → GitHub Apps), e.g. "xcwds-agent", with no webhook. Repository permissions: Contents, Pull requests and Issues read and write; Workflows read and write; Actions read and write; Checks, Commit statuses and Metadata read. Install it on xcwds/xcwds and xcwds/xcwds.github.io only.
+2. In **both** repos, under Settings → Secrets and variables → Actions, add:
+   - secret `AGENT_APP_PRIVATE_KEY` (the app's private key) and secret `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`; runs count against your plan's usage limits);
+   - variable `AGENT_APP_ID` (the app's client ID);
+   - variables `AGENT_LOG_ISSUE_TO_PR=232`, `AGENT_LOG_RENOVATE=233` and `AGENT_LOG_LABELING=234`;
+   - optionally, variable `AGENT_MODEL` to pick the model (`--model`).
+3. Recommended: in both repos, add a branch ruleset on `main` and `changeset-release/main` (Settings → Rules) that blocks force pushes and direct pushes for everyone but you. Put yourself on the bypass list, plus GitHub Actions for `changeset-release/main`. Check first that it doesn't block how you push today.
+4. Run **Agent smoke test** (Actions → Agent smoke test → Run workflow) and check that its summary ends with "Smoke test passed".

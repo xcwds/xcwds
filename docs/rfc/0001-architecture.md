@@ -110,15 +110,16 @@ renders the plugin's `Page.svelte`; it is prerendered into `hello.html` and hydr
 
 ### 3. The service worker imports a generated file
 
-SvelteKit 2 builds `src/service-worker.ts` in a separate Vite build with `configFile: false` and
-only its own `$service-worker` plugin (`build_service_worker.js` in `@sveltejs/kit` 2.49), so a
-Vite plugin's virtual modules don't resolve there.
+SvelteKit's service worker build doesn't get the app's Vite plugins in every version: SvelteKit
+2 built `src/service-worker.ts` in a separate Vite build with `configFile: false` and only its
+own `$service-worker` plugin, so a Vite plugin's virtual modules didn't resolve there.
 
 **Decision.** The integration writes real files into `.xcwds/` (git-ignored) when
-`svelte.config.js` loads, which happens before `svelte-kit sync`, `svelte-check`, `vite dev` and
-`vite build`. `src/service-worker.ts` imports `.xcwds/worker.js`, which imports each plugin's
-`./worker` entry and `onWorker` modules, and starts the worker runtime from
-`@xcwds/sveltekit/worker` with the `$service-worker` lists. Normal package resolution works in
+`vite.config.ts` loads: `xcwds()` reads the xcwds config before it creates SvelteKit's plugin,
+and loading the Vite config is the first thing `svelte-kit sync`, `vite dev` and `vite build`
+do. `src/service-worker.ts` imports `.xcwds/worker.js`, which imports each plugin's `./worker`
+entry and `onWorker` modules, and starts the worker runtime from `@xcwds/sveltekit/worker` with
+the lists from `$app/manifest` (prefixed with the base path). Normal package resolution works in
 SvelteKit's worker build, so nothing else is needed. The runtime runs `onFetch` hooks first and
 otherwise serves a baseline offline strategy (precache, then this version's cache first), so
 every app installs and works offline. The strategy reads a cache policy (`app.worker.policy`:
@@ -126,9 +127,11 @@ extra precache paths, exclusions, the offline fallback page, runtime caching) on
 plugin has registered, so `@xcwds/plugin-offline` (#11) changes the policy instead of answering
 fetches itself, and other plugins' `onFetch` hooks still run first.
 
-SvelteKit 3 builds the worker as a Vite environment (`serviceWorker`), so virtual modules would
-work there. The generated-file approach works on both, so it stays the single mechanism until
-SvelteKit 2 support is dropped.
+Since 0.5 the integration supports SvelteKit 3 only (#57). SvelteKit 3 has no `svelte.config.js`:
+its config goes to the `sveltekit()` Vite plugin, so `xcwds(config)` takes that config, adds the
+adapter, prerender entries and CSP, and returns its own plugin followed by SvelteKit's. SvelteKit
+3 builds the worker as a Vite environment (`serviceWorker`), so virtual modules would work there
+now; the generated file stays because it works and keeps the worker's imports visible on disk.
 
 **Spike.** Test 3: the worker built from `.xcwds/worker.js` answers `/__xcwds/hello` from the
 plugin's `onFetch` hook.
@@ -150,10 +153,10 @@ Page code can't `eval` a snippet under the hashed CSP, so a plugin that applies 
 at runtime ships the same logic as a function too, and tests that the two agree.
 
 The placeholder goes **after** `%sveltekit.head%`, because SvelteKit puts its CSP `<meta>` first
-in that output and a `<meta>` policy only covers what follows it. `withXcwds()` sets SvelteKit's
+in that output and a `<meta>` policy only covers what follows it. `xcwds()` sets SvelteKit's
 CSP in hash mode; SvelteKit hashes its own inline boot script, and `handle` adds the pre-paint
 script's `sha256-` hash to `script-src` in that `<meta>` (or the CSP header, in `vite dev`).
-The hash is added by `handle` rather than in `svelte.config.js` because settings fields come
+The hash is added by `handle` rather than in the Vite config because settings fields come
 from the plugins' `./client` entries, which only load in the page bundle, after the config.
 Comments in `app.html` must not contain `%sveltekit.*%` text: SvelteKit replaces placeholders
 anywhere in the file.
@@ -208,7 +211,7 @@ include it. The kernel stores paths without the base; the integration adds it at
 **Decision.** Plugins declare `network: false | { origins, reason }` (default `false`), read
 from their build entry. `network` may instead be a function of the plugin's options, for origins
 the app picks (#103); it is resolved with the options from the config, so origins stay fixed at
-build time, which the prerendered CSP needs. After SvelteKit builds the site, `withXcwds()`'s adapter wrapper scans
+build time, which the prerendered CSP needs. After SvelteKit builds the site, `xcwds()`'s adapter wrapper scans
 SvelteKit's output (page bundle, service worker, static files, prerendered pages) for URLs on
 other origins where they load or send something, and fails the build on any origin that no
 plugin declares and `privacy.allowOrigins` doesn't list, naming the plugin whose package mentions

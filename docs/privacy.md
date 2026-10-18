@@ -106,7 +106,7 @@ The CSP is what enforces the rule.
 
 ## The Content Security Policy
 
-`withXcwds()` turns on SvelteKit's CSP in hash mode, so every prerendered page gets a
+`xcwds()` turns on SvelteKit's CSP in hash mode, so every prerendered page gets a
 `<meta http-equiv="Content-Security-Policy">` with hashes for SvelteKit's boot script and the
 pre-paint script. It allows:
 

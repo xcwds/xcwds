@@ -6,7 +6,7 @@
  * `handle` puts the pre-paint script and head tags where app.html has `%xcwds.head%` (RFC 0001,
  * decision 4). It runs while SvelteKit prerenders, including the `404.html` fallback.
  */
-import type { Handle, ServerInit } from '@sveltejs/kit';
+import type { Handle, ServerInit } from '@sveltejs/kit/hooks';
 import type { App } from '@xcwds/core';
 import { data } from 'virtual:xcwds/client';
 import { headScript, injectHead, allowScript, scriptHash } from './head.js';

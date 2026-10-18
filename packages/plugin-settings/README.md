@@ -51,6 +51,7 @@ export default defineConfig({
 | `width`      | `narrow`    | `narrow`, or `split`: two columns of cards once 50rem fits (use `page-split`). |
 | `sections`   | `{}`        | Titles by section id, in the order they show (`{ tools: 'Tool defaults' }`).   |
 | `groups`     | `{}`        | Your data's storage groups by id, named and in the order they show.            |
+| `fields`     | `[]`        | Field names in the order they show within their section; the rest follow.      |
 | `source`     | none        | An `https://` link to the app's source, under About.                           |
 | `backupName` | `backup`    | The backup file's name before its date.                                        |
 
@@ -79,7 +80,8 @@ app.settings.field('alarm', {
 | `switches` | `options: [{ key, label, hint? }]` | One switch per boolean in an object. |
 
 `hint` adds a line under the field's label. Sections are ordered as in `sections`, then
-Appearance, General and Timers, then the rest in the order their fields were added.
+Appearance, General and Timers, then the rest in the order their fields were added. Within a
+section, fields follow the `fields` option, then the order plugins added them.
 Fields in the `privacy` section show in the built-in Privacy card, above the servers the app
 contacts (`@xcwds/plugin-lock` puts its cover switch there).
 

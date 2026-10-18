@@ -1,5 +1,18 @@
 # @xcwds/plugin-settings
 
+## 0.5.0
+
+### Minor Changes
+
+- 5775a2b: Need SvelteKit 3 (the `@sveltejs/kit` peer range is now `^3.0.0`), like `@xcwds/sveltekit` (#57).
+
+### Patch Changes
+
+- Updated dependencies [5775a2b]
+- Updated dependencies [5775a2b]
+  - @xcwds/plugin-shell@0.5.0
+  - @xcwds/sveltekit@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes

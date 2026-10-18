@@ -368,7 +368,7 @@ const QR = `<script lang="ts">
 const DICE = `<script lang="ts">
 	// A tool is just a page: this one rolls a die. Add yours to \`tools({ items })\` in
 	// xcwds.config.ts and give it a route like this one.
-	import { roll as rollDie } from '$lib/dice';
+	import { roll as rollDie } from '#lib/dice.js';
 
 	let roll = $state<number | null>(null);
 </script>
