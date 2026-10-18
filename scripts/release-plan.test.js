@@ -22,12 +22,9 @@ let root;
 function pkg(name, version, peers = {}, extra = {}) {
 	const dir = join(root, 'packages', name.replace(/^@xcwds\//, ''));
 	mkdirSync(dir, { recursive: true });
-	const peerDependencies = Object.fromEntries(
-		Object.keys(peers).map((peer) => [peer, peers[peer]])
-	);
 	writeFileSync(
 		join(dir, 'package.json'),
-		JSON.stringify({ name, version, peerDependencies, ...extra })
+		JSON.stringify({ name, version, peerDependencies: peers, ...extra })
 	);
 }
 

@@ -45,7 +45,7 @@ for (const peer of Object.keys(files).sort()) {
 	);
 	if (existsSync(file)) {
 		throw new Error(
-			`${file} already exists. It isn't one this script wrote (they're consumed by \`changeset version\`), so rename it.`
+			`${file} already exists. Delete it if an earlier run that stopped before \`changeset version\` left it, or rename it if it's a changeset you wrote.`
 		);
 	}
 	// Every dependent publishes the same range in practice (`workspace:^`); name it when that holds.
