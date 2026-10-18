@@ -22,7 +22,7 @@ type Network = (request: Request) => Response | Promise<Response>;
 export type TestWorkerOptions = {
 	/** SvelteKit's `paths.base`. String paths you pass never include it. */
 	base?: string;
-	/** `$service-worker`'s lists (paths with the base), to precache. Empty by default. */
+	/** SvelteKit's `$app/manifest` lists (paths with the base), to precache. Empty by default. */
 	build?: string[];
 	files?: string[];
 	prerendered?: string[];

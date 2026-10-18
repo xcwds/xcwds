@@ -6,20 +6,24 @@ Svelte 5 helpers. Design: [RFC 0001](../../docs/rfc/0001-architecture.md), decis
 
 ## Setup
 
+SvelteKit 3 only (no `svelte.config.js`): `xcwds()` takes SvelteKit's config and adds SvelteKit's
+own Vite plugin, so don't add `sveltekit()` as well.
+
 ```ts
 // vite.config.ts
-import { sveltekit } from '@sveltejs/kit/vite';
 import { xcwds } from '@xcwds/sveltekit/vite';
 import { defineConfig } from 'vite';
 
-export default defineConfig({ plugins: [xcwds(), sveltekit()] });
+export default defineConfig({ plugins: [xcwds({ paths: { base: '' } })] });
 ```
 
-```js
-// svelte.config.js: a Vite plugin can't set the adapter or CSP, so a helper does
-import { withXcwds } from '@xcwds/sveltekit/config';
-
-export default await withXcwds({ kit: { paths: { base: '' } } });
+```jsonc
+// tsconfig.json: .xcwds/types.d.ts tells TypeScript what the plugins add
+{
+	"extends": "$app/tsconfig",
+	"include": ["src", "*", ".xcwds/types.d.ts"],
+	"exclude": ["src/service-worker.ts"]
+}
 ```
 
 ```ts
@@ -46,22 +50,30 @@ export const prerender = true;
 `src/app.html` needs `%xcwds.head%` right after `%sveltekit.head%` (see decision 4). Add
 `.xcwds` to `.gitignore` if your tools don't read the one generated inside it.
 
+### From SvelteKit 2 (0.4 and earlier)
+
+Move the `kit` options from `svelte.config.js` into `xcwds()` and delete the file:
+`withXcwds({ kit: { paths } }, { adapter })` becomes `xcwds({ paths }, { adapter })`, and
+`plugins: [xcwds(), sveltekit()]` becomes `plugins: [xcwds({ paths })]`. Then follow SvelteKit 3's
+own migration: the tsconfig extends `$app/tsconfig` (add `.xcwds/types.d.ts` to its `include`,
+which `withXcwds()` used to add for you), `$app/environment` is `$app/env`, and `$lib` is gone
+(add `"imports": { "#lib/*": "./src/lib/*" }` to `package.json` and import
+`#lib/name.js`, with the extension).
+
 ## What each part does
 
-- **`withXcwds(svelteConfig, { adapter })`** loads `xcwds.config.ts` (or `.js`) with Vite's
+- **`xcwds(config, { adapter, root })`** loads `xcwds.config.ts` (or `.js`) with Vite's
   `runnerImport`, validates it, loads each plugin's `build` export and runs its build hooks
-  (`onConfig`, `onManifest`, `onHead`, `onWorker`, `onPrerender`), and writes `.xcwds/worker.js`.
-  It sets adapter-static with a `404.html` fallback (unless `kit.adapter` is set), prerender
-  `entries` for every registered route and `onPrerender` path, and a hash-mode CSP that allows
-  only the app's origin plus the origins plugins declare (`network` metadata) and
-  `privacy.allowOrigins` lists; your `kit.csp` directives are added to it. Its adapter wrapper
-  scans the built site and fails the build on any other origin it finds
-  ([docs/privacy.md](../../docs/privacy.md)). It also writes `.xcwds/types.d.ts`, a type-only
-  import of each plugin's `./client` entry, and adds it to the tsconfig SvelteKit generates, so
-  the app sees what plugins add to `App` and its settings without listing them in `src/app.d.ts`
-  (your `kit.typescript.config` still runs after).
-- **`xcwds()`** serves `virtual:xcwds/client` (each plugin's `./client` entry, routes and head
-  data) to the page bundle, and emits `manifest.webmanifest` and the icons rendered from
+  (`onConfig`, `onManifest`, `onHead`, `onWorker`, `onPrerender`), and writes `.xcwds/worker.js`
+  and `.xcwds/types.d.ts` (a type-only import of each plugin's `./client` entry). Then it creates
+  SvelteKit's plugin with your `config`, adding adapter-static with a `404.html` fallback (unless
+  `config.adapter` is set), prerender `entries` for every registered route and `onPrerender`
+  path, and a hash-mode CSP that allows only the app's origin plus the origins plugins declare
+  (`network` metadata) and `privacy.allowOrigins` lists; your `csp` directives are added to it.
+  Its adapter wrapper scans the built site and fails the build on any other origin it finds
+  ([docs/privacy.md](../../docs/privacy.md)). `root` defaults to the working directory.
+- **The `xcwds` Vite plugin** (the first one `xcwds()` returns) serves `virtual:xcwds/client`
+  (each plugin's `./client` entry, routes and head data) to the page bundle, and emits `manifest.webmanifest` and the icons rendered from
   `brand.icon` (with `@xcwds/core/build`, which needs `@resvg/resvg-js`). It adds the page
   entries of plugins installed in `node_modules` (and `@xcwds/core`, when the app depends on
   it) to `optimizeDeps.include`: only the generated module imports them, so Vite's dependency

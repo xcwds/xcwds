@@ -4,11 +4,13 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Rollup } from 'vite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { withXcwds } from '../config.js';
+import type { Config } from '@sveltejs/kit/vite';
 import { xcwds } from '../vite.js';
 import { clientModule, guardModule, prebundled } from './codegen.js';
 import { generate, withConfigManifest } from './generate.js';
-import { recall, type PluginInfo } from './state.js';
+import { kitConfig } from './kit.js';
+import { plugin as vitePlugin } from './plugin.js';
+import type { PluginInfo } from './state.js';
 
 let root: string;
 
@@ -217,58 +219,36 @@ describe('generate', () => {
 	});
 });
 
-describe('withXcwds', () => {
-	it("adds the plugins' type references to SvelteKit's tsconfig, then runs the app's hook (#133)", async () => {
-		const plain = await withXcwds({}, { root });
-		const hook = plain.kit!.typescript!.config!;
-		const tsconfig = { include: ['ambient.d.ts'] };
-		hook(tsconfig);
-		hook(tsconfig);
-		expect(tsconfig.include).toEqual(['ambient.d.ts', '../.xcwds/types.d.ts']);
+/** What `xcwds()` does before creating SvelteKit's plugin. */
+async function setup(config: Config = {}) {
+	const state = await generate({ root, base: config.paths?.base ?? '' });
+	return { config: kitConfig(config, state), state };
+}
 
-		const own = await withXcwds(
-			{ kit: { typescript: { config: (c) => ({ ...c, extra: true }) } } },
-			{ root }
-		);
-		expect(own.kit!.typescript!.config!({})).toEqual({
-			include: ['../.xcwds/types.d.ts'],
-			extra: true
-		});
-	});
-
-	it('sets the adapter, prerender entries and a hash-mode CSP, and remembers the build', async () => {
-		const config = await withXcwds(
-			{
-				kit: {
-					paths: { base: '/sub' },
-					prerender: { entries: ['*', '/more'] },
-					csp: {
-						directives: {
-							'img-src': ['https://img.example'],
-							'upgrade-insecure-requests': true
-						}
-					}
+describe('kitConfig', () => {
+	it('sets the adapter, prerender entries and a hash-mode CSP', async () => {
+		const { config, state } = await setup({
+			paths: { base: '/sub' },
+			prerender: { entries: ['*', '/more'] },
+			csp: {
+				directives: {
+					'img-src': ['https://img.example'],
+					'upgrade-insecure-requests': true
 				}
-			},
-			{ root }
-		);
-		expect(config.kit?.adapter?.name).toBe('@sveltejs/adapter-static');
-		expect(config.kit?.prerender?.entries).toEqual([
-			'*',
-			'/more',
-			'/utils/timer',
-			'/utils/timer/extra'
-		]);
-		expect(config.kit?.csp?.mode).toBe('hash');
-		expect(config.kit?.csp?.directives?.['img-src']).toEqual([
+			}
+		});
+		expect(config.adapter?.name).toBe('@sveltejs/adapter-static');
+		expect(config.prerender?.entries).toEqual(['*', '/more', '/utils/timer', '/utils/timer/extra']);
+		expect(config.csp?.mode).toBe('hash');
+		expect(config.csp?.directives?.['img-src']).toEqual([
 			'self',
 			'data:',
 			'blob:',
 			'https://img.example'
 		]);
-		expect(config.kit?.csp?.directives?.['script-src']).toEqual(['self']);
-		expect(config.kit?.csp?.directives?.['upgrade-insecure-requests']).toBe(true);
-		expect(recall(root)?.base).toBe('/sub');
+		expect(config.csp?.directives?.['script-src']).toEqual(['self']);
+		expect(config.csp?.directives?.['upgrade-insecure-requests']).toBe(true);
+		expect(state.base).toBe('/sub');
 	});
 
 	it('allows the origins plugins declare and the config lists, and checks the build', async () => {
@@ -285,8 +265,8 @@ Object.defineProperty(build, Symbol.for('xcwds.plugin-meta'), {
 			`export default { brand: { name: 'T' }, privacy: { allowOrigins: ['https://fonts.example'] }, plugins: [{ name: 'weather', options: {} }, { name: 'plain', options: {} }] };`
 		);
 		await rm(join(root, 'xcwds.config.ts'));
-		const config = await withXcwds({}, { root });
-		const directives = config.kit!.csp!.directives!;
+		const { config, state } = await setup();
+		const directives = config.csp!.directives!;
 		expect(directives['connect-src']).toEqual([
 			'self',
 			'https://api.weather.example',
@@ -301,14 +281,14 @@ Object.defineProperty(build, Symbol.for('xcwds.plugin-meta'), {
 			'https://fonts.example'
 		]);
 		expect(directives['script-src']).toEqual(['self']);
-		expect(recall(root)?.plugins.map((p) => p.network)).toEqual([
+		expect(state.plugins.map((p) => p.network)).toEqual([
 			{
 				origins: ['https://api.weather.example', 'wss://live.weather.example'],
 				reason: 'Forecasts'
 			},
 			false
 		]);
-		expect(clientModule(recall(root)!)).toContain(
+		expect(clientModule(state)).toContain(
 			'"privacy":{"plugins":[{"name":"weather","network":{"origins":["https://api.weather.example","wss://live.weather.example"],"reason":"Forecasts"}},{"name":"plain","network":false}],"allowOrigins":["https://fonts.example"]}'
 		);
 
@@ -319,12 +299,10 @@ Object.defineProperty(build, Symbol.for('xcwds.plugin-meta'), {
 			getClientDirectory: () => join(out, 'output/client'),
 			getBuildDirectory: (name: string) => join(out, name)
 		};
-		const adapter = (
-			await withXcwds(
-				{ kit: { adapter: { name: 'mine', adapt: () => void (adapted = true) } } },
-				{ root }
-			)
-		).kit!.adapter!;
+		const adapter = kitConfig(
+			{ adapter: { name: 'mine', adapt: () => void (adapted = true) } },
+			state
+		).adapter!;
 		expect(adapter.name).toBe('mine');
 		await write('.svelte-kit/output/client/_app/a.js', 'fetch("https://api.weather.example/x")');
 		await adapter.adapt(builder as never);
@@ -354,9 +332,9 @@ Object.defineProperty(build, Symbol.for('xcwds.plugin-meta'), {
 			`export default { brand: { name: 'T' }, plugins: [{ name: 'relay', options: { relay: 'https://relay.example' } }] };`
 		);
 		await rm(join(root, 'xcwds.config.ts'));
-		const config = await withXcwds({}, { root });
-		expect(config.kit!.csp!.directives!['connect-src']).toEqual(['self', 'https://relay.example']);
-		expect(recall(root)?.plugins.map((p) => p.network)).toEqual([
+		const { config, state } = await setup();
+		expect(config.csp!.directives!['connect-src']).toEqual(['self', 'https://relay.example']);
+		expect(state.plugins.map((p) => p.network)).toEqual([
 			{ origins: ['https://relay.example'], reason: 'Syncs pages' }
 		]);
 
@@ -413,8 +391,7 @@ describe('prebundled', () => {
 
 describe('the Vite plugin', () => {
 	it('serves the client module and emits the manifest in the client build only', async () => {
-		await withXcwds({}, { root });
-		const plugin = xcwds();
+		const plugin = vitePlugin(await generate({ root }));
 		const hook = <T>(h: unknown): T =>
 			(typeof h === 'function' ? h : (h as { handler: unknown }).handler) as T;
 		expect(hook<(c: unknown) => unknown>(plugin.config).call({}, { root })).toEqual({
@@ -425,39 +402,43 @@ describe('the Vite plugin', () => {
 				include: ['xcwds-plugin-timers/client']
 			}
 		});
-		const resolved = (ssr: boolean) =>
-			({ root, command: 'build', build: { ssr } }) as unknown as Parameters<
-				Extract<typeof plugin.configResolved, (...a: never[]) => unknown>
-			>[0];
-		hook<(c: unknown) => void>(plugin.configResolved)(resolved(true));
+		hook<(c: unknown) => void>(plugin.configResolved)({ root, command: 'build' });
 		const id = hook<(id: string) => string>(plugin.resolveId).call({}, 'virtual:xcwds/client');
 		expect(hook<(id: string) => string>(plugin.load).call({}, id)).toContain(
 			'xcwds-plugin-timers/client'
 		);
 
 		const emitted: Rollup.EmittedAsset[] = [];
-		const context = {
+		const context = (name: string) => ({
+			environment: { name },
 			emitFile: (f: Rollup.EmittedAsset) => emitted.push(f),
 			error: (message: string) => {
 				throw new Error(message);
 			}
-		};
-		const generateBundle = hook<(this: typeof context) => Promise<void>>(plugin.generateBundle);
-		await generateBundle.call(context);
+		});
+		type Context = ReturnType<typeof context>;
+		const generateBundle = hook<(this: Context) => Promise<void>>(plugin.generateBundle);
+		await generateBundle.call(context('ssr'));
+		await generateBundle.call(context('serviceWorker'));
 		expect(emitted).toEqual([]);
-		hook<(c: unknown) => void>(plugin.configResolved)(resolved(false));
-		await generateBundle.call(context);
+		await generateBundle.call(context('client'));
 		expect(emitted.map((f) => f.fileName)).toEqual(['manifest.webmanifest']);
 		expect(JSON.parse(String(emitted[0]!.source))).toMatchObject({ name: 'Test' });
-		// A static file added after svelte.config.js loaded still fails the build.
+		// A static file added after the config loaded still fails the build.
 		await write('static/manifest.webmanifest', '{}');
-		await expect(generateBundle.call(context)).rejects.toThrow('generates manifest.webmanifest');
+		await expect(generateBundle.call(context('client'))).rejects.toThrow(
+			'generates manifest.webmanifest'
+		);
 	});
 
-	it('asks for withXcwds() when svelte.config.js has not run it', () => {
-		const plugin = xcwds();
-		const configResolved = plugin.configResolved as (c: unknown) => void;
-		expect(() => configResolved({ root: join(root, 'other') })).toThrow('withXcwds()');
-		expect(existsSync(join(root, 'other'))).toBe(false);
+	it("comes before SvelteKit's plugins, which get the adapter and CSP", async () => {
+		const plugins = await xcwds({ paths: { base: '/sub' } }, { root });
+		expect(plugins[0]!.name).toBe('xcwds');
+		const setup = plugins.find((p) => p.name === 'vite-plugin-sveltekit-setup');
+		const options = (setup?.api as { options: Config }).options;
+		expect(options.adapter?.name).toBe('@sveltejs/adapter-static');
+		expect(options.csp?.mode).toBe('hash');
+		expect(options.paths?.base).toBe('/sub');
+		expect(existsSync(join(root, '.xcwds', 'worker.js'))).toBe(true);
 	});
 });

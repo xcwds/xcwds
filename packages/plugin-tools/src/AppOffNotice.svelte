@@ -4,15 +4,14 @@
 	 * a button that turns it back on. The page itself still works. Put it in the shell's `notices`.
 	 */
 	import { page } from '$app/state';
-	import { base } from '$app/paths';
-	import { settings, useApp } from '@xcwds/sveltekit';
+	import { appPath, settings, useApp } from '@xcwds/sveltekit';
 	import type { AppGroup } from './options.js';
 	import type {} from './types.js';
 
 	const app = useApp();
 	const tools = app.tools;
 	let off = $state<AppGroup | undefined>();
-	const path = $derived(page.url.pathname.slice(base.length) || '/');
+	const path = $derived(appPath(page.url.pathname) ?? '/');
 	$effect(() => {
 		const here = path;
 		return tools?.subscribe(() => {

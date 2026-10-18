@@ -2,7 +2,7 @@
  * The route registry (#10): what the shell needs to know about each page (title, emoji, back
  * target, width), replacing xcwds.github.io's hand-written `routeInfo` in `src/lib/nav.ts`.
  * Plugins add their pages with `app.route()` from their build entry, so the paths are known when
- * `svelte.config.js` loads and can be fed to prerender `entries`; the page bundle gets the same
+ * `vite.config.ts` loads and can be fed to prerender `entries`; the page bundle gets the same
  * list. Paths never include the base path (RFC 0001, decision 9).
  *
  * Also the framework-free core the page, the service worker and @xcwds/testing share, so they

@@ -6,7 +6,7 @@
 	 * wide screens with `width: 'split'`. Render it from the settings route; `about` adds the
 	 * app's own lines to About.
 	 */
-	import { version } from '$app/environment';
+	import { version } from '$app/env';
 	import type { FieldInfo } from '@xcwds/core';
 	import { brand, useApp } from '@xcwds/sveltekit';
 	import type { Snippet } from 'svelte';
