@@ -79,3 +79,27 @@ The plugins, `sveltekit` and `testing` peer on `@xcwds/core` with a `^0.x` range
 - Label new issues with one type and one priority from `.github/labels.md`. Never invent labels.
 - Automated work skips `needs decision` and `tracking` issues.
 - People-only labels (`human requested`, `refinement requested`, `answered in comments`, `branding`, …) are never added by agents. The two exceptions they may remove are described in `labels.md`.
+
+## Agent workflows
+
+The routines that run as scheduled tasks today are moving to GitHub Actions ([#199](https://github.com/xcwds/xcwds/issues/199)). Everything runs on one reusable workflow; nothing is scheduled yet.
+
+- [`.github/workflows/agent.yml`](.github/workflows/agent.yml) (`workflow_call`): checks out the repos side by side with full history, starts the token helper, installs dependencies and Playwright's Chromium, takes away sudo and Docker, then runs `anthropics/claude-code-action` with `.github/agents/common.md` plus the routine's prompt. Inputs: `prompt`, `context`, `repos` (`xcwds`, `xcwds.github.io` or `both`), `tools` (`read`, `label` or `pr`), `dry_run` (forces `read`), `timeout`, `max_turns`, `agents_ref`. Callers in xcwds.github.io use it as `xcwds/xcwds/.github/workflows/agent.yml@main`.
+- Prompts and scripts always come from xcwds/xcwds `main` (`agents_ref`), never from a PR's branch.
+- [`.github/agents/bin/`](.github/agents/bin): `token-helper.mjs` (runs as root with the app's key, serves installation tokens on a socket; they last an hour and runs can be longer), `agent-token`, the `gh` wrapper and git credential helper that ask it for a token on every call, `merge-pr` (the only way a run merges: it refuses Version packages PRs, authors other than the bot, Renovate or the owner, red or pending CI, drafts and conflicts) and `tool-args.mjs` (the tool profiles). Their unit tests are in `.github/agents/test/` (the `agents` vitest project).
+- Tool profiles are a guardrail, not a sandbox: the app's tokens can do more. Branch rulesets on `main` and `changeset-release/main` (owner step 3) are what makes "never push to `main`" hold.
+- A PR from a fork gets its base branch only, no installs and the `read` profile, because `issue_comment` runs have the secrets.
+- [`agent-smoke.yml`](.github/workflows/agent-smoke.yml) is a manual dry run that proves the setup: bot identity, `gh` in both repos and a token refresh.
+- Run logs: routines report as comments on [#232](https://github.com/xcwds/xcwds/issues/232) (Issue to PR), [#233](https://github.com/xcwds/xcwds/issues/233) (Renovate) and [#234](https://github.com/xcwds/xcwds/issues/234) (labeling), never in new issues.
+- Each scheduled caller sets its own concurrency group (`agent-<routine>`, `cancel-in-progress: false`) and a plain UTC cron. `@claude` mentions use no group, since GitHub keeps only one pending run per group.
+
+### Owner setup
+
+1. Create a GitHub App under your account (Settings → Developer settings → GitHub Apps), e.g. "xcwds-agent", with no webhook. Repository permissions: Contents, Pull requests and Issues read and write; Workflows read and write; Actions read and write; Checks, Commit statuses and Metadata read. Install it on xcwds/xcwds and xcwds/xcwds.github.io only.
+2. In **both** repos, under Settings → Secrets and variables → Actions, add:
+   - secret `AGENT_APP_PRIVATE_KEY` (the app's private key) and secret `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`; runs count against your plan's usage limits);
+   - variable `AGENT_APP_ID` (the app's client ID);
+   - variables `AGENT_LOG_ISSUE_TO_PR=232`, `AGENT_LOG_RENOVATE=233` and `AGENT_LOG_LABELING=234`;
+   - optionally, variable `AGENT_MODEL` to pick the model (`--model`).
+3. Recommended: in both repos, add a branch ruleset on `main` and `changeset-release/main` (Settings → Rules) that blocks force pushes and direct pushes for everyone but you. Put yourself on the bypass list, plus GitHub Actions for `changeset-release/main`. Check first that it doesn't block how you push today.
+4. Run **Agent smoke test** (Actions → Agent smoke test → Run workflow) and check that its summary ends with "Smoke test passed".
