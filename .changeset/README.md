@@ -47,36 +47,22 @@ The workflow does nothing until the repository variable `NPM_RELEASE` is `true`.
 4. Optionally, add required reviewers to the `npm` environment. Every run then waits for approval,
    including the ones that only update the Version packages PR.
 
-Run it by hand from the Actions tab (Release → Run workflow) on `main` at any time.
+Run it by hand from the Actions tab (Release → Run workflow) on `main` at any time. With a token,
+each run checks it with `npm whoami` first and warns when npm refuses it (granular tokens expire
+after 7 days by default), so an expired token shows up before a publish fails.
+
+`pnpm version-packages` fails when there are no pending changesets (changesets 3's
+`changeset version` exits 1 then); the workflow only runs it when there are some.
 
 ## When core or sveltekit gets a minor
 
-Only while on changesets 2 ([#230](https://github.com/xcwds/xcwds/issues/230) moves to 3): changesets
-2 releases every peer dependent of a minor as a major whatever its changesets ask for, so the 1.0.0s
-still need fixing by hand. `check-release-plan.js` lists them as a warning in the Release run.
-
 The plugins, `@xcwds/sveltekit` and `@xcwds/testing` peer on `@xcwds/core` (and the plugins on
-`@xcwds/sveltekit`) with a `^` range. On 0.x a minor leaves that range, and changesets then bumps
-every peer dependent to a **major**: a core 0.2.0 would release them all as 1.0.0. Keep them on
-0.x by fixing the Version packages PR by hand before merging it ([#90](https://github.com/xcwds/xcwds/issues/90)):
-
-1. Preview the plan by running `pnpm version-packages` on a scratch copy of `main`, or read the
-   warning in the latest Release run. Any package going to 1.0.0 that no changeset asked to be major
-   needs the fix.
-2. Fix the PR as the last step before merging, since the workflow rewrites it on every push to
-   `main`. On its branch (`changeset-release/main`), for each such package:
-   - in its `package.json`, set `version` to the next minor (`1.0.0` → `0.2.0` when it was
-     `0.1.x`);
-   - in its `CHANGELOG.md`, change the new heading to that version and `### Major Changes` to
-     `### Minor Changes`;
-   - in every `CHANGELOG.md`, change its "Updated dependencies" lines (`- @xcwds/<name>@1.0.0`)
-     to that version.
-3. Check that no `1.0.0` is left
-   (`git grep -n '1\.0\.0' -- 'packages/*/package.json' 'packages/*/CHANGELOG.md'`) and push.
-4. Update the PR description the same way: its "Releases" list repeats the changelogs, so change
-   each `@xcwds/<name>@1.0.0` heading and dependency line to the new version, and add a line
-   saying the versions were hand-edited per #90. Then merge. CI runs on `main` before anything is
-   published.
+`@xcwds/sveltekit`) with a `^` range. On 0.x a minor leaves that range, so every peer dependent
+needs a release with the new range, which is breaking for it. Changesets 3 makes those patches on
+its own (changesets 2 made them 1.0.0, which is why the Version packages PR used to be hand-edited,
+[#90](https://github.com/xcwds/xcwds/issues/90)); the script above turns them into minors, and the
+check fails the run if one slips through. To go to 1.0 on purpose, add a changeset asking for
+`major`.
 
 The plugins' `core` ranges (`CORE` in each `options.ts`) already follow core's minor:
 `pnpm version-packages` runs `scripts/sync-core-version.js`.

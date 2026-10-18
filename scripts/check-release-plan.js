@@ -7,8 +7,6 @@
 //   0.x, a major from 1.0) for it (changesets 3 makes those patches, and
 //   `peer-dependent-changesets.js` should have prevented it).
 //
-// Changesets 2 makes 1.0.0s on every core or sveltekit minor whatever this repository does, so with
-// it installed the first rule only warns and points at the hand edit in `.changeset/README.md`.
 // Runs in `pnpm version-packages` after `changeset version`, from the repository root (or the
 // directory given as the first argument), with the plan `peer-dependent-changesets.js` saved.
 import { existsSync, readFileSync, rmSync } from 'node:fs';
@@ -25,9 +23,6 @@ if (!existsSync(plan)) {
 }
 const { versions, requested } = JSON.parse(readFileSync(plan, 'utf8'));
 rmSync(plan);
-
-const cli = join(root, 'node_modules', '@changesets', 'cli', 'package.json');
-const legacy = existsSync(cli) && semver.major(JSON.parse(readFileSync(cli, 'utf8')).version) < 3;
 
 const packages = publishedPackages(root);
 const unasked = [];
@@ -54,19 +49,13 @@ for (const [name, manifest] of Object.entries(packages)) {
 	}
 }
 
-if (unasked.length && legacy) {
-	console.warn(
-		`Changesets 2 released these as 1.0.0 or later without a major changeset:\n  ${unasked.join('\n  ')}\n` +
-			'Hand-edit the Version packages PR before merging it (.changeset/README.md, #90) until #230 moves to changesets 3.'
-	);
-}
 const problems = [
-	...(legacy || !unasked.length
-		? []
-		: [
+	...(unasked.length
+		? [
 				'Released as 1.0.0 or later without a major changeset:',
 				...unasked.map((line) => `  ${line}`)
-			]),
+			]
+		: []),
 	...(unbroken.length
 		? [
 				'Needed a breaking release for a peer that left their range:',
