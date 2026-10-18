@@ -9,7 +9,10 @@ app runs installed.
 import { defineConfig } from '@xcwds/core';
 import install from '@xcwds/plugin-install';
 
-export default defineConfig({ brand, plugins: [install()] });
+export default defineConfig({
+	brand,
+	plugins: [install({ text: { heading: 'Install My App', intro: 'Keep it on your home screen.' } })]
+});
 ```
 
 ```svelte
@@ -35,6 +38,8 @@ export default defineConfig({ brand, plugins: [install()] });
   there's no prompt. `isIos()` and `isStandalone()` are exported for your own checks.
 
 `<InstallCard>` renders nothing until the checks have run (a prerendered page can't know) or
-once installed. Change its words with `text` (`heading`, `intro`, `install`, `iosSteps`,
-`menu`; `<strong>` is kept, other markup is shown as text) and its button colour with
+once installed. It's a card like the settings page's others (on `--xcwds-shell-card`). Change
+its words with `text` (`heading`, `intro`, `install`, `iosSteps`, `menu`; `<strong>` is kept,
+other markup is shown as text): the plugin's `text` option applies to every card (it's
+`app.install.text`), and a card's own `text` prop wins over it. Change its button colour with
 `--xcwds-install-accent`, or render your own from `app.install`.

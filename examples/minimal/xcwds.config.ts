@@ -102,14 +102,16 @@ export default defineConfig({
 			source: 'https://github.com/xcwds/xcwds',
 			backupName: 'minimal-backup',
 			width: 'split',
-			groups: { tools: 'Pinned tools' }
+			groups: { tools: 'Pinned tools' },
+			// Theme above the shell's navigation, though the shell registers its field first.
+			fields: ['theme']
 		}),
 		timers({ page: '/utils/timer' }),
 		offline(),
 		update(),
 		changelog({ entries: notes }),
 		theme(),
-		install(),
+		install({ text: { heading: 'Install Minimal' } }),
 		// A passcode lock for private pages (the Journal), with its unlock screen at /unlock; a cover
 		// in the app switcher and no spellcheck in their fields.
 		lock(),

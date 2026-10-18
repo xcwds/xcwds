@@ -40,6 +40,13 @@ for (const { name, dir, base } of targets) {
 			// Sections plugins add: @xcwds/plugin-install's card leads the page.
 			const sections = page.getByTestId('settings-page').locator(':scope > section');
 			await expect(sections.first()).toHaveAttribute('data-testid', 'install');
+			// In the config's words, as a card like the others.
+			const install = page.getByTestId('install');
+			await expect(install.getByRole('heading')).toHaveText('Install Minimal');
+			const background = (testId: string) =>
+				page.getByTestId(testId).evaluate((el) => getComputedStyle(el).backgroundColor);
+			expect(await background('install')).toBe(await background('about'));
+			expect(await install.evaluate((el) => getComputedStyle(el).paddingTop)).toBe('16px');
 		});
 
 		test("plugins' settings show in their sections and apply", async ({ page }) => {
@@ -54,8 +61,20 @@ for (const { name, dir, base } of targets) {
 			await page.keyboard.press('ArrowRight');
 			await expect(appearance.getByRole('radio', { name: 'Dark' })).toBeChecked();
 			expect(await scheme(page)).toBe('dark');
-			// The shell's own picker for its nav setting.
+			// The shell's own picker for its nav setting, below Theme as the config orders them.
 			await expect(appearance.getByTestId('nav-picker')).toBeVisible();
+			expect(
+				await appearance
+					.getByRole('radio', { name: 'Light' })
+					.evaluate(
+						(radio) =>
+							!!(
+								radio.compareDocumentPosition(
+									document.querySelector('[data-testid="nav-picker"]')!
+								) & Node.DOCUMENT_POSITION_FOLLOWING
+							)
+					)
+			).toBe(true);
 
 			await page.getByLabel('Alarm sound').uncheck();
 			await page.reload();

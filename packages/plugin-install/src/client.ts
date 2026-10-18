@@ -16,7 +16,8 @@ import {
 	isIos,
 	isStandalone,
 	resolveOptions,
-	type InstallOptions
+	type InstallOptions,
+	type InstallText
 } from './options.js';
 
 /** What this plugin uses of `app.settingsPage` (from `@xcwds/plugin-settings`, if present). */
@@ -51,6 +52,8 @@ export type AppInstall = {
 	 * or `'unavailable'` when there is no prompt or the browser refused to show it.
 	 */
 	prompt(): Promise<'accepted' | 'dismissed' | 'unavailable'>;
+	/** The card's words from the config (`text`); a card's own `text` prop wins over them. */
+	readonly text: Readonly<Partial<InstallText>>;
 };
 
 declare module '@xcwds/core' {
@@ -62,7 +65,7 @@ declare module '@xcwds/core' {
 
 export default definePlugin(
 	(app, input: InstallOptions) => {
-		resolveOptions(input);
+		const options = resolveOptions(input);
 		let state: InstallState = { checked: false, installed: false, available: false, ios: false };
 		const listeners = new Set<(state: InstallState) => void>();
 		const set = (patch: Partial<InstallState>) => {
@@ -74,6 +77,7 @@ export default definePlugin(
 		let booted = false;
 
 		app.decorate('install', {
+			text: options.text,
 			get state() {
 				return state;
 			},

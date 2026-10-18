@@ -8,6 +8,7 @@ import {
 	backupNote,
 	filesNote,
 	formatBytes,
+	orderFields,
 	orderGroups,
 	resolveOptions,
 	sectionOrder,
@@ -33,6 +34,7 @@ describe('options', () => {
 			width: 'narrow',
 			sections: {},
 			groups: {},
+			fields: [],
 			source: null,
 			backupName: 'backup'
 		});
@@ -43,6 +45,10 @@ describe('options', () => {
 		expect(() => resolveOptions({ sections: { tools: 3 } })).toThrow(/`sections`/);
 		expect(() => resolveOptions({ groups: { home: '' } })).toThrow(/`groups`/);
 		expect(() => resolveOptions({ groups: ['home'] })).toThrow(/`groups`/);
+		expect(() => resolveOptions({ fields: 'nav' })).toThrow(/`fields`/);
+		expect(() => resolveOptions({ fields: ['nav', ''] })).toThrow(/`fields`/);
+		expect(() => resolveOptions({ fields: ['nav', 'nav'] })).toThrow(/`fields`/);
+		expect(resolveOptions({ fields: ['nav', 'theme'] }).fields).toEqual(['nav', 'theme']);
 		expect(() => resolveOptions({ source: 'http://example.com' })).toThrow(/`source`/);
 		expect(() => resolveOptions({ backupName: 'my backup' })).toThrow(/`backupName`/);
 		expect(() => resolveOptions({ about: 'x' })).toThrow(/unknown option `about`/);
@@ -80,6 +86,23 @@ describe('options', () => {
 			)
 		).toEqual(['Workout history', 'Home shortcuts', 'timers entries', 'constructor entries']);
 		expect(orderGroups(groups, {})).toEqual(groups);
+	});
+
+	it('orders fields as the app lists them, then as registered', () => {
+		const fields = ['weekStart', 'nav', 'theme', 'units'].map((name) => ({ name }));
+		expect(orderFields(fields, ['nav', 'theme']).map((f) => f.name)).toEqual([
+			'nav',
+			'theme',
+			'weekStart',
+			'units'
+		]);
+		expect(orderFields(fields, ['units', 'missing']).map((f) => f.name)).toEqual([
+			'units',
+			'weekStart',
+			'nav',
+			'theme'
+		]);
+		expect(orderFields(fields, [])).toEqual(fields);
 	});
 
 	it('says how much room files take', () => {

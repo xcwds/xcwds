@@ -26,6 +26,11 @@ export type SettingsOptions = {
 	 * history' }`). Groups left out are named after their entries and follow as registered.
 	 */
 	groups?: Record<string, string>;
+	/**
+	 * Field names in the order they show within their section (`['nav', 'theme', 'weekStart']`).
+	 * Fields left out follow the listed ones, in the order plugins registered them.
+	 */
+	fields?: string[];
 	/** A link to the app's source code, shown under About. */
 	source?: string;
 	/** The backup file's name before the date, e.g. `xcwds-backup`. Defaults to `backup`. */
@@ -39,6 +44,7 @@ export type ResolvedSettingsOptions = {
 	width: 'narrow' | 'split';
 	sections: Record<string, string>;
 	groups: Record<string, string>;
+	fields: string[];
 	source: string | null;
 	backupName: string;
 };
@@ -70,6 +76,7 @@ export function resolveOptions(input: unknown = {}): ResolvedSettingsOptions {
 		'width',
 		'sections',
 		'groups',
+		'fields',
 		'source',
 		'backupName',
 		'prefix'
@@ -92,6 +99,9 @@ export function resolveOptions(input: unknown = {}): ResolvedSettingsOptions {
 	if (!titles(sections)) fail('`sections` must map section ids to titles.');
 	const groups = o.groups ?? {};
 	if (!titles(groups)) fail('`groups` must map storage group ids to names.');
+	const fields = o.fields ?? [];
+	if (!Array.isArray(fields) || !fields.every(text) || new Set(fields).size !== fields.length)
+		fail('`fields` must list settings field names, each once.');
 	const source = o.source ?? null;
 	if (source !== null && (typeof source !== 'string' || !/^https:\/\/\S+$/.test(source)))
 		fail('`source` must be an https:// link.');
@@ -105,6 +115,7 @@ export function resolveOptions(input: unknown = {}): ResolvedSettingsOptions {
 		width,
 		sections: { ...sections },
 		groups: { ...groups },
+		fields: [...fields],
 		source,
 		backupName
 	};
@@ -130,6 +141,18 @@ export function sectionOrder(ids: readonly string[], titles: Record<string, stri
 /** A section's title: the app's, a built-in one, or the id capitalised. */
 export const sectionTitle = (id: string, titles: Record<string, string>) =>
 	titles[id] ?? SECTION_TITLES[id] ?? id.charAt(0).toUpperCase() + id.slice(1).replace(/-/g, ' ');
+
+/** Fields in the order they show: the ones `order` names first, then the rest as registered. */
+export function orderFields<F extends { name: string }>(
+	fields: readonly F[],
+	order: readonly string[]
+): F[] {
+	const rank = (name: string) => (order.includes(name) ? order.indexOf(name) : order.length);
+	return fields
+		.map((field, i) => ({ field, i }))
+		.sort((a, b) => rank(a.field.name) - rank(b.field.name) || a.i - b.i)
+		.map(({ field }) => field);
+}
 
 /**
  * Your data's groups in the order they show, the ones `names` lists first (renamed), then the
