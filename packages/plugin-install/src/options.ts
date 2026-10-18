@@ -21,7 +21,7 @@ export type InstallText = {
 };
 
 export type InstallOptions = {
-	/** The words on the card the settings page shows; any left out keep their defaults. */
+	/** The words on every install card (the settings page's too); any left out keep their defaults. */
 	text?: Partial<InstallText>;
 };
 
