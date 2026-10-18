@@ -120,7 +120,7 @@ jobs:
           REPOS_CSV: ${{ steps.plan.outputs.repos_csv }}
         run: |
           log="$RUNNER_TEMP/agent-token.log"
-          printf '%s' "$AGENT_APP_PRIVATE_KEY" | sudo -n env -i PATH="$PATH" setsid node "$AGENT_BIN/token-helper.mjs" \
+          printf '%s' "$AGENT_APP_PRIVATE_KEY" | env -u AGENT_APP_PRIVATE_KEY sudo -n env -i PATH="$PATH" setsid node "$AGENT_BIN/token-helper.mjs" \
             --socket "$AGENT_TOKEN_SOCKET" --app-id "$APP_ID" --owner "$AGENT_OWNER" --repos "$REPOS_CSV" \
             > "$log" 2>&1 &
           for _ in $(seq 100); do
@@ -216,8 +216,8 @@ jobs:
             pnpm install --frozen-lockfile
             if [ "$repo" = xcwds ]; then
               pnpm --filter @xcwds/example-minimal exec playwright install --with-deps chromium
-              chromium=$(pnpm --filter @xcwds/example-minimal exec node -e \
-                "import('@playwright/test').then(({ chromium }) => console.log(chromium.executablePath()))" | tail -n 1)
+              chromium=$(cd examples/minimal && node -e \
+                "import('@playwright/test').then(({ chromium }) => console.log(chromium.executablePath()))")
               echo "CHROMIUM_PATH=$chromium" >> "$GITHUB_ENV"
             else
               pnpm exec playwright install --with-deps chromium
