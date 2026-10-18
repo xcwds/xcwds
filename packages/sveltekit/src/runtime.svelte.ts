@@ -2,7 +2,7 @@
  * The app in the page bundle: one kernel app per page load (and per prerender process), built
  * from the plugins' `./client` entries that the Vite plugin lists in `virtual:xcwds/client`.
  */
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 import { memoryStorage, type App } from '@xcwds/core';
 import { data, plugins } from 'virtual:xcwds/client';
 import { setupApp } from './routes.js';

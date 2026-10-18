@@ -1,5 +1,5 @@
 <script lang="ts">
-	import PageList from '$lib/PageList.svelte';
+	import PageList from '#lib/PageList.svelte';
 
 	let { data } = $props();
 	const plugins = $derived(data.pages.filter((p) => p.path.startsWith('/reference/plugin-')));

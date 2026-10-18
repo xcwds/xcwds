@@ -1,7 +1,7 @@
 /**
  * `@xcwds/sveltekit/worker`: the service worker. `src/service-worker.ts` imports the generated
  * `.xcwds/worker.js` (RFC 0001, decision 3), which calls `startWorker()` with SvelteKit's
- * `$service-worker` lists and every plugin's `./worker` entry.
+ * lists from `$app/manifest` and every plugin's `./worker` entry.
  *
  * Plugins' `onFetch` hooks answer first. Everything else gets one default strategy, so every
  * app installs and works offline: the build, static files and prerendered pages are precached
@@ -17,7 +17,7 @@ import type { WorkerData } from './data.js';
 import { normalizePath, setupApp, stripBase, workerPath } from './routes.js';
 
 export type WorkerOptions = WorkerData & {
-	/** From `$service-worker`. */
+	/** SvelteKit's `paths.base`, and the lists from `$app/manifest` with it. */
 	base: string;
 	build: string[];
 	files: string[];

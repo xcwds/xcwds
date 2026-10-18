@@ -3,6 +3,9 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
+	"imports": {
+		"#lib/*": "./src/lib/*"
+	},
 	"scripts": {
 		"prepare": "node scripts/prepare.js",
 		"dev": "vite dev",
@@ -27,13 +30,13 @@
 	"devDependencies": {
 		"@playwright/test": "1.64.1",
 		"@resvg/resvg-js": "^2.6.2",
-		"@sveltejs/kit": "^2.70.3",
+		"@sveltejs/kit": "^3.1.0",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@tailwindcss/vite": "^4.3.3",
 		"@types/node": "^24",
 		"@xcwds/testing": "workspace:*",
 		"marked": "^18.1.0",
-		"svelte": "^5.45.6",
+		"svelte": "^5.57.2",
 		"svelte-check": "^4.3.4",
 		"tailwindcss": "^4.3.3",
 		"typescript": "~6.0.3",

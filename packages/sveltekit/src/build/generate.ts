@@ -1,7 +1,8 @@
 /**
  * Reads `xcwds.config.*`, runs the plugins' build hooks and writes `.xcwds/` (Node only). Runs
- * whenever `svelte.config.js` loads, which happens before `svelte-kit sync`, `svelte-check`,
- * `vite dev` and `vite build`, so the generated files always exist (RFC 0001, decision 3).
+ * whenever `vite.config.ts` loads (`xcwds()` calls it before creating SvelteKit's plugin), which
+ * happens for `svelte-kit sync`, `vite dev` and `vite build`, so the generated files always
+ * exist (RFC 0001, decision 3).
  */
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
@@ -134,7 +135,7 @@ export type GenerateOptions = {
 	root: string;
 	/** SvelteKit's `paths.base`. */
 	base?: string;
-	/** SvelteKit's `kit.files.assets`, relative to `root`. */
+	/** SvelteKit's `files.assets`, relative to `root`. */
 	assets?: string;
 };
 
@@ -146,19 +147,16 @@ export async function generate({
 	const configFile = findConfig(root);
 	const dir = join(root, OUT_DIR);
 	await mkdir(dir, { recursive: true });
-	// Not the app's tsconfig: it usually extends `.svelte-kit/tsconfig.json`, which a fresh
-	// checkout only has once `svelte-kit sync` has run, and that sync loads this config. Vite 8
-	// compiles with Oxc, which reads the file `tsconfig` names; Vite 6 and 7 use esbuild's
-	// `tsconfigRaw` (and ignore `tsconfig`).
+	// Not the app's tsconfig: it extends `$app/tsconfig`, which a fresh checkout only has once
+	// `svelte-kit sync` has run, and that sync loads this config.
 	const tsconfig = join(dir, LOADER_TSCONFIG);
 	await writeGenerated(tsconfig, '{}\n');
-	// Vite's module runner loads TypeScript configs with no separate compiler (Vite >= 6.1).
-	const { runnerImport, version } = await import('vite');
+	// Vite's module runner loads TypeScript configs with no separate compiler.
+	const { runnerImport } = await import('vite');
 	const { module, dependencies } = await runnerImport<{ default: unknown }>(configFile, {
 		root,
 		logLevel: 'error',
-		tsconfig,
-		...(Number(version.split('.')[0]) >= 8 ? {} : { esbuild: { tsconfigRaw: '{}' } })
+		tsconfig
 	});
 	const fileExists = (path: string) => existsSync(resolve(root, path));
 	let config = resolveConfig(module.default, { fileExists });

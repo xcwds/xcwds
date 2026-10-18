@@ -31,8 +31,8 @@ plugins to use. The recommended set is picked already:
 
 Then it writes a SvelteKit project and installs it:
 
-- `xcwds.config.ts` with your brand and plugins, `svelte.config.js` (`withXcwds()`), the Vite
-  plugin, `hooks.server.ts` / `hooks.client.ts` and the service worker;
+- `xcwds.config.ts` with your brand and plugins, `vite.config.ts` (`xcwds()`, which adds
+  SvelteKit's plugin), `hooks.server.ts` / `hooks.client.ts` and the service worker;
 - the thin route files each plugin's pages need (RFC 0001, decision 2), Home, the error page,
   and an example tool with the `tools` template;
 - Tailwind with each plugin's styles (`src/xcwds.css`) and the shell's notices

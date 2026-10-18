@@ -22,7 +22,7 @@ const withHtml = (members: Member[], file: string, base: string): Member[] =>
 	}));
 
 /**
- * The base path, as svelte.config.js sets it. Not `$app/paths`, which is relative while pages
+ * The base path, as vite.config.ts sets it. Not `$app/paths`, which is relative while pages
  * prerender: the links end up in data that client-side navigation reuses on other pages.
  */
 const base = process.env.BASE_PATH ?? '';
