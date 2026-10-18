@@ -1,6 +1,6 @@
 import { pluginMeta } from '@xcwds/core';
 import { buildTestApp } from '@xcwds/testing';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import client from './client.js';
 import lockFactory, { build } from './index.js';
 import {
@@ -162,6 +162,7 @@ describe('what a locked app keeps behind the unlock screen', () => {
 		app.lock!.lock();
 		expect(guard('/notes')).toBe('/unlock');
 		app.settings.set({ lock: { ...DEFAULT_LOCK, scope: 'private' } });
+		expect(guard('/')).toBeUndefined();
 		await app.hooks.run('afterNavigate', [{ path: '/' }], { path: '/' });
 		expect(app.lockScreen!.next()).toBe('/');
 
@@ -181,6 +182,29 @@ describe('what a locked app keeps behind the unlock screen', () => {
 		app.lock!.lock();
 		expect(guard('/notes')).toBeUndefined();
 		expect(app.lockScreen!.path).toBe('/unlock');
+		await app.close();
+	});
+
+	it('remembers a redirect a page made on load, though that page reports its arrival late', async () => {
+		// #219: a normal page opened while locked sends itself to a private one before the app
+		// has booted, and its own afterNavigate only runs after the guard has seen the redirect.
+		const app = await buildTestApp({ plugins: [[client, {}]] });
+		const registry = (app as unknown as { routes: typeof routes }).routes;
+		vi.spyOn(registry, 'get').mockImplementation(routes.get);
+		const guard = (path: string) => app.hooks.firstNow('onNavigate', [{ path }, null], { path });
+		expect(await app.lock!.setUp('123456', 'digits')).toBeUndefined();
+		app.lock!.lock();
+		expect(guard('/journal')).toBe('/unlock');
+		expect(guard('/unlock')).toBeUndefined();
+		await app.hooks.run('afterNavigate', [{ path: '/notes' }], { path: '/notes' });
+		await app.hooks.run('afterNavigate', [{ path: '/unlock' }], { path: '/unlock' });
+		expect(app.lockScreen!.next()).toBe('/journal');
+
+		// Leaving the unlock screen for a page that is showing still forgets it.
+		expect(guard('/journal')).toBe('/unlock');
+		expect(guard('/notes')).toBeUndefined();
+		await app.hooks.run('afterNavigate', [{ path: '/notes' }], { path: '/notes' });
+		expect(app.lockScreen!.next()).toBe('/');
 		await app.close();
 	});
 });

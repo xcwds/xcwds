@@ -203,9 +203,12 @@ export function startApp(): void {
 				}
 				await loaded.ready();
 				// A redirect replaces the first page in history; `false` can't take back a page that is
-				// already showing. Either is dropped once the user has navigated elsewhere.
+				// already showing. Either is dropped once the user (or the page itself, on load) has
+				// navigated elsewhere, and then the guards don't hear of the first page at all: it isn't
+				// where the app is going any more (#219).
 				const first = route(initial);
-				if (first) {
+				const still = () => active && token === initialToken && sameDocument(location, initial);
+				if (first && still()) {
 					const answer = await askGuards(loaded, first, null);
 					const decision = decide(answer, {
 						target: initial,
@@ -213,8 +216,7 @@ export function startApp(): void {
 						redirects: 0,
 						first: true
 					});
-					if (active && token === initialToken && sameDocument(location, initial))
-						follow(decision, true);
+					if (still()) follow(decision, true);
 				}
 				return loaded;
 			})

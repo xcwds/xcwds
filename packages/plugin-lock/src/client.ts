@@ -123,10 +123,16 @@ export default definePlugin(
 		const full = (to: Route) => to.path + (to.url ? to.url.search + to.url.hash : '');
 		/** The page showing now (from `afterNavigate`). */
 		let current: Route | null = null;
+		/**
+		 * The latest navigation the guard saw. `afterNavigate` can arrive late: the first page's
+		 * runs once the app has booted, after any redirect its page made on load (#219).
+		 */
+		let latest: string | null = null;
 		/** When the app was hidden while unlocked, for auto-lock (ms since the epoch). */
 		let hiddenAt: number | null = null;
 
 		app.addHook('onNavigate', (to) => {
+			latest = trim(to.path);
 			// Nothing to unlock (any more): on to the page that was asked for.
 			if (isUnlock(to.path)) return lock.state.locked ? undefined : app.lockScreen!.next();
 			if (!lock.state.locked || !locks(to.path)) return undefined;
@@ -281,9 +287,11 @@ export default definePlugin(
 		app.addHook('afterNavigate', (to) => {
 			// A locked page that still showed (the first page, before the guards ran) stays hidden
 			// until the unlock screen replaces it; anything else shows. Having gone somewhere else
-			// instead of unlocking, the page asked for earlier isn't wanted any more.
+			// instead of unlocking, the page asked for earlier isn't wanted any more; a page the app
+			// has already left (its hook ran late) says nothing about that.
 			const hide = lock.state.locked && locks(to.path);
-			if (!hide && !isUnlock(to.path)) target = null;
+			const left = latest !== null && latest !== trim(to.path);
+			if (!hide && !isUnlock(to.path) && !left) target = null;
 			current = to;
 			if (typeof document === 'undefined') return;
 			if (hide) conceal();
