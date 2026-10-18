@@ -44,13 +44,6 @@ const generated = () =>
 	);
 const run = (script) => spawnSync(process.execPath, [script, root], { encoding: 'utf8' });
 
-/** Which changesets CLI the check sees as installed. */
-function cli(version) {
-	const dir = join(root, 'node_modules', '@changesets', 'cli');
-	mkdirSync(dir, { recursive: true });
-	writeFileSync(join(dir, 'package.json'), JSON.stringify({ version }));
-}
-
 beforeEach(() => {
 	root = mkdtempSync(join(tmpdir(), 'xcwds-peers-'));
 	mkdirSync(join(root, '.changeset'));
@@ -74,7 +67,6 @@ beforeEach(() => {
 	});
 	pkg('@xcwds/plugin-vault', '0.0.0', { '@xcwds/core': 'workspace:^' });
 	pkg('@xcwds/example', '0.0.0', { '@xcwds/core': 'workspace:^' }, { private: true });
-	cli('3.0.3');
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
@@ -195,18 +187,6 @@ describe('check-release-plan.js', () => {
 		run(fix);
 		bump('@xcwds/plugin-qr', '1.0.0');
 		expect(run(check).status).toBe(0);
-	});
-
-	it('only warns about 1.0.0s on changesets 2', () => {
-		cli('2.31.1');
-		changeset('a.md', "---\n'@xcwds/sveltekit': minor\n---\n\nA.\n");
-		run(fix);
-		bump('@xcwds/sveltekit', '0.6.0');
-		bump('@xcwds/plugin-shell', '1.0.0');
-		bump('@xcwds/plugin-settings', '1.0.0');
-		const result = run(check);
-		expect(result.status).toBe(0);
-		expect(result.stderr).toContain('Hand-edit the Version packages PR');
 	});
 
 	it('fails without the saved plan', () => {

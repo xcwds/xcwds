@@ -40,7 +40,7 @@ jobs:
     environment: npm
     # Job permissions replace the workflow's.
     permissions:
-      # Push the changeset-release/main branch and the release tags.
+      # Push the changeset-release/main branch and the release tags (through the GitHub API).
       contents: write
       # Open the "Version packages" PR.
       pull-requests: write
@@ -65,15 +65,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Open the version PR, or publish to npm
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
-        with:
-          version: pnpm version-packages
-          publish: pnpm release
-          title: Version packages
-          commit: Version packages
+      # changesets/action v2 no longer writes an .npmrc from NPM_TOKEN, so this does what v1 did: put
+      # the token in ~/.npmrc, where `pnpm publish` reads auth from. `npm whoami` then flags a token
+      # that has expired (granular tokens last 7 days by default; #208 only saw a 404 on every PUT)
+      # without failing runs that only update the Version packages PR. Skipped when the secret is
+      # empty, for trusted publishing.
+      - name: Set up npm auth
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Empty when the packages use trusted publishing instead.
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
+            npm whoami || echo "::warning::NPM_TOKEN was refused by npm (expired?); a publish would fail with 404s."
+          fi
+
+      - name: Open the version PR, or publish to npm
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          version-script: pnpm version-packages
+          publish-script: pnpm release
+          pr-title: Version packages
+          commit-message: Version packages
+        env:
           NPM_CONFIG_PROVENANCE: true
