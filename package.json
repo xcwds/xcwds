@@ -17,7 +17,7 @@
 		"publint": "pnpm --filter \"./packages/*\" --filter ./examples/plugin-tally publint",
 		"changeset": "changeset",
 		"test:starter": "node packages/create/scripts/test-starter.js",
-		"version-packages": "node packages/create/scripts/release-create.js && changeset version && node scripts/sync-core-version.js && pnpm install --lockfile-only",
+		"version-packages": "node packages/create/scripts/release-create.js && node scripts/peer-dependent-changesets.js && changeset version && node scripts/check-release-plan.js && node scripts/sync-core-version.js && pnpm install --lockfile-only",
 		"release": "pnpm build && node scripts/copy-license.js && changeset publish"
 	},
 	"devDependencies": {
@@ -32,6 +32,7 @@
 		"prettier": "^3.7.4",
 		"prettier-plugin-svelte": "^4.0.0",
 		"publint": "^0.3.15",
+		"semver": "^7.8.5",
 		"typescript": "~6.0.3",
 		"typescript-eslint": "^8.48.1",
 		"vitest": "^5.0.0"
