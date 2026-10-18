@@ -170,6 +170,7 @@ describe('generate', () => {
 		expect((await readdir(join(root, '.xcwds'))).sort()).toEqual([
 			'.gitignore',
 			'build.js',
+			'config.tsconfig.json',
 			'types.d.ts',
 			'worker-guard.js',
 			'worker.js'

@@ -33,6 +33,8 @@ export const CONFIG_FILES = [
 
 /** The directory generated files go in, relative to the app's root. */
 export const OUT_DIR = '.xcwds';
+/** An empty tsconfig in `OUT_DIR` that the config is compiled with (see `generate`). */
+const LOADER_TSCONFIG = 'config.tsconfig.json';
 /** The plugins' type references, in `OUT_DIR` (see `typesModule`). */
 export const TYPES_FILE = 'types.d.ts';
 
@@ -142,22 +144,27 @@ export async function generate({
 	assets = 'static'
 }: GenerateOptions): Promise<BuildState> {
 	const configFile = findConfig(root);
+	const dir = join(root, OUT_DIR);
+	await mkdir(dir, { recursive: true });
+	// Not the app's tsconfig: it usually extends `.svelte-kit/tsconfig.json`, which a fresh
+	// checkout only has once `svelte-kit sync` has run, and that sync loads this config. Vite 8
+	// compiles with Oxc, which reads the file `tsconfig` names; Vite 6 and 7 use esbuild's
+	// `tsconfigRaw` (and ignore `tsconfig`).
+	const tsconfig = join(dir, LOADER_TSCONFIG);
+	await writeGenerated(tsconfig, '{}\n');
 	// Vite's module runner loads TypeScript configs with no separate compiler (Vite >= 6.1).
-	const { runnerImport } = await import('vite');
+	const { runnerImport, version } = await import('vite');
 	const { module, dependencies } = await runnerImport<{ default: unknown }>(configFile, {
 		root,
 		logLevel: 'error',
-		// Not the app's tsconfig: it usually extends `.svelte-kit/tsconfig.json`, which a fresh
-		// checkout only has once `svelte-kit sync` has run, and that sync loads this config.
-		esbuild: { tsconfigRaw: '{}' }
+		tsconfig,
+		...(Number(version.split('.')[0]) >= 8 ? {} : { esbuild: { tsconfigRaw: '{}' } })
 	});
 	const fileExists = (path: string) => existsSync(resolve(root, path));
 	let config = resolveConfig(module.default, { fileExists });
 	// Valid, so plain data: hooks get a copy of the config as written.
 	const written = structuredClone(module.default) as Record<string, unknown>;
 
-	const dir = join(root, OUT_DIR);
-	await mkdir(dir, { recursive: true });
 	await writeGenerated(join(dir, '.gitignore'), '*\n');
 
 	const plugins: PluginInfo[] = config.plugins.map(({ name, options }) => {
