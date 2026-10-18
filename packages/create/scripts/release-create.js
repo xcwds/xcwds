@@ -7,6 +7,7 @@
 // as the first argument); the file it writes is consumed by that same `changeset version`.
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { released } from '../../../scripts/release-plan.js';
 
 const CREATE = '@xcwds/create';
 const FILE = 'create-starter-versions.md';
@@ -14,20 +15,10 @@ const FILE = 'create-starter-versions.md';
 const root = process.argv[2] ?? process.cwd();
 const dir = join(root, '.changeset');
 
-/** The package names in a changeset's front matter. */
-function released(source) {
-	const match = /^---\r?\n([\s\S]*?)\r?\n?---/.exec(source);
-	if (!match) return [];
-	return match[1]
-		.split(/\r?\n/)
-		.map((line) => /^\s*(['"]?)(.+?)\1\s*:\s*(major|minor|patch)\s*$/.exec(line)?.[2])
-		.filter((name) => name !== undefined);
-}
-
 const { ignore = [] } = JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8'));
 const names = readdirSync(dir)
 	.filter((file) => file.endsWith('.md') && file !== 'README.md' && file !== FILE)
-	.flatMap((file) => released(readFileSync(join(dir, file), 'utf8')));
+	.flatMap((file) => released(readFileSync(join(dir, file), 'utf8')).map(({ name }) => name));
 
 if (names.includes(CREATE)) {
 	console.log(`${CREATE} already has a changeset.`);

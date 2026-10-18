@@ -9,7 +9,7 @@ How AI coding agents (Claude Code and others) should work in this repo. The file
 | [`CLAUDE.md`](CLAUDE.md)                                         | The agent rules: pre-push checks, PR and merge flow, kernel limits, docs duties                     |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md)                             | Setup, every script, Playwright, workflow pinning, the Node 22.18 job                               |
 | [`docs/rfc/0001-architecture.md`](docs/rfc/0001-architecture.md) | The design decisions (1–14). Follow them, and change the RFC in the same PR when a decision changes |
-| [`.changeset/README.md`](.changeset/README.md)                   | Changesets, the release workflow and the 1.0.0 hand edit                                            |
+| [`.changeset/README.md`](.changeset/README.md)                   | Changesets, the release workflow, peer-dependent bumps and the 1.0.0 hand edit                      |
 | [`.github/labels.md`](.github/labels.md)                         | Issue labels (same file in xcwds.github.io; keep the two identical)                                 |
 | [`docs/`](docs)                                                  | User-facing guides: getting started, concepts, plugin guide, privacy, ecosystem                     |
 
@@ -45,11 +45,11 @@ How AI coding agents (Claude Code and others) should work in this repo. The file
 
 ## Releases and the 1.0.0 trap
 
-The plugins, `sveltekit` and `testing` peer on `@xcwds/core` with a `^0.x` range. A core (or sveltekit) minor leaves that range, and changesets then bumps every peer dependent to **1.0.0**. The owner keeps everything on 0.x, so the Version packages PR is hand-edited before merging: each would-be 1.0.0 goes to the next minor in `package.json`, `CHANGELOG.md` headings ("Major" → "Minor"), the "Updated dependencies" lines, and the PR description. The exact steps are in [`.changeset/README.md`](.changeset/README.md#when-core-or-sveltekit-gets-a-minor) ([#90](https://github.com/xcwds/xcwds/issues/90), [#137](https://github.com/xcwds/xcwds/issues/137)).
+The plugins, `sveltekit` and `testing` peer on `@xcwds/core` (and the plugins on `sveltekit`, some on `plugin-shell` or `plugin-camera`) with a `^0.x` range. A minor of a peer leaves that range, so its dependents must be released again as a breaking change, which the owner wants as the next **minor** on 0.x. `pnpm version-packages` writes those minors as `generated-peer-*.md` changesets (`scripts/peer-dependent-changesets.js`) and then checks the result (`scripts/check-release-plan.js`), failing on any unasked 1.0.0 or a peer bump released as a patch ([#229](https://github.com/xcwds/xcwds/issues/229)). Changesets 2 still turns those dependents into **1.0.0**, so until [#230](https://github.com/xcwds/xcwds/issues/230) moves to changesets 3 the Version packages PR is hand-edited before merging: each would-be 1.0.0 goes to the next minor in `package.json`, `CHANGELOG.md` headings ("Major" → "Minor"), the "Updated dependencies" lines, and the PR description. The exact steps are in [`.changeset/README.md`](.changeset/README.md#when-core-or-sveltekit-gets-a-minor) ([#90](https://github.com/xcwds/xcwds/issues/90), [#137](https://github.com/xcwds/xcwds/issues/137)).
 
 - The bot rewrites the Version packages PR whenever something merges to `main`, which wipes the edits. Make them last, right before the merge.
 - Check the latest Release run before reviewing a Version packages PR. Runs have failed silently before ([#176](https://github.com/xcwds/xcwds/issues/176), [#177](https://github.com/xcwds/xcwds/issues/177)).
-- Preview a release with `pnpm changeset status --verbose`, or a full `pnpm version-packages` on a throwaway copy of `main`.
+- Preview a release with a full `pnpm version-packages` on a throwaway copy of `main`; `pnpm changeset status` doesn't run the peer-dependent script, so it under-reports bumps.
 
 ## Package gotchas
 
