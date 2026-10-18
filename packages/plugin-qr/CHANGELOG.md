@@ -1,5 +1,13 @@
 # @xcwds/plugin-qr
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [5775a2b]
+  - @xcwds/sveltekit@0.5.0
+  - @xcwds/plugin-camera@1.0.0
+
 ## 0.1.0
 
 ### Minor Changes

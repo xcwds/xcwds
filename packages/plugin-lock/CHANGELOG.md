@@ -1,5 +1,12 @@
 # @xcwds/plugin-lock
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [5775a2b]
+  - @xcwds/sveltekit@0.5.0
+
 ## 0.3.0
 
 ### Minor Changes
