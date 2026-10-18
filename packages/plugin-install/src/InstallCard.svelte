@@ -2,21 +2,13 @@
 	/**
 	 * Offers to install the app: an Install button where the browser has a prompt, Add to Home
 	 * Screen steps on iPhone and iPad, the browser menu elsewhere. Shows nothing once the app
-	 * runs installed. Place it inside `<App>` (the settings plugin puts it on its page).
+	 * runs installed. Place it inside `<App>` (the settings plugin puts it on its page, as a card
+	 * like its others). Its words: the defaults, then the plugin's `text` option, then `text`.
 	 */
 	import { useApp } from '@xcwds/sveltekit';
 	import type { InstallState } from './client.js';
+	import type { InstallText as Text } from './options.js';
 
-	type Text = {
-		heading: string;
-		intro: string;
-		/** The Install button. */
-		install: string;
-		/** iPhone and iPad steps; `<strong>` is allowed. */
-		iosSteps: string[];
-		/** Other browsers. `<strong>` is allowed. */
-		menu: string;
-	};
 	const defaults: Text = {
 		heading: 'Install the app',
 		intro: 'Get it on your home screen. It opens full-screen and works offline.',
@@ -29,7 +21,8 @@
 		menu: "Use your browser's menu and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>."
 	};
 	let { text = {} }: { text?: Partial<Text> } = $props();
-	const t = $derived({ ...defaults, ...text });
+	const install = useApp().install;
+	const t = $derived({ ...defaults, ...install?.text, ...text });
 
 	/** Only `<strong>` survives: everything else is shown as text. */
 	const strong = (s: string) =>
@@ -38,7 +31,6 @@
 			.replace(/</g, '&lt;')
 			.replace(/&lt;(\/?)strong>/g, '<$1strong>');
 
-	const install = useApp().install;
 	let current = $state<InstallState>({
 		checked: false,
 		installed: false,
@@ -70,13 +62,29 @@
 {/if}
 
 <style>
+	/* A card like the settings page's others (with @xcwds/plugin-shell's colours). */
+	section {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.75rem;
+		padding: 1rem;
+		border-radius: 1rem;
+		background: var(--xcwds-shell-card, transparent);
+	}
 	h2 {
-		margin: 0 0 0.25rem;
+		margin: 0;
 		font-size: 1.125rem;
+		line-height: 1.75rem;
+		font-weight: 600;
 	}
 	p,
 	ol {
-		margin: 0 0 0.5rem;
+		margin: 0;
+	}
+	ol {
+		padding-left: 1.25rem;
+		list-style: decimal;
 	}
 	button {
 		min-width: 44px;

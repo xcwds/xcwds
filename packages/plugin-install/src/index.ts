@@ -9,7 +9,7 @@
 import { definePlugin, descriptor } from '@xcwds/core';
 import { CATCH_PROMPT, CORE, NAME, resolveOptions, type InstallOptions } from './options.js';
 
-export type { InstallOptions } from './options.js';
+export type { InstallOptions, InstallText } from './options.js';
 export { isIos, isStandalone } from './options.js';
 
 export default descriptor<InstallOptions>(NAME);

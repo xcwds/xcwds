@@ -8,8 +8,26 @@ export const NAME = '@xcwds/plugin-install';
  */
 export const CORE = '^0.4.0';
 
-/** The plugin has no options yet; this keeps the config honest about that. */
-export type InstallOptions = Record<string, never>;
+/** The install card's words. `<strong>` is kept in the steps and `menu`; other markup is text. */
+export type InstallText = {
+	heading: string;
+	intro: string;
+	/** The Install button. */
+	install: string;
+	/** iPhone and iPad steps. */
+	iosSteps: string[];
+	/** Other browsers. */
+	menu: string;
+};
+
+export type InstallOptions = {
+	/** The words on the card the settings page shows; any left out keep their defaults. */
+	text?: Partial<InstallText>;
+};
+
+export type ResolvedInstallOptions = { text: Partial<InstallText> };
+
+const TEXT_KEYS = ['heading', 'intro', 'install', 'iosSteps', 'menu'];
 
 /** Where the head script keeps an install prompt that fires before the app starts. */
 export const PROMPT_GLOBAL = '__xcwdsInstallPrompt';
@@ -23,20 +41,29 @@ export const CATCH_PROMPT =
 	`window.${PROMPT_GLOBAL}=e;});`;
 
 /** Checks options as written in the config. */
-export function resolveOptions(input: unknown = {}): InstallOptions {
-	if (typeof input !== 'object' || input === null || Array.isArray(input))
-		throw new XcwdsError(codes.CONFIG_INVALID, `${NAME}: options must be an object.`, {
-			plugin: NAME
-		});
-	const unknown = Object.keys(input).filter((key) => key !== 'prefix');
-	if (unknown.length)
-		throw new XcwdsError(
-			codes.CONFIG_INVALID,
-			`${NAME}: unknown option ${unknown.map((k) => `\`${k}\``).join(', ')}.`,
-			{ plugin: NAME }
-		);
-	return {};
+export function resolveOptions(input: unknown = {}): ResolvedInstallOptions {
+	if (!isObject(input)) fail('options must be an object.');
+	const unknown = Object.keys(input).filter((key) => key !== 'prefix' && key !== 'text');
+	if (unknown.length) fail(`unknown option ${unknown.map((k) => `\`${k}\``).join(', ')}.`);
+	const text = input.text ?? {};
+	if (!isObject(text)) fail('`text` must be an object.');
+	const extra = Object.keys(text).filter((key) => !TEXT_KEYS.includes(key));
+	if (extra.length) fail(`unknown \`text\` key ${extra.map((k) => `\`${k}\``).join(', ')}.`);
+	for (const key of ['heading', 'intro', 'install', 'menu'])
+		if (text[key] !== undefined && !words(text[key])) fail(`\`text.${key}\` must be a string.`);
+	const steps = text.iosSteps;
+	if (steps !== undefined && (!Array.isArray(steps) || !steps.length || !steps.every(words)))
+		fail('`text.iosSteps` must be a list of steps.');
+	return { text: { ...text, ...(steps ? { iosSteps: [...steps] } : {}) } };
 }
+
+function fail(message: string): never {
+	throw new XcwdsError(codes.CONFIG_INVALID, `${NAME}: ${message}`, { plugin: NAME });
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+	typeof v === 'object' && v !== null && !Array.isArray(v);
+const words = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
 
 /** iPhone, iPad or iPod, where there is no install prompt. iPadOS says it's a Mac with touch. */
 export function isIos(userAgent: string, maxTouchPoints: number): boolean {
