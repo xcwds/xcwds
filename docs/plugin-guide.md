@@ -63,16 +63,16 @@ one, `./worker` for the service worker, plus any components. This one has no wor
 		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
-		"@sveltejs/kit": "^2.49.1",
+		"@sveltejs/kit": "^2.70.3",
 		"@sveltejs/package": "^2.5.8",
-		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@xcwds/core": "workspace:^",
 		"@xcwds/sveltekit": "workspace:^",
 		"@xcwds/testing": "workspace:*",
 		"svelte": "^5.45.6",
 		"svelte-check": "^4.3.4",
-		"typescript": "^5.9.3",
-		"vite": "^7.2.6",
+		"typescript": "~6.0.3",
+		"vite": "^8.3.4",
 		"vitest": "^5.0.0"
 	}
 }
