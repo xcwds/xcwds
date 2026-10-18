@@ -1,5 +1,16 @@
 # @xcwds/plugin-tools
 
+## 0.7.0
+
+### Minor Changes
+
+- ac67559: A tool can set `width: 'wide'` for a list-style page (a grid of cards), as well as `narrow` and `split`.
+
+### Patch Changes
+
+- Updated dependencies [b6b97b5]
+  - @xcwds/sveltekit@0.5.1
+
 ## 0.6.0
 
 ### Minor Changes
