@@ -1,6 +1,6 @@
 # @xcwds/plugin-lock
 
-## 1.0.0
+## 0.4.0
 
 ### Patch Changes
 

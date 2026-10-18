@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-camera",
-	"version": "1.0.0",
+	"version": "0.2.0",
 	"description": "Photos taken inside an @xcwds app, with no metadata and the camera on only while it's used.",
 	"license": "MIT",
 	"type": "module",

@@ -1,6 +1,6 @@
 # @xcwds/plugin-timers
 
-## 1.0.0
+## 0.5.0
 
 ### Minor Changes
 
@@ -10,7 +10,7 @@
 
 - Updated dependencies [5775a2b]
 - Updated dependencies [5775a2b]
-  - @xcwds/plugin-shell@1.0.0
+  - @xcwds/plugin-shell@0.5.0
   - @xcwds/sveltekit@0.5.0
 
 ## 0.4.0
