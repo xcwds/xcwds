@@ -29,10 +29,11 @@ export type Tool = {
 	/** Adds the tool to the manifest's `shortcuts` (the home-screen icon's long-press menu). */
 	shortcut?: boolean;
 	/**
-	 * The page's container: `narrow` (the default) or `split`, for a tool that uses two columns
-	 * when there's room (`<main class="page-split @container">`).
+	 * The page's container: `narrow` (the default); `wide`, for a list-style tool (a grid of
+	 * cards, `<main class="page-wide">`); or `split`, for a tool that uses two columns when
+	 * there's room (`<main class="page-split @container">`).
 	 */
-	width?: 'narrow' | 'split';
+	width?: 'narrow' | 'wide' | 'split';
 	/** The id of the app (in `apps`) the tool belongs to. A tool in no app always shows. */
 	app?: string;
 };
@@ -135,8 +136,8 @@ export function checkTool(input: unknown, where = 'a tool'): Tool {
 		if (tool[key] !== undefined && typeof tool[key] !== 'boolean')
 			fail(`\`${key}\` of ${at} must be true or false.`);
 	if (tool.private && tool.shortcut) fail(`${at} is private, so it can't be a manifest shortcut.`);
-	if (tool.width !== undefined && tool.width !== 'narrow' && tool.width !== 'split')
-		fail(`\`width\` of ${at} must be "narrow" or "split".`);
+	if (tool.width !== undefined && !WIDTHS.includes(tool.width as string))
+		fail(`\`width\` of ${at} must be "narrow", "wide" or "split".`);
 	if (tool.app !== undefined && !isAppId(tool.app)) fail(`\`app\` of ${at} must be an app's id.`);
 	const out: Tool = {
 		path: tool.path,
@@ -146,10 +147,12 @@ export function checkTool(input: unknown, where = 'a tool'): Tool {
 	};
 	if (tool.private) out.private = true;
 	if (tool.shortcut) out.shortcut = true;
-	if (tool.width === 'split') out.width = 'split';
+	if (tool.width === 'wide' || tool.width === 'split') out.width = tool.width;
 	if (tool.app !== undefined) out.app = tool.app as string;
 	return out;
 }
+
+const WIDTHS = ['narrow', 'wide', 'split'];
 
 const isAppId = (v: unknown): v is string =>
 	typeof v === 'string' && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(v);
