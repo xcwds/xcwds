@@ -1,0 +1,29 @@
+# Checks the agent runner end to end (#200): the token helper, the bot identity, gh and git in both
+# repos. A dry run: it posts nothing. Run it after setting up the app and secrets (AGENTS.md, "Agent
+# workflows"), or after changing agent.yml or .github/agents/.
+name: Agent smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    uses: ./.github/workflows/agent.yml
+    with:
+      prompt: .github/agents/smoke.md
+      repos: both
+      dry_run: true
+      timeout: 30
+      max_turns: 20
+      # The prompts and scripts from the commit being tested, not main's.
+      agents_ref: ${{ github.sha }}
+    secrets:
+      AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

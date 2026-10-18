@@ -1,0 +1,334 @@
+# The shared runner every agent routine and event workflow calls (#199, #200). It checks out the
+# repos a routine works on, starts the token helper, installs what the repos need and runs Claude
+# Code with the routine's prompt from .github/agents/. AGENTS.md ("Agent workflows") lists the
+# secrets and variables it needs and the owner's setup steps.
+#
+# Callers set their own concurrency group and schedule; this workflow has neither.
+name: Agent
+
+on:
+  workflow_call:
+    inputs:
+      prompt:
+        description: Prompt file in xcwds/xcwds, e.g. .github/agents/renovate.md
+        type: string
+        required: true
+      context:
+        description: Extra text appended to the prompt, e.g. the issue number from a dispatch
+        type: string
+        default: ''
+      repos:
+        description: Repos to check out, side by side (xcwds, xcwds.github.io or both)
+        type: string
+        required: true
+      tools:
+        description: Tool profile (read, label or pr); a dry run always gets read
+        type: string
+        default: read
+      dry_run:
+        description: Read-only run that posts nothing (callers pass inputs.dry_run == true)
+        type: boolean
+        default: false
+      timeout:
+        description: Job timeout, in minutes
+        type: number
+        default: 30
+      max_turns:
+        description: Claude Code's --max-turns
+        type: number
+        default: 50
+      agents_ref:
+        description: Ref of xcwds/xcwds to take .github/agents/ (prompts and scripts) from
+        type: string
+        default: main
+    secrets:
+      AGENT_APP_PRIVATE_KEY:
+        description: The agent GitHub App's private key
+        required: true
+      CLAUDE_CODE_OAUTH_TOKEN:
+        description: The owner's Claude subscription token (claude setup-token)
+        required: true
+
+# All writes go through the app's tokens; the workflow's own token only reads.
+permissions:
+  contents: read
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout }}
+    steps:
+      - name: Plan the run
+        id: plan
+        env:
+          REPOS: ${{ inputs.repos }}
+          TOOLS: ${{ inputs.tools }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          PROMPT: ${{ inputs.prompt }}
+          APP_ID: ${{ vars.AGENT_APP_ID }}
+        run: |
+          case "$REPOS" in
+            xcwds | xcwds.github.io) list="$REPOS" ;;
+            both) list="xcwds xcwds.github.io" ;;
+            *) echo "::error::repos must be xcwds, xcwds.github.io or both, not '$REPOS'"; exit 1 ;;
+          esac
+          if ! [[ "$PROMPT" =~ ^\.github/agents/[a-z0-9-]+\.md$ ]]; then
+            echo "::error::prompt must be a file in .github/agents/, not '$PROMPT'"; exit 1
+          fi
+          if [ -z "$APP_ID" ]; then
+            echo "::error::Set the AGENT_APP_ID variable (AGENTS.md, Agent workflows)"; exit 1
+          fi
+          profile="$TOOLS"
+          [ "$DRY_RUN" = true ] && profile=read
+          {
+            echo "repos=$list"
+            echo "repos_csv=${list// /,}"
+            echo "first=${list%% *}"
+            echo "profile=$profile"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "AGENT_TOKEN_SOCKET=$RUNNER_TEMP/agent-token.sock"
+            echo "AGENT_BIN=/opt/xcwds-agent/bin"
+            echo "AGENT_OWNER=$GITHUB_REPOSITORY_OWNER"
+          } >> "$GITHUB_ENV"
+
+      - name: Check out the agent's prompts and scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: xcwds/xcwds
+          ref: ${{ inputs.agents_ref }}
+          path: .agent
+          sparse-checkout: .github/agents
+          persist-credentials: false
+
+      # Root-owned and outside the workspace, so a run can't rewrite merge-pr, the gh wrapper or the
+      # credential helper once sudo is gone.
+      - name: Install the agent's scripts
+        run: |
+          sudo -n rm -rf "$(dirname "$AGENT_BIN")"
+          sudo -n install -d -o root -g root -m 0755 "$(dirname "$AGENT_BIN")"
+          sudo -n cp -R .agent/.github/agents/bin "$AGENT_BIN"
+          sudo -n chown -R root:root "$AGENT_BIN"
+          sudo -n chmod -R go-w "$AGENT_BIN"
+
+      # First, before anything else runs: the key goes in on stdin and only the helper (as root)
+      # holds it. sudo is taken away from the runner user below, so the agent can't read it back.
+      - name: Start the token helper
+        env:
+          AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          APP_ID: ${{ vars.AGENT_APP_ID }}
+          REPOS_CSV: ${{ steps.plan.outputs.repos_csv }}
+        run: |
+          log="$RUNNER_TEMP/agent-token.log"
+          printf '%s' "$AGENT_APP_PRIVATE_KEY" | env -u AGENT_APP_PRIVATE_KEY sudo -n env -i PATH="$PATH" setsid node "$AGENT_BIN/token-helper.mjs" \
+            --socket "$AGENT_TOKEN_SOCKET" --app-id "$APP_ID" --owner "$AGENT_OWNER" --repos "$REPOS_CSV" \
+            > "$log" 2>&1 &
+          for _ in $(seq 100); do
+            [ -S "$AGENT_TOKEN_SOCKET" ] && break
+            sleep 0.2
+          done
+          if ! "$AGENT_BIN/agent-token" status > /dev/null; then
+            cat "$log"
+            echo "::error::The token helper didn't start. Check the app's ID, key and installation (AGENTS.md, Agent workflows)."
+            exit 1
+          fi
+
+      - name: Set up git and gh as the bot
+        run: |
+          echo "AGENT_REAL_GH=$(command -v gh)" >> "$GITHUB_ENV"
+          echo "$AGENT_BIN" >> "$GITHUB_PATH"
+          git config --global credential.https://github.com.helper ''
+          git config --global --add credential.https://github.com.helper "$AGENT_BIN/git-credential-agent"
+          identity=$("$AGENT_BIN/agent-token" identity)
+          login=$(jq -r .login <<< "$identity")
+          id=$(jq -r .id <<< "$identity")
+          git config --global user.name "$login"
+          git config --global user.email "$id+$login@users.noreply.github.com"
+          {
+            echo "AGENT_BOT_SLUG=$(jq -r .slug <<< "$identity")"
+            echo "AGENT_BOT_LOGIN=$login"
+            echo "AGENT_BOT_ID=$id"
+          } >> "$GITHUB_ENV"
+
+      # A PR from a fork must never have its code run here: issue_comment runs have the secrets.
+      - name: Check for a fork PR
+        id: fork
+        env:
+          HAS_PR: ${{ github.event.pull_request != null }}
+          PR_HEAD: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          ISSUE_PR: ${{ github.event.issue.pull_request.url }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          head='' base='' pr=false
+          if [ "$HAS_PR" = true ]; then
+            pr=true head="$PR_HEAD" base="$PR_BASE"
+          elif [ -n "$ISSUE_PR" ]; then
+            pr=true
+            info=$(PATH="$AGENT_BIN:$PATH" gh api "repos/$GITHUB_REPOSITORY/pulls/$ISSUE_NUMBER")
+            head=$(jq -r '.head.repo.full_name // ""' <<< "$info")
+            base=$(jq -r .base.ref <<< "$info")
+          fi
+          # A deleted fork leaves no head repo: treat it as a fork too.
+          if [ "$pr" = true ] && [ "$head" != "$GITHUB_REPOSITORY" ]; then
+            echo "::notice::The PR comes from a fork: checking out its base branch only, with read-only tools."
+            echo "fork=true" >> "$GITHUB_OUTPUT"
+            echo "base=$base" >> "$GITHUB_OUTPUT"
+          else
+            echo "fork=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the repos
+        env:
+          REPOS: ${{ steps.plan.outputs.repos }}
+          FORK: ${{ steps.fork.outputs.fork }}
+          BASE: ${{ steps.fork.outputs.base }}
+        run: |
+          for repo in $REPOS; do
+            git clone --quiet "https://github.com/$AGENT_OWNER/$repo.git" "$GITHUB_WORKSPACE/$repo"
+          done
+          caller="${GITHUB_REPOSITORY#*/}"
+          if [ "$FORK" = true ] && [ -d "$GITHUB_WORKSPACE/$caller" ]; then
+            git -C "$GITHUB_WORKSPACE/$caller" checkout --quiet "$BASE"
+          fi
+
+      - name: Install pnpm
+        if: steps.fork.outputs.fork != 'true'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: ${{ steps.plan.outputs.first }}/package.json
+
+      - name: Install Node.js
+        if: steps.fork.outputs.fork != 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ${{ steps.plan.outputs.first }}/.tool-versions
+          cache: pnpm
+          cache-dependency-path: '*/pnpm-lock.yaml'
+
+      - name: Install dependencies and Playwright's Chromium
+        if: steps.fork.outputs.fork != 'true'
+        env:
+          REPOS: ${{ steps.plan.outputs.repos }}
+        run: |
+          for repo in $REPOS; do
+            cd "$GITHUB_WORKSPACE/$repo"
+            pnpm install --frozen-lockfile
+            if [ "$repo" = xcwds ]; then
+              pnpm --filter @xcwds/example-minimal exec playwright install --with-deps chromium
+              chromium=$(cd examples/minimal && node -e \
+                "import('@playwright/test').then(({ chromium }) => console.log(chromium.executablePath()))")
+              echo "CHROMIUM_PATH=$chromium" >> "$GITHUB_ENV"
+            else
+              pnpm exec playwright install --with-deps chromium
+            fi
+          done
+
+      # After the last step that needs root. The token helper keeps running as root; stopping Docker
+      # closes one way back to root, and a last-match sudoers rule (written last) closes the other.
+      - name: Take away sudo and Docker
+        run: |
+          user=$(id -un)
+          sudo -n systemctl stop docker.socket docker.service 2> /dev/null || true
+          rule="$RUNNER_TEMP/zz-agent-no-sudo"
+          echo "$user ALL=(ALL) !ALL" > "$rule"
+          sudo -n install -m 0440 -o root -g root "$rule" /etc/sudoers.d/zz-agent-no-sudo
+          rm -f "$rule"
+          if sudo -n true 2> /dev/null; then
+            echo "::error::sudo still works for $user, so the agent could read the app's key. Not running."
+            exit 1
+          fi
+          if docker info > /dev/null 2>&1; then
+            echo "::error::Docker still works for $user, so the agent could get root. Not running."
+            exit 1
+          fi
+
+      - name: Build the prompt
+        id: prompt
+        env:
+          PROMPT: ${{ inputs.prompt }}
+          CONTEXT: ${{ inputs.context }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          PROFILE: ${{ steps.plan.outputs.profile }}
+          FORK: ${{ steps.fork.outputs.fork }}
+          REPOS: ${{ steps.plan.outputs.repos }}
+          MAX_TURNS: ${{ inputs.max_turns }}
+          MODEL: ${{ vars.AGENT_MODEL }}
+          LOG_ISSUE_TO_PR: ${{ vars.AGENT_LOG_ISSUE_TO_PR }}
+          LOG_RENOVATE: ${{ vars.AGENT_LOG_RENOVATE }}
+          LOG_LABELING: ${{ vars.AGENT_LOG_LABELING }}
+        run: |
+          [ "$FORK" = true ] && PROFILE=read
+          file="$RUNNER_TEMP/agent-prompt.md"
+          {
+            cat .agent/.github/agents/common.md
+            echo
+            cat ".agent/$PROMPT"
+            echo
+            echo "## This run"
+            echo
+            echo "- Event: $GITHUB_EVENT_NAME in $GITHUB_REPOSITORY (run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+            echo "- Repos checked out: $REPOS"
+            echo "- Bot: $AGENT_BOT_LOGIN (user id $AGENT_BOT_ID)"
+            echo "- Tool profile: $PROFILE"
+            echo "- Run-log issues in xcwds/xcwds: Issue to PR #${LOG_ISSUE_TO_PR:-?}, Renovate #${LOG_RENOVATE:-?}, labeling #${LOG_LABELING:-?}"
+            if [ "$DRY_RUN" = true ]; then
+              echo "- **Dry run:** read and report only. Post, push, label and merge nothing."
+            fi
+            if [ "$FORK" = true ]; then
+              echo "- **Fork PR:** only the base branch is checked out. Don't fetch or run the PR's code."
+            fi
+            if [ -n "$CONTEXT" ]; then
+              printf '\n## Context\n\n%s\n' "$CONTEXT"
+            fi
+          } > "$file"
+          args="$(node "$AGENT_BIN/tool-args.mjs" "$PROFILE") --max-turns $MAX_TURNS"
+          [ -n "$MODEL" ] && args="$args --model $MODEL"
+          delimiter="EOF_$(openssl rand -hex 16)"
+          {
+            echo "text<<$delimiter"
+            cat "$file"
+            echo "$delimiter"
+            echo "claude_args=$args"
+          } >> "$GITHUB_OUTPUT"
+          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+
+      - name: Get a token for the action's own calls
+        id: token
+        run: |
+          token=$(agent-token)
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@f27be6b65a4652f08a2ba3cff79114829b588967 # v1.0.252
+        with:
+          prompt: ${{ steps.prompt.outputs.text }}
+          github_token: ${{ steps.token.outputs.token }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: ${{ steps.prompt.outputs.claude_args }}
+          bot_id: ${{ env.AGENT_BOT_ID }}
+          bot_name: ${{ env.AGENT_BOT_LOGIN }}
+          display_report: true
+
+      - name: Summarise the run
+        if: always()
+        env:
+          PROMPT: ${{ inputs.prompt }}
+          REPOS: ${{ steps.plan.outputs.repos }}
+          PROFILE: ${{ steps.prompt.outputs.profile }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          {
+            echo "### Agent run"
+            echo
+            echo "- Prompt: \`$PROMPT\`"
+            echo "- Repos: $REPOS"
+            echo "- Tool profile: ${PROFILE:-not reached}"
+            echo "- Dry run: $DRY_RUN"
+            if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+              echo
+              echo "GitHub turns off a public repo's schedules after 60 days without activity. If a"
+              echo "routine stopped running, open it under Actions and choose **Enable workflow**."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

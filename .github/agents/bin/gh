@@ -1,0 +1,6 @@
+#!/bin/sh
+# Runs the real gh (AGENT_REAL_GH, set by agent.yml) with a fresh token from the token helper, so
+# runs longer than a token's one-hour life keep working.
+GH_TOKEN=$(agent-token) || exit 1
+export GH_TOKEN
+exec "${AGENT_REAL_GH:?AGENT_REAL_GH is not set}" "$@"

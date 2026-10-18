@@ -35,3 +35,11 @@ anything a generated app uses, including `packages/create`).
 - Workflows pin every action to a commit SHA with its version in a comment
   (`uses: actions/checkout@<sha> # v7.0.1`); Renovate keeps both up to date. Give a new job only
   the `permissions` it needs.
+
+## Agent workflows
+
+`.github/workflows/agent.yml` is the shared runner for the agent routines (Claude Code on GitHub
+Actions, [#199](https://github.com/xcwds/xcwds/issues/199)); `.github/agents/` holds their prompts
+and scripts, tested by the `agents` vitest project. Nothing runs on a schedule yet. What runs where,
+the secrets and variables, and the owner's setup steps are in
+[AGENTS.md](AGENTS.md#agent-workflows).
