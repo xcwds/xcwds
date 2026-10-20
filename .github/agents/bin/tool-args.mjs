@@ -43,7 +43,20 @@ const LABEL = [
 	'Bash(gh issue create:*)',
 	'Bash(gh pr edit:*)',
 	'Bash(gh pr comment:*)',
-	'Bash(gh api:*)'
+	'Bash(gh api:*)',
+	// Refinement writes issue bodies to a scratch file first (gh issue edit --body-file); Edit
+	// rules cover Write too.
+	'Edit(./.labeling/**)',
+	// A gap in the label guide becomes a PR on a claude/labels-* branch (labeling.md), which the
+	// owner merges.
+	'Edit(**/.github/labels.md)',
+	'Bash(git fetch origin main)',
+	'Bash(git switch -c claude/labels-:*)',
+	'Bash(pnpm exec prettier --write .github/labels.md)',
+	'Bash(git add .github/labels.md)',
+	'Bash(git commit:*)',
+	'Bash(git push -u origin claude/labels-:*)',
+	'Bash(gh pr create:*)'
 ];
 
 // Everything else a contributor does: edit, build, test, commit, push and open PRs.

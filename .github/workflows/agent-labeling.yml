@@ -1,0 +1,74 @@
+# Labels the open issues in both repos and refines the ones the owner asks for (#202), with the
+# prompt in .github/agents/labeling.md on the label profile. It runs:
+#
+# - on a schedule, Sun, Tue and Fri at 18:47 UTC (1:47pm in Chicago in summer, 12:47pm in winter),
+#   once the AGENT_LABELING variable is `on`;
+# - when the owner adds `refinement requested` or `answered in comments` to an issue here, or in
+#   xcwds.github.io through its caller (workflow_call), for that issue only, also once
+#   AGENT_LABELING is `on` (until then the scheduled task still does this, and two would collide);
+# - by hand (Actions → Agent labeling → Run workflow), for every issue or one, as a dry run unless
+#   you turn that off.
+name: Agent labeling
+
+on:
+  schedule:
+    - cron: '47 18 * * 0,2,5'
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Only this issue, as owner/repo#n (empty for every open issue in both repos)
+        type: string
+        default: ''
+      dry_run:
+        description: Report the changes it would make, and change nothing
+        type: boolean
+        default: true
+  workflow_call:
+    secrets:
+      AGENT_APP_PRIVATE_KEY:
+        required: true
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+# A scheduled run and one-issue runs don't wait for each other; two runs for one issue do, keyed
+# as owner/repo#n whether a dispatch or a label event started them.
+concurrency:
+  group: >-
+    agent-labeling${{ (inputs.issue || github.event_name == 'issues')
+      && format('-{0}', inputs.issue || format('{0}#{1}', github.repository, github.event.issue.number))
+      || '' }}
+  cancel-in-progress: false
+
+jobs:
+  labeling:
+    # Events (here or in the caller's repo, which a workflow_call run sees as its own) only for the
+    # owner's two labels, never a bot's, and like the schedule only once AGENT_LABELING is on.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (vars.AGENT_LABELING == 'on' && (
+        github.event_name == 'schedule'
+        || (github.event_name == 'issues'
+          && github.event.sender.login == github.repository_owner
+          && github.event.issue.pull_request == null
+          && contains(fromJSON('["refinement requested","answered in comments"]'), github.event.label.name))
+      ))
+    uses: xcwds/xcwds/.github/workflows/agent.yml@main
+    with:
+      prompt: .github/agents/labeling.md
+      repos: both
+      tools: label
+      dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      timeout: 45
+      max_turns: 200
+      context: >-
+        ${{ (inputs.issue || github.event_name == 'issues')
+          && format('One issue: {0}.', inputs.issue || format('{0}#{1}', github.repository, github.event.issue.number))
+          || 'Scheduled: every open issue in both repos, plus at most 2 refinements.' }}
+    secrets:
+      AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
