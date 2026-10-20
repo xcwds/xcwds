@@ -12,6 +12,10 @@
 		"directory": "packages/plugin-vault"
 	},
 	"exports": {
+		"./blobs": {
+			"types": "./dist/blobs.d.ts",
+			"default": "./dist/blobs.js"
+		},
 		"./seal": {
 			"types": "./dist/seal.d.ts",
 			"default": "./dist/seal.js"

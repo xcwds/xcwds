@@ -15,6 +15,19 @@ in order. Locked, sensitive keys read as `undefined` and refuse writes, and migr
 its salt is saved in (`lock` by default). Another tab's re-seal is opened again in each unlocked
 tab. Connecting it to `@xcwds/plugin-lock`'s passcode comes next.
 
+From `@xcwds/plugin-vault/blobs` ([#149](https://github.com/xcwds/xcwds/issues/149)),
+`createBlobVault({ sensitive, enabled })` does the same for files: install its `layer` with
+`app.blobs.layer(...)` and the blobs of sensitive collections (photos, shared images) are sealed
+in IndexedDB. Each blob is sealed in 1 MB chunks, so a photo is never held as a whole second
+copy, with a fresh IV per chunk and bound to its collection, id, place and the number of chunks:
+chunks changed, moved, reordered, dropped or added don't open. Its size, type and `meta` are
+sealed too; the row keeps only a size rounded up to 64 KB and when it was saved. Give it the key
+the storage layer accepted with `unlock(key)`, and `lock()` to forget it. Locked, a sensitive
+collection reads as empty and refuses saves, but deleting and clearing it still work, so a reset
+clears what it can't read. `sealAll(progress)` seals the blobs already saved once the vault is
+on, and `openAll(progress)` opens them back before it's turned off; both go one blob at a time,
+leave one that fails as it was, and can run again to finish.
+
 From `@xcwds/plugin-vault/seal`:
 
 - `deriveKey(passcode, salt, iterations?)` turns the lock's passcode into an AES-GCM-256 key with
