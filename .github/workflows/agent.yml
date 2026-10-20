@@ -301,7 +301,7 @@ jobs:
           echo "token=$token" >> "$GITHUB_OUTPUT"
 
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@f27be6b65a4652f08a2ba3cff79114829b588967 # v1.0.252
+        uses: anthropics/claude-code-action@5eb090f3c3afd701a0672cd32981197ca27688f6 # v1.0.253
         with:
           prompt: ${{ steps.prompt.outputs.text }}
           github_token: ${{ steps.token.outputs.token }}
