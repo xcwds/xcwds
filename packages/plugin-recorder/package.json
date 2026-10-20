@@ -1,0 +1,58 @@
+{
+	"name": "@xcwds/plugin-recorder",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Voice recordings kept on the device in @xcwds apps, with the microphone on only while recording. Work in progress (#150), not published yet.",
+	"license": "MIT",
+	"type": "module",
+	"sideEffects": false,
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/xcwds/xcwds.git",
+		"directory": "packages/plugin-recorder"
+	},
+	"exports": {
+		"./format": {
+			"types": "./dist/format.d.ts",
+			"default": "./dist/format.js"
+		},
+		"./recorder": {
+			"types": "./dist/recorder.d.ts",
+			"default": "./dist/recorder.js"
+		},
+		"./recordings": {
+			"types": "./dist/recordings.d.ts",
+			"default": "./dist/recordings.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"!dist/**/*.test.*"
+	],
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"check": "tsc -p tsconfig.json --noEmit",
+		"publint": "publint"
+	},
+	"peerDependencies": {
+		"@xcwds/core": "workspace:^"
+	},
+	"devDependencies": {
+		"@xcwds/core": "workspace:^",
+		"typescript": "~6.0.3",
+		"vitest": "^5.0.0"
+	},
+	"keywords": [
+		"pwa",
+		"offline-first",
+		"xcwds",
+		"xcwds-plugin",
+		"privacy",
+		"audio",
+		"recorder"
+	],
+	"engines": {
+		"node": ">=22.18"
+	}
+}
