@@ -1,0 +1,64 @@
+# Tag @claude in an issue, a PR comment, a PR review or a review comment and the agent answers or
+# does the work there (#201). It runs the shared runner (agent.yml) from main with the pr profile;
+# AGENTS.md ("Agent workflows") has the setup. The prompt is .github/agents/mention.md.
+#
+# No concurrency group: GitHub keeps only one pending run per group, so a newer mention would cancel
+# a waiting one. Two runs on one PR rely on "pull before you push" in common.md.
+name: Agent mention
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  mention:
+    # A cheap first filter, so other comments start no runner: the text tags @claude, a person with
+    # write access wrote it (the action checks that again), and never a bot, so the agent's own
+    # replies and Renovate can't trigger it. Review events on fork PRs get no secrets, so they're
+    # left out; a plain comment on a fork PR runs with the base branch and the read profile.
+    if: >-
+      github.event.sender.type != 'Bot' && (
+        (github.event_name == 'issue_comment'
+          && contains(github.event.comment.body, '@claude')
+          && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+        || (github.event_name == 'pull_request_review_comment'
+          && contains(github.event.comment.body, '@claude')
+          && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+          && github.event.pull_request.head.repo.full_name == github.repository)
+        || (github.event_name == 'pull_request_review'
+          && contains(github.event.review.body, '@claude')
+          && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)
+          && github.event.pull_request.head.repo.full_name == github.repository)
+        || (github.event_name == 'issues'
+          && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude'))
+          && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
+      )
+    # From main, never from the PR's branch: a review event would otherwise run the branch's copy.
+    uses: xcwds/xcwds/.github/workflows/agent.yml@main
+    with:
+      prompt: .github/agents/mention.md
+      repos: xcwds
+      tools: pr
+      reply: true
+      timeout: 60
+      max_turns: 100
+      context: |
+        @${{ github.event.sender.login }} tagged you in ${{ github.event.comment.html_url || github.event.review.html_url || github.event.issue.html_url }}, on ${{ github.event.issue.pull_request && 'PR' || github.event.pull_request && 'PR' || 'issue' }} #${{ github.event.issue.number || github.event.pull_request.number }}.${{ github.event.comment.path && format(' The comment is on `{0}`, line {1}.', github.event.comment.path, github.event.comment.line || github.event.comment.original_line) || '' }}${{ github.event_name == 'issues' && format(' The issue is titled "{0}".', github.event.issue.title) || '' }}
+
+        What they wrote (their request, from someone with write access):
+
+        <mention>
+        ${{ github.event.comment.body || github.event.review.body || github.event.issue.body }}
+        </mention>
+    secrets:
+      AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
