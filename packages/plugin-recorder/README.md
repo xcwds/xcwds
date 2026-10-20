@@ -2,12 +2,36 @@
 
 Voice recordings kept on the device in an @xcwds app: the microphone is on only while recording,
 nothing is sent anywhere, and nothing goes into another app's library. **Work in progress**
-([#150](https://github.com/xcwds/xcwds/issues/150)): not published yet, and not a plugin you can
-install yet.
+([#150](https://github.com/xcwds/xcwds/issues/150)): not published yet. The plugin works; the
+`<Recorder>` and `<Recordings>` components come next.
 
-So far it holds the recorder and the store the plugin will be built on. The plugin entry
-(`app.recorder`, holding app updates while recording, a screen wake lock, recovering on boot) and
-the `<Recorder>` and `<Recordings>` components come next.
+```ts
+// xcwds.config.ts
+import recorder from '@xcwds/plugin-recorder';
+export default defineConfig({ brand, plugins: [recorder()] });
+```
+
+The plugin gives the app one recorder as `app.recorder` and its recordings as `app.recordings`
+(`app:recorder:recordings`, group `recordings`), and looks after them whatever page is showing:
+
+- **Updates wait** while recording, paused or saving (an `onBeforeReload` reason), so an update
+  never cuts a recording short.
+- **The screen stays on** while recording or paused, with a screen wake lock where the browser has
+  one: a phone that locks itself would send the app to the background, where some browsers turn the
+  microphone off. It's taken again when the page shows again, and let go on stop.
+- **Recovery.** On boot, recordings left unfinished (the app closed mid-recording) are joined and
+  kept, marked `recovered`; `app.recordings.recovered` resolves to their ids.
+- **With `@xcwds/plugin-lock`**, locking the app stops and saves the recording. Recovery waits
+  until the app is unlocked, and runs again on each unlock.
+- **Closing** the app stops and saves the recording. Hiding the page doesn't: Android browsers keep
+  recording in the background (see Backgrounding below for the ones that don't).
+
+| Option                                                    | Default            |                                                                   |
+| --------------------------------------------------------- | ------------------ | ----------------------------------------------------------------- |
+| `echoCancellation`, `noiseSuppression`, `autoGainControl` | the browser's (on) | `false` turns that voice processing off (see below).              |
+| `timeslice`                                               | `3000`             | How often a chunk is saved while recording, in ms (250 to 60000). |
+
+The pieces it's built on can also be used alone.
 
 From `@xcwds/plugin-recorder/recordings`, `createRecordings(app.blobs)` keeps recordings in the
 blob store (`app:<namespace>:recordings`, and `recordings-chunks` while one is being made), both
