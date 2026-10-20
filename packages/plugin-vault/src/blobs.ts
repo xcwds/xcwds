@@ -39,11 +39,16 @@ export type BlobVault = {
 	lock(): void;
 	/**
 	 * Seals every plaintext blob in the sensitive collections, one at a time, after the vault is
-	 * turned on. False when one couldn't be sealed (it's left as it was) or there's no key; run it
-	 * again to finish. `progress` gets how many are done of how many.
+	 * turned on. False when one couldn't be sealed (it's left as it was), there's no key, or a
+	 * conversion is already running; run it again to finish. Blobs deleted meanwhile stay
+	 * deleted. `progress` gets how many are done of how many.
 	 */
 	sealAll(progress?: (done: number, total: number) => void): Promise<boolean>;
-	/** Opens every sealed blob back to plaintext, before the vault is turned off. As `sealAll`. */
+	/**
+	 * Opens every sealed blob back to plaintext, when the vault is turned off. Turn it off first
+	 * (so new saves are plaintext), then call this while the key is still held, then `lock()`: a
+	 * blob sealed after this ran would never open again once the key is gone. As `sealAll`.
+	 */
 	openAll(progress?: (done: number, total: number) => void): Promise<boolean>;
 };
 
@@ -104,6 +109,12 @@ export function createBlobVault(options: BlobVaultOptions): BlobVault {
 		throw new RangeError('chunkBytes must be a whole number of bytes.');
 	let key: CryptoKey | null = null;
 	let inner: BlobBackend | null = null;
+	/**
+	 * While `sealAll` or `openAll` runs: the blobs deleted (`[collection, id]`) and collections
+	 * cleared meanwhile, so a conversion never writes one back.
+	 */
+	let removed: { ids: Set<string>; collections: Set<string> } | null = null;
+	const idKey = (collection: string, id: string) => JSON.stringify([collection, id]);
 	const isSensitive = (collection: string) => options.sensitive().includes(collection);
 
 	/** Seals `row` with `k`, a chunk at a time. */
@@ -230,8 +241,14 @@ export function createBlobVault(options: BlobVaultOptions): BlobVault {
 				}
 				return out;
 			},
-			delete: (collection, id) => below.delete(collection, id),
-			clear: (collection) => below.clear(collection),
+			delete(collection, id) {
+				removed?.ids.add(idKey(collection, id));
+				return below.delete(collection, id);
+			},
+			clear(collection) {
+				removed?.collections.add(collection);
+				return below.clear(collection);
+			},
 			...(below.close ? { close: () => below.close!() } : {})
 		};
 	};
@@ -245,28 +262,36 @@ export function createBlobVault(options: BlobVaultOptions): BlobVault {
 	): Promise<boolean> {
 		const k = key;
 		const below = inner;
-		if (!k || !below) return false;
+		if (!k || !below || removed) return false;
+		const gone = (removed = { ids: new Set(), collections: new Set() });
+		const isGone = (row: Pick<BlobRow, 'collection' | 'id'>) =>
+			gone.collections.has(row.collection) || gone.ids.has(idKey(row.collection, row.id));
 		let ok = true;
-		const todo: Omit<BlobRow, 'blob'>[] = [];
-		for (const collection of options.sensitive()) {
-			try {
-				todo.push(...(await below.list(collection)).filter(wants));
-			} catch {
-				ok = false;
+		try {
+			const todo: Omit<BlobRow, 'blob'>[] = [];
+			for (const collection of options.sensitive()) {
+				try {
+					todo.push(...(await below.list(collection)).filter(wants));
+				} catch {
+					ok = false;
+				}
 			}
-		}
-		let done = 0;
-		progress?.(done, todo.length);
-		for (const info of todo) {
-			try {
-				const row = await below.get(info.collection, info.id);
-				const next = row && (await convert(k, row));
-				if (next) await below.put(next);
-				else if (next === undefined && row) ok = false;
-			} catch {
-				ok = false;
+			let done = 0;
+			progress?.(done, todo.length);
+			for (const info of todo) {
+				try {
+					const row = isGone(info) ? undefined : await below.get(info.collection, info.id);
+					const next = row && (await convert(k, row));
+					// Deleted while it was being converted: writing it now would bring it back.
+					if (next && !isGone(info)) await below.put(next);
+					else if (next === undefined && row) ok = false;
+				} catch {
+					ok = false;
+				}
+				progress?.(++done, todo.length);
 			}
-			progress?.(++done, todo.length);
+		} finally {
+			removed = null;
 		}
 		return ok;
 	}

@@ -251,13 +251,54 @@ describe('the blob vault', () => {
 				expect(got!.meta).toEqual({ caption: CAPTION });
 			}
 
-			expect(await s.vault.openAll()).toBe(true);
+			// Off first, so nothing new is sealed, then open what's sealed while the key is held.
 			s.turnOff();
+			expect(await s.vault.openAll()).toBe(true);
 			s.vault.lock();
 			for (const [i, id] of ids.entries()) {
 				expect(await text(rowOf(s.backend, id).blob)).toBe(`${SECRET} ${i + 1}`);
 				expect(rowOf(s.backend, id).meta).toEqual({ caption: CAPTION });
 			}
+		});
+
+		it('never brings back a blob deleted while it runs', async () => {
+			const s = setup();
+			const ids: string[] = [];
+			for (const n of [1, 2, 3])
+				ids.push((await s.blobs.put(s.photos, new Blob([`${SECRET} ${n}`]))) as string);
+			s.turnOn();
+			s.vault.unlock(await key());
+			// The third is deleted while it's being sealed (after it was read), the first before.
+			const get = s.backend.get.bind(s.backend);
+			s.backend.get = async (collection, id) => {
+				const row = await get(collection, id);
+				if (id === ids[2]) void s.blobs.delete(s.photos, id);
+				return row;
+			};
+			expect(
+				await s.vault.sealAll((done) => {
+					if (done === 0) void s.blobs.delete(s.photos, ids[0]!);
+				})
+			).toBe(true);
+			expect([...s.backend.rows.values()].map((r) => r.id)).toEqual([ids[1]]);
+			expect(rowOf(s.backend, ids[1]!).type).toBe(SEALED_TYPE);
+
+			// A reset clearing the collection meanwhile leaves nothing behind either.
+			s.backend.get = async (collection, id) => {
+				const row = await get(collection, id);
+				void s.blobs.clear(s.photos);
+				return row;
+			};
+			s.turnOff();
+			expect(await s.vault.openAll()).toBe(true);
+			expect(s.backend.rows.size).toBe(0);
+		});
+
+		it('runs one conversion at a time', async () => {
+			const s = await sealedPhoto();
+			const first = s.vault.openAll();
+			expect(await s.vault.openAll()).toBe(false);
+			expect(await first).toBe(true);
 		});
 
 		it("reports a blob it couldn't convert, and leaves it as it was", async () => {
