@@ -11,7 +11,16 @@
 		"url": "git+https://github.com/xcwds/xcwds.git",
 		"directory": "packages/plugin-recorder"
 	},
+	"types": "./dist/index.d.ts",
 	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./client": {
+			"types": "./dist/client.d.ts",
+			"default": "./dist/client.js"
+		},
 		"./format": {
 			"types": "./dist/format.d.ts",
 			"default": "./dist/format.js"
@@ -40,6 +49,7 @@
 	},
 	"devDependencies": {
 		"@xcwds/core": "workspace:^",
+		"@xcwds/testing": "workspace:*",
 		"typescript": "~6.0.3",
 		"vitest": "^5.0.0"
 	},

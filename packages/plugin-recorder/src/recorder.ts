@@ -94,6 +94,11 @@ export interface Recorder {
 	 * recorded.
 	 */
 	stop(name?: string): Promise<FinishResult | undefined>;
+	/**
+	 * Stops and saves the recording like `stop`, and says why in `notice` (`reason`, a sentence):
+	 * for something other than the person that cut it short, such as the app locking.
+	 */
+	interrupt(reason: string): Promise<FinishResult | undefined>;
 	/** Stops and throws away what was recorded. */
 	discard(): Promise<void>;
 }
@@ -110,7 +115,8 @@ export const MESSAGES = {
 		'Recording stopped: the microphone was turned off by the system or another app. What was recorded is saved.',
 	background:
 		'Recording stopped when the app went to the background: this browser turns the microphone off there. What was recorded is saved.',
-	broke: 'Recording stopped because of an error. What was recorded is saved.'
+	broke: 'Recording stopped because of an error. What was recorded is saved.',
+	locked: 'Recording stopped when the app locked. What was recorded is saved.'
 } as const;
 
 export const DEFAULT_TIMESLICE = 3000;
@@ -248,14 +254,24 @@ export function createRecorder(
 		}
 	}
 
+	/** Stops, saves and says why. */
+	async function interrupt(reason: string) {
+		if (state === 'asking') {
+			generation++;
+			set('idle');
+			return undefined;
+		}
+		if (state !== 'recording' && state !== 'paused') return undefined;
+		const result = await end(true);
+		notice = reason;
+		emit();
+		return result;
+	}
+
 	/** The microphone went away mid-recording: keep what's there and say why. */
 	function interrupted(message: string) {
 		if (state !== 'recording' && state !== 'paused') return;
-		const why = browser(env).hidden() ? MESSAGES.background : message;
-		void end(true).then(() => {
-			notice = why;
-			emit();
-		});
+		void interrupt(browser(env).hidden() ? MESSAGES.background : message);
 	}
 
 	return {
@@ -390,6 +406,7 @@ export function createRecorder(
 			}
 			return end(true, name);
 		},
+		interrupt,
 		async discard() {
 			if (state === 'asking') {
 				generation++;

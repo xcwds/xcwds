@@ -104,7 +104,11 @@ export function recordingCollections(options: RecordingCollectionOptions = {}) {
 
 /** What the store uses of `navigator.locks`. */
 export type LocksLike = {
-	request(name: string, callback: () => Promise<unknown>): Promise<unknown>;
+	request(
+		name: string,
+		options: { ifAvailable?: boolean },
+		callback: (lock: unknown) => Promise<unknown>
+	): Promise<unknown>;
 	query(): Promise<{ held?: { name?: string }[] }>;
 };
 
@@ -197,7 +201,7 @@ export function createRecordings(
 		if (!manager) return () => {};
 		let release!: () => void;
 		const held = new Promise<void>((resolve) => (release = resolve));
-		manager.request(lockName(take), () => held).catch(() => {});
+		manager.request(lockName(take), {}, () => held).catch(() => {});
 		return release;
 	}
 
@@ -242,6 +246,32 @@ export function createRecordings(
 
 	async function deleteAll(ids: string[]) {
 		for (const id of ids) await blobs.delete(chunks, id);
+	}
+
+	/**
+	 * Joins a take's chunks into a recording marked `recovered` and deletes them; returns its id,
+	 * or undefined when a chunk is gone (another tab joined them) or it can't be saved.
+	 */
+	async function join(list: (BlobInfo<ChunkMeta> & { meta: ChunkMeta })[]) {
+		const ids = list.map((c) => c.id);
+		const parts = await read(ids);
+		if (!parts) return undefined;
+		const first = list[0]!.meta;
+		const audio = new Blob(parts, { type: first.type });
+		if (audio.size === 0) {
+			await deleteAll(ids);
+			return undefined;
+		}
+		const meta: RecordingMeta = {
+			name: '',
+			recordedAt: first.recordedAt,
+			duration: Math.max(...list.map((c) => c.meta.duration)),
+			recovered: true
+		};
+		const saved = await blobs.put(collection, audio, meta);
+		if (saved === false) return undefined;
+		await deleteAll(ids);
+		return saved;
 	}
 
 	function begin(type: string, recordedAt: number): Take {
@@ -333,29 +363,27 @@ export function createRecordings(
 		async recover(except = []) {
 			const out: string[] = [];
 			const held = await heldTakes();
+			const manager = held && locks();
 			for (const [take, list] of await savedChunks()) {
 				if (except.includes(take)) continue;
 				// Still open in some tab (this one or another), or, without locks, maybe so.
 				if (held ? held.has(take) : list.some((c) => now() - c.created < staleAfter)) continue;
-				const ids = list.map((c) => c.id);
-				const parts = await read(ids);
-				if (!parts) continue;
-				const first = list[0]!.meta;
-				const audio = new Blob(parts, { type: first.type });
-				if (audio.size === 0) {
-					await deleteAll(ids);
+				if (!manager) {
+					const id = await join(list);
+					if (id) out.push(id);
 					continue;
 				}
-				const meta: RecordingMeta = {
-					name: '',
-					recordedAt: first.recordedAt,
-					duration: Math.max(...list.map((c) => c.meta.duration)),
-					recovered: true
-				};
-				const saved = await blobs.put(collection, audio, meta);
-				if (saved === false) continue;
-				await deleteAll(ids);
-				out.push(saved);
+				// Under the take's lock, so two tabs booting together don't both join it: the one
+				// that waits finds its chunks gone, and one started meanwhile is left alone.
+				try {
+					await manager.request(lockName(take), { ifAvailable: true }, async (lock) => {
+						if (!lock) return;
+						const id = await join(list);
+						if (id) out.push(id);
+					});
+				} catch {
+					// No lock, no recovery this time; the chunks stay for the next.
+				}
 			}
 			return out;
 		},
