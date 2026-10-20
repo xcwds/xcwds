@@ -19,6 +19,16 @@ describe('tool profiles', () => {
 		expect(PROFILES.read).not.toContain('Bash(gh api:*)');
 	});
 
+	it('let the label profile push only claude/labels-* branches and edit only the label guide', () => {
+		const pushes = PROFILES.label.filter((tool) => tool.startsWith('Bash(git push'));
+		expect(pushes).toEqual(['Bash(git push -u origin claude/labels-:*)']);
+		const edits = PROFILES.label.filter((tool) => /^(Edit|Write|MultiEdit)\b/.test(tool));
+		expect(edits).toEqual(['Write(./.labeling/**)', 'Edit(**/.github/labels.md)']);
+		expect(
+			PROFILES.read.filter((tool) => tool.includes('push') || tool.includes('pr create'))
+		).toEqual([]);
+	});
+
 	it('force read for a dry run', () => {
 		expect(toolArgs('pr', { dryRun: true })).toBe(toolArgs('read'));
 	});
