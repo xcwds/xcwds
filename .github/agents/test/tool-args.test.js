@@ -23,7 +23,7 @@ describe('tool profiles', () => {
 		const pushes = PROFILES.label.filter((tool) => tool.startsWith('Bash(git push'));
 		expect(pushes).toEqual(['Bash(git push -u origin claude/labels-:*)']);
 		const edits = PROFILES.label.filter((tool) => /^(Edit|Write|MultiEdit)\b/.test(tool));
-		expect(edits).toEqual(['Write(./.labeling/**)', 'Edit(**/.github/labels.md)']);
+		expect(edits).toEqual(['Edit(./.labeling/**)', 'Edit(**/.github/labels.md)']);
 		expect(
 			PROFILES.read.filter((tool) => tool.includes('push') || tool.includes('pr create'))
 		).toEqual([]);

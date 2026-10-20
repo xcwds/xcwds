@@ -44,8 +44,9 @@ const LABEL = [
 	'Bash(gh pr edit:*)',
 	'Bash(gh pr comment:*)',
 	'Bash(gh api:*)',
-	// Refinement writes issue bodies to a scratch file first (gh issue edit --body-file).
-	'Write(./.labeling/**)',
+	// Refinement writes issue bodies to a scratch file first (gh issue edit --body-file); Edit
+	// rules cover Write too.
+	'Edit(./.labeling/**)',
 	// A gap in the label guide becomes a PR on a claude/labels-* branch (labeling.md), which the
 	// owner merges.
 	'Edit(**/.github/labels.md)',
