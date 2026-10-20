@@ -16,10 +16,19 @@ const TYPE = 'audio/webm;codecs=opus';
 /** `navigator.locks` for one browser: the tabs (stores) made with it share its locks. */
 class FakeLocks implements LocksLike {
 	held = new Set<string>();
-	async request(name: string, callback: () => Promise<unknown>) {
+	async request(
+		name: string,
+		options: { ifAvailable?: boolean },
+		callback: (lock: unknown) => Promise<unknown>
+	) {
+		// Only `ifAvailable` is needed here: no test waits for a lock.
+		if (this.held.has(name)) {
+			if (options.ifAvailable) return callback(null);
+			throw new Error(`${name} is held: the fake can't wait for it`);
+		}
 		this.held.add(name);
 		try {
-			return await callback();
+			return await callback({ name });
 		} finally {
 			this.held.delete(name);
 		}
@@ -207,6 +216,37 @@ describe('recordings', () => {
 			const second = setup(backend, { locks });
 			const [id] = await second.recordings.recover();
 			expect(await text((await second.recordings.get(id!))!.blob)).toBe('closed mid-sentence');
+		});
+
+		it('joins one only once when two tabs recover it together', async () => {
+			const backend = memoryBlobs();
+			const locks = new FakeLocks();
+			const first = setup(backend, { locks });
+			await first.recordings.begin(TYPE, 0).append(new Blob(['once']), 3000);
+			locks.held.clear();
+			const a = setup(backend, { locks });
+			const b = setup(backend, { locks });
+			const [x, y] = await Promise.all([a.recordings.recover(), b.recordings.recover()]);
+			expect([...x, ...y]).toHaveLength(1);
+			expect(await a.recordings.list()).toHaveLength(1);
+			expect(await a.blobs.list(a.recordings.chunks)).toEqual([]);
+		});
+
+		it('leaves alone a take that started after it looked', async () => {
+			const backend = memoryBlobs();
+			const locks = new FakeLocks();
+			const { recordings } = setup(backend, { locks });
+			// The take's chunk is saved, but the lock query ran before it began.
+			const query = locks.query.bind(locks);
+			let take: ReturnType<typeof recordings.begin> | undefined;
+			locks.query = async () => {
+				const before = await query();
+				take = recordings.begin(TYPE, 0);
+				await take.append(new Blob(['new']), 3000);
+				return before;
+			};
+			expect(await recordings.recover()).toEqual([]);
+			expect((await take!.finish()).ok).toBe(true);
 		});
 
 		it('without locks, leaves recently written recordings alone', async () => {

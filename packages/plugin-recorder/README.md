@@ -21,7 +21,7 @@ The plugin gives the app one recorder as `app.recorder` and its recordings as `a
   microphone off. It's taken again when the page shows again, and let go on stop.
 - **Recovery.** On boot, recordings left unfinished (the app closed mid-recording) are joined and
   kept, marked `recovered`; `app.recordings.recovered` resolves to their ids.
-- **With `@xcwds/plugin-lock`**, locking the app stops and saves the recording. Recovery waits
+- **With `@xcwds/plugin-lock`**, locking the app stops and saves the recording, and `notice` says why. Recovery waits
   until the app is unlocked, and runs again on each unlock.
 - **Closing** the app stops and saves the recording. Hiding the page doesn't: Android browsers keep
   recording in the background (see Backgrounding below for the ones that don't).
@@ -41,12 +41,14 @@ them into one recording and deletes them, and `discard()` throws them away. If t
 mid-recording, the chunks stay, and `recover()` joins them into a recording marked `recovered`.
 When a recording can't be saved (storage full), the chunks are kept for `recover()` too. A take
 still recording in another tab is left alone: each open take holds a Web Lock (`navigator.locks`),
-and `recover()` skips takes whose lock is held. Without the Locks API, it skips takes with a chunk
+and `recover()` skips takes whose lock is held. It joins each take under that lock, so two tabs
+starting together never both recover one. Without the Locks API, it skips takes with a chunk
 saved in the last 10 minutes (`staleAfter`).
 
 From `@xcwds/plugin-recorder/recorder`, `createRecorder(recordings, options)` records from the
 microphone with `getUserMedia` and `MediaRecorder`: `start()` (from a tap: browsers ask for the
-microphone here), `pause()`, `resume()`, `stop(name)` and `discard()`, with `state` (`idle`,
+microphone here), `pause()`, `resume()`, `stop(name)`, `interrupt(reason)` (stops and saves, with `reason` in `notice`)
+and `discard()`, with `state` (`idle`,
 `asking`, `recording`, `paused`, `denied`, `unavailable`, `error`), `elapsed()` (not counting
 pauses), `level()` (0 to 1, for a meter, from an `AnalyserNode`) and `busy` (for `markBusy`).
 A chunk is saved every 3 seconds (`timeslice`), so a crash loses at most the last few.

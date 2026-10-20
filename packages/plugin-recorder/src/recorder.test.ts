@@ -227,6 +227,19 @@ describe('the recorder', () => {
 		});
 	});
 
+	it('says why when something else stops it', async () => {
+		const s = setup();
+		expect(await s.recorder.interrupt(MESSAGES.locked)).toBeUndefined();
+		expect(s.recorder.notice).toBe('');
+		await s.recorder.start();
+		s.media().say('cut short');
+		const result = await s.recorder.interrupt(MESSAGES.locked);
+		expect(result?.ok).toBe(true);
+		expect(s.recorder.state).toBe('idle');
+		expect(s.recorder.notice).toBe(MESSAGES.locked);
+		expect(await s.recordings.list()).toHaveLength(1);
+	});
+
 	describe("can't start", () => {
 		it('on an insecure page or without the APIs', async () => {
 			expect(await setup({ secure: false }).recorder.start()).toBe('unavailable');

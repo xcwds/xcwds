@@ -12,8 +12,9 @@
  * - **Recovery.** On boot, recordings left unfinished (the app closed mid-recording) are joined
  *   and kept, marked `recovered`; `app.recordings.recovered` gives their ids.
  * - **Locked app.** When `app.lock` (from `@xcwds/plugin-lock`, if the app has it) locks, the
- *   recording stops and is saved. Recovery waits until the app is unlocked, and runs again on each
- *   unlock (a recording that couldn't be saved while locked is kept for it).
+ *   recording stops and is saved, and `notice` says why. Recovery waits until the app is
+ *   unlocked, and runs again on each unlock (a recording that couldn't be saved while locked is
+ *   kept for it).
  * - **Closing.** `onClose` stops and saves the recording.
  *
  * Hiding the page doesn't stop it: Android browsers keep recording in the background. Where the
@@ -21,7 +22,7 @@
  * Imported at prerender too, so it only touches browser globals once the app boots.
  */
 import { definePlugin } from '@xcwds/core';
-import { createRecorder, type Recorder, type RecorderEnv } from './recorder.js';
+import { MESSAGES, createRecorder, type Recorder, type RecorderEnv } from './recorder.js';
 import { createRecordings, type Recordings, type RecordingsEnv } from './recordings.js';
 import { CORE, NAME, resolveOptions, type RecorderPluginOptions } from './options.js';
 
@@ -85,9 +86,18 @@ export function recorderPlugin(env: RecorderPluginEnv = {}) {
 			const store = createRecordings(app.blobs, {}, env.recordings);
 			const recorder = createRecorder(store, options, env.recorder);
 
+			let recovering: Promise<unknown> = Promise.resolve();
+			/** Joins unfinished recordings, one run at a time, whoever asks. */
+			function recover(except?: string[]) {
+				const run = recovering.then(() => store.recover(except).catch(() => [] as string[]));
+				recovering = run;
+				return run;
+			}
+
 			let done!: (ids: string[]) => void;
 			const recordings: AppRecordings = {
 				...store,
+				recover,
 				recovered: new Promise<string[]>((resolve) => (done = resolve))
 			};
 			app.decorate('recorder', recorder);
@@ -133,14 +143,6 @@ export function recorderPlugin(env: RecorderPluginEnv = {}) {
 				}
 			}
 
-			let recovering: Promise<unknown> = Promise.resolve();
-			/** Joins unfinished recordings, one run at a time; the first run settles `recovered`. */
-			function recover() {
-				const run = recovering.then(() => store.recover().catch(() => [] as string[]));
-				recovering = run;
-				return run;
-			}
-
 			const stops: (() => void)[] = [];
 			app.addHook('onBoot', () => {
 				booted = true;
@@ -150,7 +152,7 @@ export function recorderPlugin(env: RecorderPluginEnv = {}) {
 				const unsubscribe = lock()?.subscribe((state) => {
 					if (state.locked === locked) return;
 					locked = state.locked;
-					if (locked) void recorder.stop();
+					if (locked) void recorder.interrupt(MESSAGES.locked);
 					else void recover().then(done);
 				});
 				if (unsubscribe) stops.push(unsubscribe);

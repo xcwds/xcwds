@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import client, { RECORDING, recorderPlugin, type RecorderPluginEnv } from './client.js';
 import recorderFactory, { build } from './index.js';
 import { resolveOptions } from './options.js';
-import type { MediaRecorderLike } from './recorder.js';
+import { MESSAGES, type MediaRecorderLike } from './recorder.js';
 import { STALE_AFTER } from './recordings.js';
 
 const TYPE = 'audio/webm;codecs=opus';
@@ -269,6 +269,7 @@ describe('app.recorder', () => {
 		lock.set(true);
 		await settle();
 		expect(recorder.state).toBe('idle');
+		expect(recorder.notice).toBe(MESSAGES.locked);
 		lock.set(false);
 		await settle();
 		expect(recorder.state).toBe('idle');
@@ -300,6 +301,18 @@ describe('recovery', () => {
 		expect(await got!.blob.text()).toBe('before the crash');
 		await app.close();
 		await first.close();
+	});
+
+	it("doesn't join one twice when asked to recover twice at once", async () => {
+		const fake = fakeEnv();
+		later(fake);
+		const app = await buildTestApp({ plugins: [[recorderPlugin(fake.env), {}]] });
+		expect(await app.recordings!.recovered).toEqual([]);
+		await app.recordings!.begin(TYPE, 0).append(new Blob(['once']), 1000);
+		const runs = await Promise.all([app.recordings!.recover(), app.recordings!.recover()]);
+		expect(runs.flat()).toHaveLength(1);
+		expect(await app.recordings!.list()).toHaveLength(1);
+		await app.close();
 	});
 
 	it('waits until the app is unlocked, and runs again on each unlock', async () => {
