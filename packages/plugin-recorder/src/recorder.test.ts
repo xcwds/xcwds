@@ -83,7 +83,7 @@ class FakeRecorder implements MediaRecorderLike {
 
 function setup(env: Partial<RecorderEnv> = {}) {
 	const blobs = createBlobs({ backend: memoryBlobs() });
-	const recordings = createRecordings(blobs.scope('recorder'));
+	const recordings = createRecordings(blobs.scope('recorder'), {}, { locks: null });
 	let clock = 1000;
 	let hidden = false;
 	const stream = new FakeStream();

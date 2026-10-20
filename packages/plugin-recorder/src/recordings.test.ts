@@ -2,7 +2,10 @@ import { createBlobs, memoryBlobs } from '@xcwds/core';
 import { describe, expect, it } from 'vitest';
 import {
 	RECORDING_MESSAGES,
+	STALE_AFTER,
 	createRecordings,
+	type LocksLike,
+	type RecordingsEnv,
 	parseChunkMeta,
 	parseRecordingMeta,
 	recordingCollections
@@ -10,9 +13,25 @@ import {
 
 const TYPE = 'audio/webm;codecs=opus';
 
-function setup(backend = memoryBlobs()) {
+/** `navigator.locks` for one browser: the tabs (stores) made with it share its locks. */
+class FakeLocks implements LocksLike {
+	held = new Set<string>();
+	async request(name: string, callback: () => Promise<unknown>) {
+		this.held.add(name);
+		try {
+			return await callback();
+		} finally {
+			this.held.delete(name);
+		}
+	}
+	async query() {
+		return { held: [...this.held].map((name) => ({ name })) };
+	}
+}
+
+function setup(backend = memoryBlobs(), env: RecordingsEnv = { locks: new FakeLocks() }) {
 	const blobs = createBlobs({ backend });
-	const recordings = createRecordings(blobs.scope('recorder'));
+	const recordings = createRecordings(blobs.scope('recorder'), {}, env);
 	return { backend, blobs, recordings };
 }
 
@@ -128,15 +147,18 @@ describe('recordings', () => {
 	describe('recover', () => {
 		it('joins the chunks of recordings that never finished', async () => {
 			const backend = memoryBlobs();
-			const first = setup(backend);
+			const first = setup(backend, { locks: null, now: () => Date.now() + STALE_AFTER });
 			const crashed = first.recordings.begin(TYPE, 5000);
 			await crashed.append(new Blob(['before ']), 3000);
 			await crashed.append(new Blob(['the crash']), 6000);
 			const running = first.recordings.begin(TYPE, 9000);
 			await running.append(new Blob(['still going']), 3000);
 
-			// The app opens again (same storage).
-			const { recordings, blobs } = setup(backend);
+			// The app opens again (same storage), long after.
+			const { recordings, blobs } = setup(backend, {
+				locks: null,
+				now: () => Date.now() + STALE_AFTER
+			});
 			const ids = await recordings.recover([running.id]);
 			expect(ids).toHaveLength(1);
 			const got = await recordings.get(ids[0]!);
@@ -153,6 +175,62 @@ describe('recordings', () => {
 				running.id
 			]);
 			expect(await recordings.recover([running.id])).toEqual([]);
+		});
+
+		it('leaves a recording running in another tab alone', async () => {
+			const backend = memoryBlobs();
+			const locks = new FakeLocks();
+			const first = setup(backend, { locks });
+			const take = first.recordings.begin(TYPE, 0);
+			await take.append(new Blob(['first tab ']), 3000);
+
+			// A second tab opens while the first is recording (even paused, writing nothing).
+			const second = setup(backend, { locks });
+			expect(await second.recordings.recover()).toEqual([]);
+			await take.append(new Blob(['still recording']), 6000);
+			const result = await take.finish();
+			if (!result.ok) throw new Error(result.error);
+			expect(await text((await first.recordings.get(result.id))!.blob)).toBe(
+				'first tab still recording'
+			);
+			expect(locks.held.size).toBe(0);
+		});
+
+		it('takes over one whose tab closed (its lock let go)', async () => {
+			const backend = memoryBlobs();
+			const locks = new FakeLocks();
+			const first = setup(backend, { locks });
+			const take = first.recordings.begin(TYPE, 0);
+			await take.append(new Blob(['closed mid-sentence']), 3000);
+			// The tab is killed: the browser lets its locks go, and `finish` never runs.
+			locks.held.clear();
+			const second = setup(backend, { locks });
+			const [id] = await second.recordings.recover();
+			expect(await text((await second.recordings.get(id!))!.blob)).toBe('closed mid-sentence');
+		});
+
+		it('without locks, leaves recently written recordings alone', async () => {
+			const backend = memoryBlobs();
+			let clock = Date.now();
+			const env = { locks: null, now: () => clock };
+			const first = setup(backend, env);
+			await first.recordings.begin(TYPE, 0).append(new Blob(['maybe still going']), 3000);
+			const second = setup(backend, env);
+			expect(await second.recordings.recover()).toEqual([]);
+			clock += STALE_AFTER + 1;
+			expect(await second.recordings.recover()).toHaveLength(1);
+		});
+
+		it("falls back to the age of the chunks when locks can't be queried", async () => {
+			const backend = memoryBlobs();
+			const locks = new FakeLocks();
+			locks.query = async () => {
+				throw new Error('SecurityError');
+			};
+			const first = setup(backend, { locks });
+			await first.recordings.begin(TYPE, 0).append(new Blob(['recent']), 3000);
+			locks.held.clear();
+			expect(await setup(backend, { locks }).recordings.recover()).toEqual([]);
 		});
 	});
 });

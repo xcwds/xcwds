@@ -15,7 +15,10 @@ personal (`sensitive`, so a lock's reset clears them) and out of backups. `begin
 recordedAt)` starts a take whose chunks are saved as they arrive, in order; `finish(name)` joins
 them into one recording and deletes them, and `discard()` throws them away. If the app closes
 mid-recording, the chunks stay, and `recover()` joins them into a recording marked `recovered`.
-When a recording can't be saved (storage full), the chunks are kept for `recover()` too.
+When a recording can't be saved (storage full), the chunks are kept for `recover()` too. A take
+still recording in another tab is left alone: each open take holds a Web Lock (`navigator.locks`),
+and `recover()` skips takes whose lock is held. Without the Locks API, it skips takes with a chunk
+saved in the last 10 minutes (`staleAfter`).
 
 From `@xcwds/plugin-recorder/recorder`, `createRecorder(recordings, options)` records from the
 microphone with `getUserMedia` and `MediaRecorder`: `start()` (from a tap: browsers ask for the

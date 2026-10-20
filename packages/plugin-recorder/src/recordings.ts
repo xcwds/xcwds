@@ -3,7 +3,10 @@
  * audio arrives in chunks every few seconds, and each is saved as it comes (a `-chunks`
  * collection), so a crash, a killed tab or a dead battery keeps everything up to the last chunk.
  * Stopping joins the chunks into one recording and deletes them; on the next start, chunks with
- * no recording still running are joined and kept as a recovered recording.
+ * no recording still running are joined and kept as a recovered recording. "Still running"
+ * includes other tabs: each open take holds a Web Lock (`navigator.locks`), and `recover` leaves a
+ * take whose lock is held alone. Without the Locks API, it leaves takes with a chunk saved in the
+ * last `staleAfter` ms.
  *
  * Both collections are personal (`sensitive`: a lock's reset clears them) and out of backups.
  * Framework-agnostic and safe to import during prerender: nothing here touches the browser until a
@@ -99,6 +102,26 @@ export function recordingCollections(options: RecordingCollectionOptions = {}) {
 	};
 }
 
+/** What the store uses of `navigator.locks`. */
+export type LocksLike = {
+	request(name: string, callback: () => Promise<unknown>): Promise<unknown>;
+	query(): Promise<{ held?: { name?: string }[] }>;
+};
+
+export type RecordingsEnv = {
+	/** `navigator.locks` by default; `null` for none. */
+	locks?: LocksLike | null;
+	now?: () => number;
+	/**
+	 * Without locks: how long since a take's last chunk before `recover` takes it as abandoned, in
+	 * ms. Default 10 minutes, longer than most pauses.
+	 */
+	staleAfter?: number;
+};
+
+/** Without the Locks API, takes with a chunk this recent may still be running elsewhere. */
+export const STALE_AFTER = 10 * 60 * 1000;
+
 /** What the store uses of `app.blobs`. */
 export type BlobsLike = Pick<BlobScope, 'register' | 'put' | 'get' | 'list' | 'delete'>;
 
@@ -149,11 +172,47 @@ const saved = (info: BlobInfo<RecordingMeta>): SavedRecording | undefined =>
 
 export function createRecordings(
 	blobs: BlobsLike,
-	options: RecordingCollectionOptions = {}
+	options: RecordingCollectionOptions = {},
+	env: RecordingsEnv = {}
 ): Recordings {
 	const spec = recordingCollections(options);
 	const collection = blobs.register<RecordingMeta>(spec.recordings);
 	const chunks = blobs.register<ChunkMeta>(spec.chunks);
+	const locks = (): LocksLike | undefined =>
+		env.locks === null
+			? undefined
+			: (env.locks ??
+				(globalThis as { navigator?: { locks?: LocksLike } }).navigator?.locks ??
+				undefined);
+	const now = env.now ?? Date.now;
+	const staleAfter = env.staleAfter ?? STALE_AFTER;
+	const lockName = (take: string) => `xcwds-recorder:${chunks.key}:${take}`;
+
+	/**
+	 * Holds `take`'s lock until the returned function is called, so other tabs' `recover` leaves
+	 * it alone.
+	 */
+	function hold(take: string): () => void {
+		const manager = locks();
+		if (!manager) return () => {};
+		let release!: () => void;
+		const held = new Promise<void>((resolve) => (release = resolve));
+		manager.request(lockName(take), () => held).catch(() => {});
+		return release;
+	}
+
+	/** The takes whose lock some tab holds, or undefined when that can't be known. */
+	async function heldTakes(): Promise<Set<string> | undefined> {
+		const manager = locks();
+		if (!manager) return undefined;
+		try {
+			const prefix = lockName('');
+			const names = (await manager.query()).held?.map((l) => l.name ?? '') ?? [];
+			return new Set(names.filter((n) => n.startsWith(prefix)).map((n) => n.slice(prefix.length)));
+		} catch {
+			return undefined;
+		}
+	}
 
 	/** The chunks saved for each take, in order. */
 	async function savedChunks(): Promise<
@@ -187,6 +246,7 @@ export function createRecordings(
 
 	function begin(type: string, recordedAt: number): Take {
 		const id = takeId();
+		const release = hold(id);
 		/** Each chunk's saved id, or the blob itself when saving it failed. */
 		const parts: (string | Blob)[] = [];
 		let duration = 0;
@@ -216,42 +276,54 @@ export function createRecordings(
 			append,
 			async finish(name = '') {
 				closed = true;
-				await queue;
-				const ids = parts.filter((p): p is string => typeof p === 'string');
-				// In order: saved chunks read back, and any that couldn't be saved from memory. One
-				// that vanished meanwhile (its group cleared) is left out rather than losing the rest.
-				const blobsInOrder: Blob[] = [];
-				for (const p of parts) {
-					if (typeof p !== 'string') blobsInOrder.push(p);
-					else {
-						const got = await blobs.get(chunks, p);
-						if (got) blobsInOrder.push(got.blob);
-					}
+				try {
+					return await save(name);
+				} finally {
+					release();
 				}
-				const audio = new Blob(blobsInOrder, { type });
-				if (audio.size === 0) {
-					await deleteAll(ids);
-					return { ok: false, error: RECORDING_MESSAGES.empty };
-				}
-				const meta: RecordingMeta = { name, recordedAt, duration };
-				const saved = await blobs.put(collection, audio, meta);
-				if (saved === false) {
-					// Save what's only in memory as chunks, so it can be recovered.
-					for (const [seq, p] of parts.entries()) {
-						if (typeof p === 'string') continue;
-						await blobs.put(chunks, p, { recording: id, seq, recordedAt, duration, type });
-					}
-					return { ok: false, error: RECORDING_MESSAGES.full };
-				}
-				await deleteAll(ids);
-				return { ok: true, id: saved };
 			},
 			async discard() {
 				closed = true;
-				await queue;
-				await deleteAll(parts.filter((p): p is string => typeof p === 'string'));
+				try {
+					await queue;
+					await deleteAll(parts.filter((p): p is string => typeof p === 'string'));
+				} finally {
+					release();
+				}
 			}
 		};
+
+		async function save(name: string): Promise<FinishResult> {
+			await queue;
+			const ids = parts.filter((p): p is string => typeof p === 'string');
+			// In order: saved chunks read back, and any that couldn't be saved from memory. One
+			// that vanished meanwhile (its group cleared) is left out rather than losing the rest.
+			const blobsInOrder: Blob[] = [];
+			for (const p of parts) {
+				if (typeof p !== 'string') blobsInOrder.push(p);
+				else {
+					const got = await blobs.get(chunks, p);
+					if (got) blobsInOrder.push(got.blob);
+				}
+			}
+			const audio = new Blob(blobsInOrder, { type });
+			if (audio.size === 0) {
+				await deleteAll(ids);
+				return { ok: false, error: RECORDING_MESSAGES.empty };
+			}
+			const meta: RecordingMeta = { name, recordedAt, duration };
+			const saved = await blobs.put(collection, audio, meta);
+			if (saved === false) {
+				// Save what's only in memory as chunks, so it can be recovered.
+				for (const [seq, p] of parts.entries()) {
+					if (typeof p === 'string') continue;
+					await blobs.put(chunks, p, { recording: id, seq, recordedAt, duration, type });
+				}
+				return { ok: false, error: RECORDING_MESSAGES.full };
+			}
+			await deleteAll(ids);
+			return { ok: true, id: saved };
+		}
 	}
 
 	return {
@@ -260,8 +332,11 @@ export function createRecordings(
 		begin,
 		async recover(except = []) {
 			const out: string[] = [];
+			const held = await heldTakes();
 			for (const [take, list] of await savedChunks()) {
 				if (except.includes(take)) continue;
+				// Still open in some tab (this one or another), or, without locks, maybe so.
+				if (held ? held.has(take) : list.some((c) => now() - c.created < staleAfter)) continue;
 				const ids = list.map((c) => c.id);
 				const parts = await read(ids);
 				if (!parts) continue;
