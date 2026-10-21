@@ -41,6 +41,7 @@ for (const { name, dir, base } of targets) {
 				/Units/,
 				/Camera/,
 				/QR code/,
+				/Voice memos/,
 				/Journal/
 			]);
 			await page.getByRole('link', { name: /Dice/ }).click();

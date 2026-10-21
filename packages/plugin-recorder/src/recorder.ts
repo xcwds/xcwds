@@ -52,6 +52,7 @@ export interface AudioContextLike {
 		getFloatTimeDomainData(array: Float32Array<ArrayBuffer>): void;
 	};
 	close(): Promise<void>;
+	resume?(): Promise<void>;
 }
 
 /** The browser APIs the recorder uses; the real ones unless a test passes its own. */
@@ -87,7 +88,7 @@ export interface Recorder {
 	resume(): void;
 	/** How much has been recorded, in ms, not counting pauses. */
 	elapsed(): number;
-	/** The input level now, 0 to 1, for a meter (0 without one). */
+	/** The input level now, 0 (-60 dB or less) to 1 (0 dB), for a meter (0 without one). */
 	level(): number;
 	/**
 	 * Stops and saves the recording (with `name`, if given). Undefined when nothing was being
@@ -350,6 +351,9 @@ export function createRecorder(
 					analyser.fftSize = 2048;
 					samples = new Float32Array(analyser.fftSize);
 					audio.createMediaStreamSource(got).connect(analyser);
+					// Made after `await`ing the microphone, it may start suspended (autoplay rules),
+					// and a suspended one reads silence. The page has had a tap by now.
+					void audio.resume?.().catch(() => {});
 				} catch {
 					// No meter; recording works without one.
 					audio = null;
@@ -395,8 +399,11 @@ export function createRecorder(
 			analyser.getFloatTimeDomainData(samples);
 			let sum = 0;
 			for (const s of samples) sum += s * s;
-			// RMS, scaled so speech fills most of the meter.
-			return Math.min(1, Math.sqrt(sum / samples.length) * 4);
+			// The loudness in decibels, from -60 dB (silence, 0) to 0 dB (1), as level meters show
+			// it: a quiet voice still moves it.
+			const rms = Math.sqrt(sum / samples.length);
+			if (rms <= 0) return 0;
+			return Math.min(1, Math.max(0, (20 * Math.log10(rms) + 60) / 60));
 		},
 		stop(name) {
 			if (state === 'asking') {

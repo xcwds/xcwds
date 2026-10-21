@@ -164,6 +164,7 @@ for (const { name, dir, base } of targets) {
 					'/utils/timer',
 					'/utils/camera',
 					'/utils/qr',
+					'/utils/recorder',
 					'/my-apps',
 					'/my-apps/edit',
 					'/my-apps/import',

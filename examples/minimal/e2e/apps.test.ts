@@ -54,6 +54,7 @@ for (const { name, dir, base } of targets) {
 				/Units/,
 				/Camera/,
 				/QR code/,
+				/Voice memos/,
 				/Journal/
 			]);
 			await gotoHydrated(page, url('/'));
@@ -121,9 +122,9 @@ test.describe('at the root', () => {
 		await gotoHydrated(page, url('/apps'));
 		const other = await context.newPage();
 		await gotoHydrated(other, url('/utils'));
-		await expect(toolLinks(other)).toHaveCount(8);
+		await expect(toolLinks(other)).toHaveCount(9);
 		await toggle(page, 'Kitchen').click();
-		await expect(toolLinks(other)).toHaveCount(6);
+		await expect(toolLinks(other)).toHaveCount(7);
 
 		await gotoHydrated(other, url('/settings'));
 		const link = other.getByTestId('apps-link');
