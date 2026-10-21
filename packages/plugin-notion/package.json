@@ -1,0 +1,40 @@
+{
+	"name": "@xcwds/plugin-notion",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Notion pages saved on the device in @xcwds apps, read through a stateless relay. Work in progress (#102), not published yet.",
+	"license": "MIT",
+	"type": "module",
+	"sideEffects": false,
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/xcwds/xcwds.git",
+		"directory": "packages/plugin-notion"
+	},
+	"exports": {
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"relay",
+		"!relay/**/*.test.*"
+	],
+	"scripts": {
+		"check": "tsc -p tsconfig.json --noEmit",
+		"publint": "publint"
+	},
+	"devDependencies": {
+		"typescript": "~6.0.3",
+		"vitest": "^5.0.0"
+	},
+	"keywords": [
+		"pwa",
+		"offline-first",
+		"xcwds",
+		"xcwds-plugin",
+		"privacy",
+		"notion"
+	],
+	"engines": {
+		"node": ">=22.18"
+	}
+}

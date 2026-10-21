@@ -1,0 +1,25 @@
+# The Notion relay for @xcwds/plugin-notion, as a Cloudflare Worker. Copy this file to
+# wrangler.toml next to your app's package.json, change the two lines marked CHANGE, and deploy
+# with `npx wrangler deploy` (see this folder's README.md).
+name = "notion-relay"
+main = "node_modules/@xcwds/plugin-notion/relay/worker.ts"
+compatibility_date = "2026-10-01"
+
+# Only the custom domain below, not a workers.dev address or preview URLs.
+workers_dev = false
+preview_urls = false
+
+# CHANGE: the relay's own address. It must match the relay origin your app declares.
+routes = [{ pattern = "notion-relay.example.com", custom_domain = true }]
+
+[vars]
+# CHANGE: the app origins allowed to use the relay, separated by commas.
+ALLOWED_ORIGINS = "https://example.com"
+
+# Stateless: no Workers Logs, traces or Logpush. The relay keeps nothing about requests.
+[observability]
+enabled = false
+
+[observability.logs]
+enabled = false
+invocation_logs = false
