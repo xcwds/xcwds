@@ -35,12 +35,12 @@ export function fileName(recording: { name: string; recordedAt: number; type: st
 		.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g, ' ')
 		.replace(/\s+/g, ' ')
 		.trim()
-		.replace(/^\.+/, '')
-		.slice(0, 80)
-		.trim();
+		.replace(/^\.+/, '');
+	// By code points, so an emoji at the cut isn't split in half.
+	const short = Array.from(safe).slice(0, 80).join('').trim();
 	const d = new Date(recording.recordedAt);
 	const stamp = `recording-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-	return `${safe || stamp}.${extensionFor(recording.type)}`;
+	return `${short || stamp}.${extensionFor(recording.type)}`;
 }
 
 const nav = (env: ShareEnv) =>

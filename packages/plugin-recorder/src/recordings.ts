@@ -433,7 +433,11 @@ export function createRecordings(
 			if (!got?.meta) return false;
 			const saved = await blobs.put(collection, got.blob, { ...got.meta, name });
 			if (saved === false) return false;
-			await blobs.delete(collection, id);
+			if (!(await blobs.delete(collection, id))) {
+				// Both would stay: keep only the old one.
+				await blobs.delete(collection, saved);
+				return false;
+			}
 			changed();
 			return saved;
 		},

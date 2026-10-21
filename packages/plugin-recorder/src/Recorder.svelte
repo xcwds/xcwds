@@ -37,6 +37,7 @@
 		saving: string;
 		saved: string;
 		discarded: string;
+		confirmDiscard: string;
 		paused: string;
 		level: string;
 		missing: string;
@@ -52,6 +53,7 @@
 		saving: 'Saving…',
 		saved: 'Recording saved.',
 		discarded: 'Recording discarded.',
+		confirmDiscard: 'Tap again to discard',
 		paused: 'Paused',
 		level: 'Microphone level',
 		missing: "This app doesn't have the recorder plugin."
@@ -101,12 +103,14 @@
 			if (notice) message = '';
 			cancelAnimationFrame(frame);
 			tick();
+			if (!running) unconfirm();
 		};
 		read();
 		const stop = r.onChange(read);
 		return () => {
 			stop();
 			cancelAnimationFrame(frame);
+			unconfirm();
 		};
 	});
 
@@ -118,7 +122,23 @@
 		const result = await recorder?.stop();
 		if (result) message = result.ok ? t.saved : result.error;
 	}
+	/**
+	 * Discarding can't be undone, so it takes a second tap within a few seconds: one slip next to
+	 * Stop and save can't throw a recording away.
+	 */
+	let confirming = $state(false);
+	let confirmTimer: ReturnType<typeof setTimeout> | undefined;
+	const unconfirm = () => {
+		clearTimeout(confirmTimer);
+		confirming = false;
+	};
 	async function discard() {
+		if (!confirming) {
+			confirming = true;
+			confirmTimer = setTimeout(unconfirm, 4000);
+			return;
+		}
+		unconfirm();
 		const was = running;
 		await recorder?.discard();
 		if (was) message = t.discarded;
@@ -164,7 +184,13 @@
 					class="min-h-11 rounded-xl bg-(--xcwds-shell-accent) px-4 font-medium text-white hover:not-disabled:opacity-90 active:opacity-90"
 					onclick={stop}>{t.stop}</button
 				>
-				<button type="button" class={button} onclick={discard}>{t.discard}</button>
+				<button
+					type="button"
+					class={confirming
+						? 'min-h-11 rounded-xl bg-red-700 px-4 font-medium text-white hover:not-disabled:bg-red-800 active:bg-red-800'
+						: button}
+					onclick={discard}>{confirming ? t.confirmDiscard : t.discard}</button
+				>
 			{:else}
 				<button
 					type="button"

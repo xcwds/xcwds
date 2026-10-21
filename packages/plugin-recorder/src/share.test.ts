@@ -39,6 +39,10 @@ describe('fileName', () => {
 		expect(fileName({ name: ' a/b:c?\n ', recordedAt, type: 'audio/ogg' })).toBe('a b c.ogg');
 		expect(fileName({ name: '..', recordedAt, type: TYPE })).toBe('recording-20261021-083005.webm');
 		expect(fileName({ name: 'x'.repeat(200), recordedAt, type: TYPE })).toHaveLength(85);
+		// Cut by code points: the emoji at the cut stays whole.
+		expect(fileName({ name: 'x'.repeat(79) + '🎙️🎙️', recordedAt, type: TYPE })).toBe(
+			'x'.repeat(79) + '🎙.webm'
+		);
 	});
 });
 

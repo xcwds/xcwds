@@ -103,10 +103,13 @@ test('records only on a tap, keeps it, plays it, and renames and deletes it', as
 	expect(away).toEqual([]);
 });
 
-test('discard throws a recording away', async ({ page }) => {
+test('discard throws a recording away, on a second tap', async ({ page }) => {
 	await gotoHydrated(page, url('/utils/recorder'));
 	await record(page);
+	// One tap only asks: it can't be undone.
 	await page.getByRole('button', { name: 'Discard' }).click();
+	await expect(state(page)).toHaveAttribute('data-state', 'recording');
+	await page.getByRole('button', { name: 'Tap again to discard' }).click();
 	await expect(page.getByTestId('recorder-status')).toHaveText('Recording discarded.');
 	await expect(page.getByTestId('recordings')).toContainText('No recordings yet.');
 });

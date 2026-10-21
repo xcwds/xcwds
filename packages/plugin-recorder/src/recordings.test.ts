@@ -124,6 +124,22 @@ describe('recordings', () => {
 		expect(changes).toHaveBeenCalledTimes(5);
 	});
 
+	it("keep one copy when a rename can't delete the old one", async () => {
+		const backend = memoryBlobs();
+		const { recordings } = setup(backend);
+		const take = recordings.begin(TYPE, 0);
+		await take.append(new Blob(['memo']), 1000);
+		const result = await take.finish('Old');
+		if (!result.ok) throw new Error(result.error);
+		const remove = backend.delete.bind(backend);
+		backend.delete = async (collection, id) => {
+			if (id === result.id) throw new Error('blocked');
+			return remove(collection, id);
+		};
+		expect(await recordings.rename(result.id, 'New')).toBe(false);
+		expect((await recordings.list()).map((r) => [r.id, r.name])).toEqual([[result.id, 'Old']]);
+	});
+
 	it('keep chunks in order whichever saves first', async () => {
 		const { recordings } = setup();
 		const take = recordings.begin(TYPE, 0);
