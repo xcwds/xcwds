@@ -37,7 +37,12 @@ const GUIDES: [slug: string, file: string, emoji: string, blurb: string][] = [
 	['concepts', 'docs/concepts.md', '💡', 'Plugins, hooks, decorators, saved data and updates.'],
 	['plugin-guide', 'docs/plugin-guide.md', '🧩', 'Build, test and use a plugin of your own.'],
 	['privacy', 'docs/privacy.md', '🔒', 'How the framework keeps apps from phoning home.'],
-	['camera', 'docs/camera.md', '📷', 'What each browser lets a page do with the camera.'],
+	[
+		'camera',
+		'docs/camera.md',
+		'📷',
+		'What each browser lets a page do with the camera and microphone.'
+	],
 	['ecosystem', 'docs/ecosystem.md', '🌱', 'Every plugin, first-party and community.'],
 	['architecture', 'docs/rfc/0001-architecture.md', '📐', 'The design decisions, and why.']
 ];
