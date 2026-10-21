@@ -1,14 +1,14 @@
 // The ✅ cells of docs/camera.md (#143) for Chromium on a computer, checked with Playwright's
-// fake camera: a smoke test of what @xcwds/plugin-camera relies on, not proof of what a real camera
-// does. It runs on Linux, as CI does (Web Share and BarcodeDetector differ on other systems).
-// When one of these changes, change its cell too.
+// fake camera and microphone: a smoke test of what @xcwds/plugin-camera and plugin-recorder rely
+// on, not proof of what a real camera or microphone does. It runs on Linux, as CI does (Web Share
+// and BarcodeDetector differ on other systems). When one of these changes, change its cell too.
 import { expect, test } from '@playwright/test';
 import { serveStatic, type StaticServer } from '@xcwds/testing/playwright';
 import { fileURLToPath } from 'node:url';
 
 // A per-file `launchOptions` replaces the config's, so this repeats its Chromium and flag.
 test.use({
-	permissions: ['camera'],
+	permissions: ['camera', 'microphone'],
 	launchOptions: {
 		executablePath: process.env.CHROMIUM_PATH || undefined,
 		args: ['--disable-gpu', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream']
@@ -111,6 +111,64 @@ test('Chromium has what the camera plugin uses, as docs/camera.md says', async (
 		jpeg: 'image/jpeg',
 		webp: 'image/webp',
 		persist: true,
+		share: false
+	});
+});
+
+test('Chromium has what the recorder plugin uses, as docs/camera.md says (#150)', async ({
+	page
+}) => {
+	await page.goto(server.url('/'));
+	const found = await page.evaluate(async () => {
+		const stream = await navigator.mediaDevices.getUserMedia({
+			audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+		});
+		const track = stream.getAudioTracks()[0]!;
+		const { echoCancellation, noiseSuppression, autoGainControl } = track.getSettings();
+		const records = (type: string) => MediaRecorder.isTypeSupported(type);
+		// Chunks every `timeslice`, joined into one file the page can play.
+		const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+		const chunks: Blob[] = [];
+		recorder.ondataavailable = (event) => chunks.push(event.data);
+		recorder.start(250);
+		await new Promise((done) => setTimeout(done, 1200));
+		await new Promise((done) => {
+			recorder.onstop = done;
+			recorder.stop();
+		});
+		track.stop();
+		const audio = new Audio(URL.createObjectURL(new Blob(chunks, { type: recorder.mimeType })));
+		const plays = await new Promise<boolean>((done) => {
+			audio.onloadedmetadata = () => done(true);
+			audio.onerror = () => done(false);
+		});
+		const canPlay = (type: string) => audio.canPlayType(type);
+		return {
+			processing: [echoCancellation, noiseSuppression, autoGainControl],
+			webm: records('audio/webm;codecs=opus'),
+			ogg: records('audio/ogg;codecs=opus'),
+			mp4: records('audio/mp4'),
+			chunks: chunks.length > 1,
+			plays,
+			playsWebm: canPlay('audio/webm; codecs="opus"'),
+			playsOgg: canPlay('audio/ogg; codecs="opus"'),
+			wakeLock: 'wakeLock' in navigator,
+			locks: 'locks' in navigator,
+			share: typeof navigator.share === 'function'
+		};
+	});
+
+	expect(found).toEqual({
+		processing: [false, false, false],
+		webm: true,
+		ogg: false,
+		mp4: true,
+		chunks: true,
+		plays: true,
+		playsWebm: 'probably',
+		playsOgg: 'probably',
+		wakeLock: true,
+		locks: true,
 		share: false
 	});
 });

@@ -2,7 +2,8 @@
 
 What each browser lets a page do with the camera, for
 [`@xcwds/plugin-camera`](../packages/plugin-camera/README.md) and the plugins that build on it
-([#142](https://github.com/xcwds/xcwds/issues/142)). Published compatibility data disagrees with
+([#142](https://github.com/xcwds/xcwds/issues/142)), and with the microphone, for
+[`@xcwds/plugin-recorder`](../packages/plugin-recorder/README.md) ([#150](https://github.com/xcwds/xcwds/issues/150)). Published compatibility data disagrees with
 itself here, so each cell says where it comes from:
 
 - **✅ checked**: run in that browser, at the version given.
@@ -40,10 +41,29 @@ Whatever a cell says, the plugin checks the feature at run time rather than by b
 hardware zoom means an honestly labelled digital zoom, no `ImageCapture` means a frame from the
 video, no Web Share with files means Save.
 
+### Microphone and recording
+
+| Feature                                                              | Chrome, Android                       | Firefox, Android         | Safari, iOS (browser · Home Screen app)                                | Chrome, computer                                            | Firefox, computer        |
+| -------------------------------------------------------------------- | ------------------------------------- | ------------------------ | ---------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------ |
+| [`getUserMedia`][gum] audio                                          | 📚 yes                                | 📚 yes                   | 📚 yes · 📱 check (may ask on every launch)                            | ✅ yes (Chromium 141, Linux)                                | 📚 yes                   |
+| `echoCancellation`, `noiseSuppression`, `autoGainControl` turned off | 📚 yes                                | 📚 yes                   | 📱 check                                                               | ✅ yes, all three (Chromium 141)                            | 📚 yes                   |
+| [`MediaRecorder`][mr] [types][mr-type]: WebM/Opus · Ogg/Opus · MP4   | 📚 yes · no · yes since Chrome 126    | 📚 yes · yes · no        | 📚 no · no · yes (AAC); 📱 check WebM, which newer versions may record | ✅ yes · no · yes, Opus in MP4 (Chromium 141)               | 📚 yes · yes · no        |
+| Chunks every `timeslice`, joined into one file that plays            | 📚 yes                                | 📚 yes                   | 📱 check (MP4 chunks are only playable joined)                         | ✅ yes (Chromium 141)                                       | 📚 yes                   |
+| `<audio>` [plays][cpt] WebM/Opus · Ogg/Opus · MP4 AAC                | 📚 yes · yes · yes                    | 📚 yes · yes · yes       | 📱 check · 📱 check · 📚 yes                                           | ✅ yes · yes · no AAC in Chromium builds (📚 yes in Chrome) | 📚 yes · yes · yes       |
+| The microphone when the page is hidden or the phone locks            | 📱 check (reported to keep recording) | 📱 check                 | 📱 check (reported to stop: the plugin saves and says so)              | 📚 keeps recording                                          | 📚 keeps recording       |
+| [Screen Wake Lock][wake]                                             | 📚 yes                                | 📚 yes since Firefox 126 | 📚 yes since Safari 16.4 · 📱 check                                    | ✅ yes (Chromium 141)                                       | 📚 yes since Firefox 126 |
+| [Web Locks][locks] (`navigator.locks`)                               | 📚 yes                                | 📚 yes                   | 📚 yes since Safari 15.4                                               | ✅ yes (Chromium 141)                                       | 📚 yes                   |
+| [Web Share][share] with audio files                                  | 📚 yes                                | 📱 check                 | 📚 yes                                                                 | 📚 as for photos; ✅ no Web Share on Linux (Chromium 141)   | 📱 check                 |
+
+The recorder checks these at run time too: it takes the first type `MediaRecorder` accepts (WebM,
+then Ogg, then MP4) and saves the type it got with each recording, a recording that stops on its
+own is saved with a sentence saying why, and no Web Share with files means Save.
+
 ### How the ✅ cells are checked
 
 `examples/minimal/e2e/camera-support.test.ts` runs the probes in Playwright's Chromium with its
-fake camera (`--use-fake-device-for-media-stream`) and fails when a ✅ cell above stops being true.
+fake camera and microphone (`--use-fake-device-for-media-stream`) and fails when a ✅ cell above
+stops being true.
 It is a smoke test of what the plugin relies on, not proof of what a real camera does: the fake
 camera has no zoom, torch or facing, and headless Linux has no Web Share or `BarcodeDetector`.
 
@@ -57,6 +77,8 @@ plugins do come first:
 2. Firefox on Android: `getCapabilities()`, and what `dom.imagecapture.enabled` turns on today.
 3. Every phone: what happens to the stream when the page is hidden, the phone locks, and the app is
    reopened; the largest stream with and without `ideal` constraints.
+4. Safari on iOS: which types `MediaRecorder` records and `<audio>` plays, the voice processing
+   switches, and the microphone in the background (with a Home Screen app too).
 
 ## What the page can't control
 
@@ -106,3 +128,8 @@ WebKit, so it behaves like Safari.
 [target]: https://developer.mozilla.org/en-US/docs/Web/Manifest/share_target
 [bz-ic]: https://bugzilla.mozilla.org/show_bug.cgi?id=888177
 [bz-zoom]: https://bugzilla.mozilla.org/show_bug.cgi?id=1419688
+[mr]: https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder
+[mr-type]: https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/isTypeSupported_static
+[cpt]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/canPlayType
+[wake]: https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API
+[locks]: https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API

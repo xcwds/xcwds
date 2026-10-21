@@ -86,7 +86,8 @@ A chunk is saved every 3 seconds (`timeslice`), so a crash loses at most the las
 - **Formats differ by browser.** From `@xcwds/plugin-recorder/format`, `pickFormat` takes the
   first one `MediaRecorder.isTypeSupported` accepts: WebM/Opus (Chromium, Firefox), Ogg/Opus
   (Firefox), MP4 (Safari); with none of them, the browser picks. The type actually written is
-  saved with each recording, and `extensionFor(type)` names a file for it.
+  saved with each recording, and `extensionFor(type)` names a file for it. What each browser
+  records and plays back is in [Camera support](../../docs/camera.md#microphone-and-recording).
 - **Backgrounding.** Mobile browsers may turn the microphone off while the app is in the
   background (iOS does). When the microphone's track ends or the recorder fails mid-recording, it
   stops, saves what was recorded and says why in `notice`. It never claims to record in the
