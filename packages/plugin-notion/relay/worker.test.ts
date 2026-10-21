@@ -109,6 +109,12 @@ describe('the Notion relay', () => {
 			expect(response.headers.get('Access-Control-Allow-Origin')).toBe(APP);
 			expect(upstream).not.toHaveBeenCalled();
 		}
+		// What reaches Notion is the query that was checked.
+		const checked = notion();
+		await call(`/v1/blocks/${BLOCK}/children?page_size=5&&start_cursor=${BLOCK}&`, {}, checked);
+		expect(sent(checked).url).toBe(
+			`${NOTION}/v1/blocks/${BLOCK}/children?page_size=5&start_cursor=${BLOCK}`
+		);
 		// A Notion-Version that isn't one.
 		const upstream = notion();
 		const odd = await call('/v1/users/me', { headers: { 'Notion-Version': 'latest' } }, upstream);
@@ -130,6 +136,21 @@ describe('the Notion relay', () => {
 			expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
 			expect(upstream).not.toHaveBeenCalled();
 		}
+		// Written loosely in the config, still matched; entries that aren't origins match nothing.
+		for (const ALLOWED_ORIGINS of [`${APP}/`, 'HTTPS://APP.EXAMPLE', `nonsense ${APP}/path null`]) {
+			const loose = await relay(
+				new Request(RELAY + '/v1/users/me', { headers: { Origin: APP } }),
+				{ ALLOWED_ORIGINS },
+				notion()
+			);
+			expect(loose.status, ALLOWED_ORIGINS).toBe(200);
+		}
+		const junk = await relay(
+			new Request(RELAY + '/v1/users/me', { headers: { Origin: 'null' } }),
+			{ ALLOWED_ORIGINS: 'null nonsense' },
+			notion()
+		);
+		expect(junk.status).toBe(403);
 		// No origins configured: nobody.
 		const upstream = notion();
 		const none = await relay(

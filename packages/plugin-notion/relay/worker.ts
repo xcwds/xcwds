@@ -56,9 +56,18 @@ const ALLOW_HEADERS = 'Authorization, Content-Type, Notion-Version';
 /** `Notion-Version` is a date. */
 const VERSION = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The allowed origins in `env`. */
+/**
+ * The allowed origins in `env`, as browsers write them in `Origin` (so `https://Example.com/`
+ * matches `https://example.com`). Entries that aren't URLs are left out.
+ */
 function origins(env: RelayEnv): Set<string> {
-	return new Set((env.ALLOWED_ORIGINS ?? '').split(/[\s,]+/).filter(Boolean));
+	const allowed = new Set<string>();
+	for (const entry of (env.ALLOWED_ORIGINS ?? '').split(/[\s,]+/)) {
+		if (!URL.canParse(entry)) continue;
+		const { origin } = new URL(entry);
+		if (origin !== 'null') allowed.add(origin);
+	}
+	return allowed;
 }
 
 /** The route `method` and `path` match, if any. */
@@ -184,7 +193,9 @@ export async function relay(
 
 	let response: Response;
 	try {
-		response = await upstream(NOTION + url.pathname + url.search, {
+		// Exactly the parameters checked above.
+		const query = url.searchParams.toString();
+		response = await upstream(NOTION + url.pathname + (query ? `?${query}` : ''), {
 			method: request.method,
 			headers,
 			body,
