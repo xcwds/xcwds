@@ -127,7 +127,10 @@ export type RecordingsEnv = {
 export const STALE_AFTER = 10 * 60 * 1000;
 
 /** What the store uses of `app.blobs`. */
-export type BlobsLike = Pick<BlobScope, 'register' | 'put' | 'get' | 'list' | 'delete'>;
+export type BlobsLike = Pick<
+	BlobScope,
+	'register' | 'put' | 'get' | 'list' | 'delete' | 'onChange'
+>;
 
 /** One recording being made: the chunks so far are saved under its id. */
 export type Take = {
@@ -158,10 +161,22 @@ export type Recordings = {
 	 * the new recordings' ids.
 	 */
 	recover(except?: string[]): Promise<string[]>;
-	/** Newest first. */
+	/** Newest first (by when they were recorded). */
 	list(): Promise<SavedRecording[]>;
 	get(id: string): Promise<{ blob: Blob; recording: SavedRecording } | undefined>;
 	delete(id: string): Promise<boolean>;
+	/**
+	 * Names a recording. Blobs can't be changed in place, so it's saved again under a new id,
+	 * returned (or false when it couldn't be saved; the old one is kept then).
+	 */
+	rename(id: string, name: string): Promise<string | false>;
+	/** Saves a recording again (Undo after `delete`): its new id, or false. */
+	restore(blob: Blob, meta: RecordingMeta): Promise<string | false>;
+	/**
+	 * Calls `listener` when recordings change: this tab's saves, deletes and renames, other tabs'
+	 * (through `app.blobs`), and clears. Returns a function that stops it.
+	 */
+	onChange(listener: () => void): () => void;
 };
 
 /** A random id for a take: chunks are grouped by it. */
@@ -191,6 +206,11 @@ export function createRecordings(
 	const now = env.now ?? Date.now;
 	const staleAfter = env.staleAfter ?? STALE_AFTER;
 	const lockName = (take: string) => `xcwds-recorder:${chunks.key}:${take}`;
+	/** This tab's own changes; `app.blobs` reports other tabs' and clears. */
+	const local = new Set<() => void>();
+	const changed = () => {
+		for (const listener of [...local]) listener();
+	};
 
 	/**
 	 * Holds `take`'s lock until the returned function is called, so other tabs' `recover` leaves
@@ -271,6 +291,7 @@ export function createRecordings(
 		const saved = await blobs.put(collection, audio, meta);
 		if (saved === false) return undefined;
 		await deleteAll(ids);
+		changed();
 		return saved;
 	}
 
@@ -352,6 +373,7 @@ export function createRecordings(
 				return { ok: false, error: RECORDING_MESSAGES.full };
 			}
 			await deleteAll(ids);
+			changed();
 			return { ok: true, id: saved };
 		}
 	}
@@ -390,7 +412,8 @@ export function createRecordings(
 		async list() {
 			return (await blobs.list(collection))
 				.map(saved)
-				.filter((r): r is SavedRecording => r !== undefined);
+				.filter((r): r is SavedRecording => r !== undefined)
+				.sort((a, b) => b.recordedAt - a.recordedAt);
 		},
 		async get(id) {
 			const got = await blobs.get(collection, id);
@@ -400,6 +423,34 @@ export function createRecordings(
 				recording: { ...got.meta, id, size: got.blob.size, type: got.blob.type }
 			};
 		},
-		delete: (id) => blobs.delete(collection, id)
+		async delete(id) {
+			const done = await blobs.delete(collection, id);
+			if (done) changed();
+			return done;
+		},
+		async rename(id, name) {
+			const got = await blobs.get(collection, id);
+			if (!got?.meta) return false;
+			const saved = await blobs.put(collection, got.blob, { ...got.meta, name });
+			if (saved === false) return false;
+			await blobs.delete(collection, id);
+			changed();
+			return saved;
+		},
+		async restore(blob, meta) {
+			const saved = await blobs.put(collection, blob, meta);
+			if (saved !== false) changed();
+			return saved;
+		},
+		onChange(listener) {
+			local.add(listener);
+			const stop = blobs.onChange((key) => {
+				if (key === null || key === collection.key) listener();
+			});
+			return () => {
+				local.delete(listener);
+				stop();
+			};
+		}
 	};
 }

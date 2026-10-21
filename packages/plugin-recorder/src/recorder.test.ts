@@ -305,7 +305,8 @@ describe('the recorder', () => {
 		const s = setup({ AudioContext: FakeAudio as never });
 		expect(s.recorder.level()).toBe(0);
 		await s.recorder.start();
-		expect(s.recorder.level()).toBeCloseTo(0.4);
+		// 0.1 is -20 dB.
+		expect(s.recorder.level()).toBeCloseTo(2 / 3);
 		s.recorder.pause();
 		expect(s.recorder.level()).toBe(0);
 	});

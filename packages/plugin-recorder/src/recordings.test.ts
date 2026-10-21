@@ -1,5 +1,5 @@
 import { createBlobs, memoryBlobs } from '@xcwds/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	RECORDING_MESSAGES,
 	STALE_AFTER,
@@ -83,6 +83,45 @@ describe('recordings', () => {
 		expect(await text(got!.blob)).toBe('one two three');
 		expect(await recordings.delete(saved!.id)).toBe(true);
 		expect(await recordings.list()).toEqual([]);
+	});
+
+	it('are listed newest recorded first, renamed, restored, and say when they change', async () => {
+		const { recordings } = setup();
+		const changes = vi.fn();
+		const stop = recordings.onChange(changes);
+		const save = async (at: number, words: string) => {
+			const take = recordings.begin(TYPE, at);
+			await take.append(new Blob([words]), 1000);
+			const result = await take.finish();
+			if (!result.ok) throw new Error(result.error);
+			return result.id;
+		};
+		const older = await save(1000, 'older');
+		await save(5000, 'newer');
+		expect(changes).toHaveBeenCalledTimes(2);
+
+		// Renaming saves it again: it keeps its place, by when it was recorded.
+		const renamed = await recordings.rename(older, 'Older');
+		expect(renamed).not.toBe(false);
+		expect((await recordings.list()).map((r) => [r.name, r.recordedAt])).toEqual([
+			['', 5000],
+			['Older', 1000]
+		]);
+		expect(await recordings.get(older)).toBeUndefined();
+		expect(await recordings.rename(older, 'gone')).toBe(false);
+
+		const got = (await recordings.get(renamed as string))!;
+		expect(await recordings.delete(got.recording.id)).toBe(true);
+		const back = await recordings.restore(got.blob, {
+			name: 'Older',
+			recordedAt: 1000,
+			duration: 1000
+		});
+		expect(await text((await recordings.get(back as string))!.blob)).toBe('older');
+		expect(changes).toHaveBeenCalledTimes(5);
+		stop();
+		await recordings.delete(back as string);
+		expect(changes).toHaveBeenCalledTimes(5);
 	});
 
 	it('keep chunks in order whichever saves first', async () => {

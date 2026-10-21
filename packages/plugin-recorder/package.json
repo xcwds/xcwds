@@ -5,7 +5,10 @@
 	"description": "Voice recordings kept on the device in @xcwds apps, with the microphone on only while recording. Work in progress (#150), not published yet.",
 	"license": "MIT",
 	"type": "module",
-	"sideEffects": false,
+	"sideEffects": [
+		"**/*.svelte",
+		"**/*.css"
+	],
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/xcwds/xcwds.git",
@@ -33,6 +36,21 @@
 			"types": "./dist/recordings.d.ts",
 			"default": "./dist/recordings.js"
 		},
+		"./share": {
+			"types": "./dist/share.d.ts",
+			"default": "./dist/share.js"
+		},
+		"./Recorder.svelte": {
+			"types": "./dist/Recorder.svelte.d.ts",
+			"svelte": "./dist/Recorder.svelte",
+			"default": "./dist/Recorder.svelte"
+		},
+		"./Recordings.svelte": {
+			"types": "./dist/Recordings.svelte.d.ts",
+			"svelte": "./dist/Recordings.svelte",
+			"default": "./dist/Recordings.svelte"
+		},
+		"./styles.css": "./dist/styles.css",
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -40,17 +58,26 @@
 		"!dist/**/*.test.*"
 	],
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json",
-		"check": "tsc -p tsconfig.json --noEmit",
+		"build": "svelte-package -i src -o dist",
+		"check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
 		"publint": "publint"
 	},
 	"peerDependencies": {
-		"@xcwds/core": "workspace:^"
+		"@xcwds/core": "workspace:^",
+		"@xcwds/sveltekit": "workspace:^",
+		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
+		"@sveltejs/kit": "^3.1.0",
+		"@sveltejs/package": "^3.0.0",
+		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@xcwds/core": "workspace:^",
+		"@xcwds/sveltekit": "workspace:^",
 		"@xcwds/testing": "workspace:*",
+		"svelte": "^5.57.2",
+		"svelte-check": "^4.3.4",
 		"typescript": "~6.0.3",
+		"vite": "^8.3.4",
 		"vitest": "^5.0.0"
 	},
 	"keywords": [

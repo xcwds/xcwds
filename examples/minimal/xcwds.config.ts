@@ -3,6 +3,7 @@ import { defineConfig } from '@xcwds/core';
 import blocks from '@xcwds/plugin-blocks';
 import camera from '@xcwds/plugin-camera';
 import qr from '@xcwds/plugin-qr';
+import recorder from '@xcwds/plugin-recorder';
 import changelog from '@xcwds/plugin-changelog';
 import install from '@xcwds/plugin-install';
 import lock from '@xcwds/plugin-lock';
@@ -78,6 +79,12 @@ export default defineConfig({
 				{ path: '/utils/units', emoji: '📏', name: 'Units', blurb: 'Convert lengths.' },
 				{ path: '/utils/camera', emoji: '📷', name: 'Camera', blurb: 'Photos with no metadata.' },
 				{ path: '/utils/qr', emoji: '🔳', name: 'QR code', blurb: 'Show text as a QR code.' },
+				{
+					path: '/utils/recorder',
+					emoji: '🎙️',
+					name: 'Voice memos',
+					blurb: 'Recordings kept here.'
+				},
 				// Private: never under Recently used, shared or a shortcut; named discreetly.
 				{
 					path: '/utils/journal',
@@ -118,6 +125,9 @@ export default defineConfig({
 		// The camera as `app.camera`, off while hidden or locked; /utils/camera shows `<Camera>`.
 		camera({ maxSide: 2048 }),
 		// QR codes made and read on the device; /utils/qr shows `<QrScanner>` and `<QrCode>`.
-		qr()
+		qr(),
+		// Voice memos as `app.recorder` and `app.recordings`; /utils/recorder shows `<Recorder>` and
+		// `<Recordings>`.
+		recorder()
 	]
 });
