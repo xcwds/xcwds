@@ -123,6 +123,13 @@ describe('finding the page', () => {
 			'last'
 		);
 
+		// A title filter it can't apply fails rather than matching every page.
+		const untitled = fake({ dataSource: async () => ({ object: 'data_source', properties: {} }) });
+		await expect(resolve(untitled, database({ title: 'Agenda' }))).rejects.toMatchObject({
+			kind: 'failed'
+		});
+		expect(untitled.query).not.toHaveBeenCalled();
+
 		const empty = fake({
 			query: async () => ({ results: [], has_more: false, next_cursor: null })
 		});
@@ -189,6 +196,9 @@ describe('fromToday', () => {
 		expect(fromToday(new Date(2026, 9, 22, 0, 5).toISOString(), now)).toBe(true);
 		expect(fromToday(new Date(2026, 9, 21, 23, 55).toISOString(), now)).toBe(false);
 		expect(fromToday(new Date(2025, 9, 22, 8).toISOString(), now)).toBe(false);
+		// A date property's bare date is on the person's calendar.
+		expect(fromToday('2026-10-22', now)).toBe(true);
+		expect(fromToday('2026-10-21', now)).toBe(false);
 		expect(fromToday(null, now)).toBe(false);
 		expect(fromToday('not a date', now)).toBe(false);
 	});

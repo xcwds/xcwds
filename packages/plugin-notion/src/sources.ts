@@ -7,7 +7,7 @@
  * Also here: the checks the saved entries use (`parseSources`, `parseCopies`), the size caps a
  * copy must fit (`fitCopy`), and `fromToday`, so yesterday's agenda isn't mistaken for today's.
  */
-import { parseId, type NotionClient, type RawObject } from './api.js';
+import { NotionError, parseId, type NotionClient, type RawObject } from './api.js';
 import { DOCUMENT_VERSION, toDocument, type NotionDocument } from './document.js';
 
 /** What to download, with the label people gave it. */
@@ -92,6 +92,8 @@ export async function resolve(client: SourceClient, source: Source): Promise<str
 			return source.page;
 		case 'database': {
 			const titleName = source.title ? await titleProperty(client, source.dataSource) : undefined;
+			// Never the newest page of the whole database shown as if it matched.
+			if (source.title && !titleName) throw new NotionError('failed');
 			const { results } = await client.query(source.dataSource, newestQuery(source, titleName));
 			return results[0]?.id;
 		}
@@ -119,10 +121,16 @@ export async function download(
 	return toDocument(page, blocks, { fetchedAt: now(), truncated });
 }
 
-/** Whether `createdTime` falls on today's date where the person is. */
+/**
+ * Whether `createdTime` falls on today's date where the person is. A bare date (`2026-10-22`, a
+ * date property's value) is a date on their calendar, not midnight UTC.
+ */
 export function fromToday(createdTime: string | null, now: number = Date.now()): boolean {
 	if (!createdTime) return false;
-	const created = new Date(createdTime);
+	const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(createdTime);
+	const created = day
+		? new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]))
+		: new Date(createdTime);
 	if (Number.isNaN(created.getTime())) return false;
 	const today = new Date(now);
 	return (
