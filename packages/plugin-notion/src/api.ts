@@ -237,6 +237,13 @@ export function createNotionClient(options: NotionClientOptions) {
 		}
 	}
 
+	/** One page of a list, refused unless it is one (a proxy's other JSON, say). */
+	async function requestList<T>(method: 'GET' | 'POST', path: string, body?: unknown) {
+		const list = await request<List<T>>(method, path, body);
+		if (!Array.isArray(list?.results)) throw new NotionError('failed', 200);
+		return list;
+	}
+
 	/** Every page of a paginated list, `next(cursor)` fetching one. */
 	async function all<T>(next: (cursor?: string) => Promise<List<T>>): Promise<T[]> {
 		const results: T[] = [];
@@ -251,7 +258,7 @@ export function createNotionClient(options: NotionClientOptions) {
 
 	const path = (id: string) => encodeURIComponent(id);
 	const children = (id: string, cursor?: string) =>
-		request<List<RawBlock>>(
+		requestList<RawBlock>(
 			'GET',
 			`/v1/blocks/${path(id)}/children?page_size=100${cursor ? `&start_cursor=${encodeURIComponent(cursor)}` : ''}`
 		);
@@ -264,10 +271,10 @@ export function createNotionClient(options: NotionClientOptions) {
 		dataSource: (id: string) => request<RawObject>('GET', `/v1/data_sources/${path(id)}`),
 		/** One page of a data source's query (`sorts`, `filter`, `page_size`). */
 		query: (id: string, body: Record<string, unknown> = {}) =>
-			request<List<RawObject>>('POST', `/v1/data_sources/${path(id)}/query`, body),
+			requestList<RawObject>('POST', `/v1/data_sources/${path(id)}/query`, body),
 		/** One page of search results. */
 		search: (body: Record<string, unknown> = {}) =>
-			request<List<RawObject>>('POST', '/v1/search', body),
+			requestList<RawObject>('POST', '/v1/search', body),
 		/** One page of a block's children. */
 		children,
 		/** All of a block's direct children. */

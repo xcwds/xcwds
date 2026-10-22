@@ -78,7 +78,11 @@ describe('parseId', () => {
 
 describe('the Notion client', () => {
 	it('sends the token and pinned version to the relay, with nothing else of the page', async () => {
-		const { notion, fetch } = client(() => Response.json({ object: 'user', id: 'u', name: 'Bot' }));
+		const { notion, fetch } = client((url) =>
+			url.pathname.endsWith('/query')
+				? list([])
+				: Response.json({ object: 'user', id: 'u', name: 'Bot' })
+		);
 		expect(await notion.me()).toMatchObject({ name: 'Bot' });
 		const [url, init] = fetch.mock.calls[0]!;
 		expect(String(url)).toBe(`${RELAY}/v1/users/me`);
@@ -182,6 +186,16 @@ describe('the Notion client', () => {
 			'failed',
 			'offline'
 		]);
+	});
+
+	it('refuses a list that isn’t one with a NotionError', async () => {
+		for (const body of [{ object: 'error' }, { results: 'nope' }, null]) {
+			const { notion } = client(() => Response.json(body));
+			await expect(notion.allChildren(ID)).rejects.toMatchObject({ kind: 'failed' });
+			await expect(notion.blocks(ID)).rejects.toBeInstanceOf(NotionError);
+			await expect(notion.search()).rejects.toMatchObject({ kind: 'failed' });
+			await expect(notion.query(ID)).rejects.toMatchObject({ kind: 'failed' });
+		}
 	});
 
 	it('stops when its signal aborts, waiting or fetching', async () => {
