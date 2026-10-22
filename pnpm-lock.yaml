@@ -566,6 +566,12 @@ importers:
 
   packages/plugin-notion:
     devDependencies:
+      '@xcwds/core':
+        specifier: workspace:^
+        version: link:../core
+      '@xcwds/testing':
+        specifier: workspace:*
+        version: link:../testing
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
