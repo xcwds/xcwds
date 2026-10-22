@@ -23,6 +23,15 @@ So far it holds:
   this shape. Blocks it doesn't know become `{ type: 'unsupported', notionType }`; images and
   files are placeholders until [#108](https://github.com/xcwds/xcwds/issues/108).
 
-Saving sources and copies, connecting and refreshing (the rest of
+- **`./sources`**: what to download. A source is one page, the newest page of a database (by
+  created time or a date property, optionally only pages whose title contains some text: the daily
+  agenda a scheduled task adds each morning), or the newest child page under a parent page.
+  `download(client, source)` finds the page it points at now and returns it in the saved format,
+  or `undefined` when there's none yet. `dataSources(client, database)` lists a database's data
+  sources to choose from. `fromToday(createdTime)` says whether a page is from today, so
+  yesterday's agenda isn't taken for today's. `fitCopy` enforces the size caps (1 MB a copy, 2 MB
+  for all of them), and `parseSources` and `parseCopies` check the saved entries.
+
+Saving the token, sources and copies, connecting and refreshing (the rest of
 [#106](https://github.com/xcwds/xcwds/issues/106)) and showing them
 ([#107](https://github.com/xcwds/xcwds/issues/107)) come next.
