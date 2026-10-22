@@ -270,6 +270,8 @@ describe('app.notion', () => {
 			app.storage.read(app.storage.entries().find((e) => e.key === 'app:notion:copies')!)
 		).toBeUndefined();
 		expect(notion.sources()).toEqual([agenda]);
+		// The aborted download leaves no error behind for the next connection.
+		expect(notion.status('s1')).toEqual({ downloading: false });
 		await app.close();
 	});
 
@@ -314,6 +316,11 @@ describe('app.notion', () => {
 		expect(backup).toContain('app:notion:sources');
 		expect(backup).not.toContain(TOKEN);
 		expect(backup).not.toContain('app:notion:copies');
+
+		// A bad source is refused, and the saved list stays readable.
+		const bad = { ...page, id: 's3', page: 'not-an-id' } as Source;
+		expect(notion.saveSources((list) => [...list, bad])).toBe(false);
+		expect(notion.sources().map((s) => s.id)).toEqual(['s1', 's2']);
 
 		notion.saveSources((list) => list.filter((s) => s.id !== 's1'));
 		expect(notion.copy('s1')).toBeUndefined();

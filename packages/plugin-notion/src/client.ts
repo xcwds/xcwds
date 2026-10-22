@@ -55,7 +55,10 @@ export type AppNotion = {
 	disconnect(): void;
 	/** The saved sources, in order. */
 	sources(): Source[];
-	/** Saves the sources (from the latest saved list); copies of removed ones go too. */
+	/**
+	 * Saves the sources (from the latest saved list); copies of removed ones go too. False, and
+	 * nothing saved, when the list has a source that isn't valid (`parseSources`).
+	 */
 	saveSources(change: (sources: Source[]) => Source[]): boolean;
 	/** A source's saved copy. */
 	copy(id: string): NotionDocument | undefined;
@@ -193,6 +196,8 @@ export function notionPlugin(env: NotionPluginEnv = {}) {
 				try {
 					copy = await download(client, source, now);
 				} catch (error) {
+					// From an earlier connection: its failure says nothing about this one.
+					if (started !== generation) return set(source.id, { downloading: false });
 					const kind = error instanceof NotionError ? error.kind : 'failed';
 					return set(source.id, { downloading: false, ...failed(kind) });
 				}
@@ -266,9 +271,14 @@ export function notionPlugin(env: NotionPluginEnv = {}) {
 				},
 				sources,
 				saveSources(change) {
-					const { value, saved } = app.storage.update(sourcesEntry, sources(), (latest) =>
-						change(latest ?? [])
-					);
+					// One bad source would make the whole saved list unreadable: refuse it instead.
+					let valid = true;
+					const { value, saved } = app.storage.update(sourcesEntry, sources(), (latest) => {
+						const next = parseSources(change(latest ?? []));
+						if (!next) valid = false;
+						return next ?? latest;
+					});
+					if (!valid) return false;
 					if (saved) {
 						const keep = new Set((value ?? []).map((s) => s.id));
 						const current = savedCopies();
