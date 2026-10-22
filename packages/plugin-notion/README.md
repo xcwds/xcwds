@@ -32,6 +32,25 @@ So far it holds:
   yesterday's agenda isn't taken for today's. `fitCopy` enforces the size caps (1 MB a copy, 2 MB
   for all of them), and `parseSources` and `parseCopies` check the saved entries.
 
-Saving the token, sources and copies, connecting and refreshing (the rest of
-[#106](https://github.com/xcwds/xcwds/issues/106)) and showing them
-([#107](https://github.com/xcwds/xcwds/issues/107)) come next.
+- **The plugin** (`.` and `./client`): `notion({ relay, page })` in `xcwds.config.ts`. `relay`
+  is your relay's `https:` origin, and the build declares it as the plugin's only network use
+  ([#103](https://github.com/xcwds/xcwds/issues/103)), so the page's content security policy allows exactly that origin. Pages get
+  `app.notion`:
+  - `connect(token)` checks the token with Notion and saves it only if Notion accepts it.
+    `disconnect()` removes the token and every copy.
+  - `sources()` / `saveSources(change)` list and edit the sources; removing a source removes its
+    copy.
+  - `copy(id)`, `status(id)` (downloading, or why the last try failed, with a message safe to
+    show) and `refresh(id, { force })`.
+
+  Saved data: the token (`app:notion:token`, its own "Notion connection" group, personal, never
+  in backups), the sources (in backups) and the copies (personal, out of backups). When the app
+  comes back to the foreground, copies older than the `notionRefreshMinutes` setting (30 by
+  default; 0 means only by hand) are downloaded again. Going to the background cancels downloads
+  in flight, and app updates wait while one runs. The token is saved unencrypted in browser
+  storage until [#79](https://github.com/xcwds/xcwds/issues/79), so use a read-only integration
+  shared with only the pages you need.
+
+Still to come: the docs and an example app with e2e tests (the rest of
+[#106](https://github.com/xcwds/xcwds/issues/106)), and the pages that show sources and copies
+([#107](https://github.com/xcwds/xcwds/issues/107)).

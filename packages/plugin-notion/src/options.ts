@@ -1,0 +1,50 @@
+/** The plugin's name, the @xcwds/core versions it works with, and its options. */
+import { XcwdsError, codes, isOrigin } from '@xcwds/core';
+
+export const NAME = '@xcwds/plugin-notion';
+/**
+ * The same range as the peer dependency (`scripts/sync-core-version.js` moves it along with
+ * core's minor versions).
+ */
+export const CORE = '^0.4.0';
+
+/** The options, all JSON (RFC 0001, decision 1). */
+export type NotionPluginOptions = {
+	/**
+	 * The relay's origin (`relay/README.md`): `https://notion-relay.example.com`. Fixed at build
+	 * time, since the page's content security policy allows exactly this origin.
+	 */
+	relay: string;
+	/** The sources page's path; `/notion` by default. */
+	page?: string;
+};
+
+export type ResolvedOptions = { relay: string; page: string };
+
+/** Why the plugin contacts the relay, as Settings → Privacy says it. */
+export const REASON =
+	'Downloads the Notion pages you choose, through a relay that adds the headers browsers need. Your token goes to Notion with each request; nothing is stored on the way.';
+
+const KEYS = ['relay', 'page'];
+const PAGE = /^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/;
+
+function fail(message: string): never {
+	throw new XcwdsError(codes.CONFIG_INVALID, `${NAME}: ${message}`, { plugin: NAME });
+}
+
+/** Checks options as written in the config, so a mistake fails the build rather than the page. */
+export function resolveOptions(input: unknown): ResolvedOptions {
+	if (typeof input !== 'object' || input === null || Array.isArray(input))
+		fail('options must be an object.');
+	const options = input as Record<string, unknown>;
+	const unknown = Object.keys(options).filter((k) => !KEYS.includes(k));
+	if (unknown.length) fail(`unknown option ${unknown.map((k) => `\`${k}\``).join(', ')}.`);
+	const { relay, page = '/notion' } = options;
+	if (relay === undefined)
+		fail('`relay` is required: the origin of your Notion relay (see the relay README).');
+	if (!isOrigin(relay) || !String(relay).startsWith('https:'))
+		fail('`relay` must be an https: origin, such as "https://notion-relay.example.com".');
+	if (typeof page !== 'string' || !PAGE.test(page))
+		fail('`page` must be a path such as "/notion" (lower case letters, digits and dashes).');
+	return { relay, page };
+}
