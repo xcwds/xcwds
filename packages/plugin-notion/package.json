@@ -12,13 +12,24 @@
 		"directory": "packages/plugin-notion"
 	},
 	"exports": {
+		"./api": {
+			"types": "./dist/api.d.ts",
+			"default": "./dist/api.js"
+		},
+		"./document": {
+			"types": "./dist/document.d.ts",
+			"default": "./dist/document.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"files": [
+		"dist",
+		"!dist/**/*.test.*",
 		"relay",
 		"!relay/**/*.test.*"
 	],
 	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
 		"check": "tsc -p tsconfig.json --noEmit",
 		"publint": "publint"
 	},

@@ -4,7 +4,7 @@ export default defineProject({
 	test: {
 		name: 'plugin-notion',
 		environment: 'node',
-		include: ['relay/**/*.test.ts'],
+		include: ['src/**/*.test.ts', 'relay/**/*.test.ts'],
 		expect: { requireAssertions: true }
 	}
 });
