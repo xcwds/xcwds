@@ -20,6 +20,10 @@
 			"types": "./dist/document.d.ts",
 			"default": "./dist/document.js"
 		},
+		"./sources": {
+			"types": "./dist/sources.d.ts",
+			"default": "./dist/sources.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"files": [
