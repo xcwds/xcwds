@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
-		"build:base": "BASE_PATH=/sub BUILD_DIR=build-sub HELLO_ORIGIN=https://greetings.example vite build",
+		"build:base": "BASE_PATH=/sub BUILD_DIR=build-sub HELLO_ORIGIN=https://greetings.example NOTION_RELAY=https://notion-relay.example vite build",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
 		"test:e2e": "vite build && pnpm build:base && playwright test"
@@ -19,6 +19,7 @@
 		"@xcwds/plugin-changelog": "workspace:*",
 		"@xcwds/plugin-install": "workspace:*",
 		"@xcwds/plugin-lock": "workspace:*",
+		"@xcwds/plugin-notion": "workspace:*",
 		"@xcwds/plugin-offline": "workspace:*",
 		"@xcwds/plugin-qr": "workspace:*",
 		"@xcwds/plugin-recorder": "workspace:*",

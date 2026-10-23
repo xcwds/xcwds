@@ -235,6 +235,9 @@ importers:
       '@xcwds/plugin-lock':
         specifier: workspace:*
         version: link:../../packages/plugin-lock
+      '@xcwds/plugin-notion':
+        specifier: workspace:*
+        version: link:../../packages/plugin-notion
       '@xcwds/plugin-offline':
         specifier: workspace:*
         version: link:../../packages/plugin-offline

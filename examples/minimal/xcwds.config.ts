@@ -7,6 +7,7 @@ import recorder from '@xcwds/plugin-recorder';
 import changelog from '@xcwds/plugin-changelog';
 import install from '@xcwds/plugin-install';
 import lock from '@xcwds/plugin-lock';
+import notion from '@xcwds/plugin-notion';
 import offline from '@xcwds/plugin-offline';
 import settings from '@xcwds/plugin-settings';
 import share from '@xcwds/plugin-share';
@@ -85,6 +86,10 @@ export default defineConfig({
 					name: 'Voice memos',
 					blurb: 'Recordings kept here.'
 				},
+				// Only in the base-path build, which has a Notion relay (NOTION_RELAY in `build:base`).
+				...(process.env.NOTION_RELAY
+					? [{ path: '/utils/notion', emoji: '🗒️', name: 'Notion', blurb: 'Pages kept here.' }]
+					: []),
 				// Private: never under Recently used, shared or a shortcut; named discreetly.
 				{
 					path: '/utils/journal',
@@ -111,7 +116,8 @@ export default defineConfig({
 			width: 'split',
 			groups: { tools: 'Pinned tools' },
 			// Theme above the shell's navigation, though the shell registers its field first.
-			fields: ['theme']
+			fields: ['theme'],
+			sections: { notion: 'Notion' }
 		}),
 		timers({ page: '/utils/timer' }),
 		offline(),
@@ -128,6 +134,9 @@ export default defineConfig({
 		qr(),
 		// Voice memos as `app.recorder` and `app.recordings`; /utils/recorder shows `<Recorder>` and
 		// `<Recordings>`.
-		recorder()
+		recorder(),
+		// Notion pages downloaded through the relay as `app.notion` (#106); /utils/notion uses it. Only
+		// the base-path build sets a relay, so the root build still contacts no server.
+		...(process.env.NOTION_RELAY ? [notion({ relay: process.env.NOTION_RELAY })] : [])
 	]
 });
