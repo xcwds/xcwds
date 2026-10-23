@@ -97,7 +97,7 @@ async function mockRelay(context: BrowserContext): Promise<Relay> {
 
 const sources = (page: Page) => page.getByRole('list', { name: 'Sources' }).getByTestId('source');
 const source = (page: Page, label: string) =>
-	sources(page).filter({ has: page.getByRole('heading', { name: label }) });
+	sources(page).filter({ has: page.getByTestId('source-label').getByText(label, { exact: true }) });
 
 async function connect(page: Page, token: string) {
 	await page.getByLabel('Integration token').fill(token);
@@ -142,6 +142,10 @@ test('connects, downloads each kind of source, keeps copies when the relay fails
 	);
 	await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Reading list');
 	await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Inside Reading list');
+	// Drawn by `<NotionDocument>`: the title under the shell's h1, then the blocks.
+	await expect(
+		source(page, 'Reading').getByRole('heading', { level: 2, name: 'Reading list' })
+	).toBeVisible();
 	await expect(source(page, 'Reading').getByTestId('source-status')).toHaveText(/^Downloaded /);
 	// The newest child page: the last one Notion lists.
 	await addSource(page, 'Newest child page', 'Journal', PARENT);

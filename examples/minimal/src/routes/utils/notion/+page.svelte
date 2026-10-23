@@ -1,7 +1,8 @@
 <script lang="ts">
 	// A bare page over `app.notion` (#106) until the plugin's own pages land (#107): connect,
-	// add sources, download them and read the saved copies as plain text.
-	import type { Block, NotionDocument } from '@xcwds/plugin-notion/document';
+	// add sources, download them and read the saved copies with `<NotionDocument>`.
+	import NotionDocument from '@xcwds/plugin-notion/NotionDocument.svelte';
+	import type { NotionDocument as Copy } from '@xcwds/plugin-notion/document';
 	import { parseId } from '@xcwds/plugin-notion/api';
 	import type { Source } from '@xcwds/plugin-notion/client';
 	import { useApp } from '@xcwds/sveltekit';
@@ -69,10 +70,7 @@
 
 	const remove = (id: string) => notion?.saveSources((list) => list.filter((s) => s.id !== id));
 
-	/** A block's text, without formatting. */
-	const text = (block: Block) =>
-		'text' in block ? block.text.map((run) => run.text).join('') : `[${block.type}]`;
-	const time = (copy: NotionDocument) =>
+	const time = (copy: Copy) =>
 		new Date(copy.fetchedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 </script>
 
@@ -142,7 +140,7 @@
 			{#each view.sources as { source, status, copy } (source.id)}
 				<li class="flex flex-col gap-2 rounded-xl border p-3" data-testid="source">
 					<div class="flex flex-wrap items-center gap-2">
-						<h3 class="font-semibold">{source.label}</h3>
+						<p class="font-semibold" data-testid="source-label">{source.label}</p>
 						<button
 							type="button"
 							class="min-h-11 rounded-xl border px-3"
@@ -163,10 +161,7 @@
 						{:else}Not downloaded yet.{/if}
 					</p>
 					{#if copy}
-						<article data-testid="copy" class="flex flex-col gap-1">
-							<h4 class="font-medium">{copy.title}</h4>
-							{#each copy.blocks as block, i (i)}<p>{text(block)}</p>{/each}
-						</article>
+						<div data-testid="copy"><NotionDocument document={copy} /></div>
 					{/if}
 				</li>
 			{/each}

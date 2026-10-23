@@ -5,7 +5,10 @@
 	"description": "Notion pages saved on the device in @xcwds apps, read through a stateless relay. Work in progress (#102), not published yet.",
 	"license": "MIT",
 	"type": "module",
-	"sideEffects": false,
+	"sideEffects": [
+		"**/*.svelte",
+		"**/*.css"
+	],
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/xcwds/xcwds.git",
@@ -33,6 +36,16 @@
 			"types": "./dist/sources.d.ts",
 			"default": "./dist/sources.js"
 		},
+		"./render": {
+			"types": "./dist/render.d.ts",
+			"default": "./dist/render.js"
+		},
+		"./NotionDocument.svelte": {
+			"types": "./dist/NotionDocument.svelte.d.ts",
+			"svelte": "./dist/NotionDocument.svelte",
+			"default": "./dist/NotionDocument.svelte"
+		},
+		"./styles.css": "./dist/styles.css",
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -42,17 +55,23 @@
 		"!relay/**/*.test.*"
 	],
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json",
-		"check": "tsc -p tsconfig.json --noEmit",
+		"build": "svelte-package -i src -o dist",
+		"check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
 		"publint": "publint"
 	},
 	"peerDependencies": {
-		"@xcwds/core": "workspace:^"
+		"@xcwds/core": "workspace:^",
+		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
+		"@sveltejs/package": "^3.0.0",
+		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@xcwds/core": "workspace:^",
 		"@xcwds/testing": "workspace:*",
+		"svelte": "^5.57.2",
+		"svelte-check": "^4.3.4",
 		"typescript": "~6.0.3",
+		"vite": "^8.3.4",
 		"vitest": "^5.0.0"
 	},
 	"keywords": [
