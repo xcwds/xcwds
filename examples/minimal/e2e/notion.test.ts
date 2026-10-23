@@ -23,6 +23,7 @@ test.afterAll(() => server.close());
 
 const RELAY = 'https://notion-relay.example';
 const TOKEN = 'ntn_good_token_1234';
+const OFFLINE = "Couldn't reach Notion. Check the connection.";
 const PAGE = '0c940186-ab70-4351-bb34-2d16f0635d49';
 const PARENT = '11111111-2222-4333-8444-555555555555';
 const DS = '59833787-2cf9-4fdf-8782-e53db20768a5';
@@ -122,8 +123,10 @@ test('connects, downloads each kind of source, keeps copies when the relay fails
 
 	// A token Notion refuses isn't saved.
 	await connect(page, 'ntn_wrong_token_99');
-	await expect(page.getByTestId('connect-note')).not.toHaveText('');
-	await expect(page.getByTestId('connect-note')).not.toContainText('Connected');
+	await expect(page.getByTestId('connect-note')).toHaveText(
+		'Notion refused the token. Connect again with a valid token.'
+	);
+	await expect(page.getByTestId('notion-connected')).toHaveCount(0);
 	expect(await page.evaluate(() => localStorage.getItem('app:notion:token'))).toBeNull();
 
 	await connect(page, TOKEN);
@@ -156,9 +159,7 @@ test('connects, downloads each kind of source, keeps copies when the relay fails
 	await expect(sources(page)).toHaveCount(3);
 	await expect(source(page, 'Agenda').getByTestId('copy')).toContainText('Agenda for today');
 	await source(page, 'Agenda').getByRole('button', { name: 'Refresh' }).click();
-	await expect(source(page, 'Agenda').getByTestId('source-status')).not.toHaveText(
-		/^(Downloaded|Downloading)/
-	);
+	await expect(source(page, 'Agenda').getByTestId('source-status')).toHaveText(OFFLINE);
 	await expect(source(page, 'Agenda').getByTestId('copy')).toContainText('Agenda for today');
 
 	// Removing a source removes its copy.
@@ -227,9 +228,7 @@ test.describe('with the service worker', () => {
 		await expect(page.locator('html')).toHaveAttribute('data-hydrated', '');
 		await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Inside Reading list');
 		await source(page, 'Reading').getByRole('button', { name: 'Refresh' }).click();
-		await expect(source(page, 'Reading').getByTestId('source-status')).not.toHaveText(
-			/^(Downloaded|Downloading)/
-		);
+		await expect(source(page, 'Reading').getByTestId('source-status')).toHaveText(OFFLINE);
 		await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Inside Reading list');
 		await context.setOffline(false);
 	});
