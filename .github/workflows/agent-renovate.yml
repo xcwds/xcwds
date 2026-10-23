@@ -1,0 +1,79 @@
+# Leaves every open Renovate PR in both repos merged or closed (#203), with the prompt in
+# .github/agents/renovate.md on the pr profile. It runs:
+#
+# - on a schedule, daily at 13:56 UTC (8:56am in Chicago in summer, 7:56am in winter), once the
+#   AGENT_RENOVATE variable is `on`;
+# - by hand (Actions → Agent Renovate → Run workflow), for both repos, one, or one PR, as a dry run
+#   unless you turn that off.
+name: Agent Renovate
+
+on:
+  schedule:
+    - cron: '56 13 * * *'
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: Repos to review
+        type: choice
+        options: [both, xcwds, xcwds.github.io]
+        default: both
+      pr:
+        description: Only this PR number (needs one repo above; empty for every open Renovate PR)
+        type: string
+        default: ''
+      dry_run:
+        description: Report what it would do, and change nothing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# One run at a time, whatever started it: two runs merging lockfile PRs side by side is what broke
+# main's lockfile once (xcwds#101).
+concurrency:
+  group: agent-renovate
+  cancel-in-progress: false
+
+jobs:
+  # Fails fast on a PR number without one repo, before the runner spends any time on setup.
+  inputs:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the inputs
+        env:
+          REPO: ${{ inputs.repo }}
+          PR: ${{ inputs.pr }}
+        run: |
+          if [ -n "$PR" ] && ! [[ "$PR" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::pr must be a PR number, not '$PR'"; exit 1
+          fi
+          if [ -n "$PR" ] && [ "$REPO" = both ]; then
+            echo "::error::A single PR needs one repo (xcwds or xcwds.github.io), not both"; exit 1
+          fi
+
+  renovate:
+    needs: inputs
+    if: >-
+      !cancelled() && !failure()
+      && (github.event_name == 'workflow_dispatch'
+        || (github.event_name == 'schedule' && vars.AGENT_RENOVATE == 'on'))
+    uses: xcwds/xcwds/.github/workflows/agent.yml@main
+    with:
+      prompt: .github/agents/renovate.md
+      repos: ${{ github.event_name == 'workflow_dispatch' && inputs.repo || 'both' }}
+      tools: pr
+      dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      timeout: 120
+      max_turns: 400
+      context: >-
+        ${{ (github.event_name == 'workflow_dispatch' && inputs.pr != '')
+          && format('One PR: {0}/{1}#{2}.', github.repository_owner, inputs.repo, inputs.pr)
+          || format('Every open Renovate PR in {0}.',
+            (github.event_name == 'workflow_dispatch' && inputs.repo != 'both')
+              && format('{0}/{1}', github.repository_owner, inputs.repo)
+              || 'both repos') }}
+    secrets:
+      AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
