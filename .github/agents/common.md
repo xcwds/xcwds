@@ -18,8 +18,9 @@ inside it; where they say something about cloud containers, this section wins.
   create unless the PR's author asked you to.
 - **Secrets:** never print a token, `agent-token`'s output or any environment variable that may
   hold one. `agent-token status` and `agent-token refresh` print only a fingerprint and expiry.
-- **Playwright:** browsers are installed on this runner and `CHROMIUM_PATH` is set for xcwds/xcwds,
-  so `pnpm test:e2e` works. Don't run `playwright install` again.
+- **Playwright:** browsers are installed on this runner (`CHROMIUM_PATH` is set for xcwds/xcwds;
+  xcwds.github.io uses Playwright's own install), so `pnpm test:e2e` works in both without the
+  cloud containers' `executablePath` config. Don't run `playwright install` again.
 - **Comments:** every comment, review or reply you post on GitHub ends with this footer:
 
   ```
