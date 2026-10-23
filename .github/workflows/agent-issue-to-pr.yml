@@ -1,0 +1,75 @@
+# Ships one issue per run across both repos (#205), with the prompt in .github/agents/issue-to-pr.md
+# on the pr profile: it finishes the bot's previous Issue to PR PR if one is still open, otherwise
+# picks the highest-priority open issue, opens a PR, reviews and fixes it, waits for CI and merges
+# it through merge-pr when it's clean and green. It runs:
+#
+# - on a schedule, at 03:13, 13:13 and 19:13 UTC (10:13pm, 8:13am and 2:13pm in Chicago in summer,
+#   an hour earlier in winter), once the AGENT_ISSUE_TO_PR variable is `on`;
+# - by hand (Actions → Agent Issue to PR → Run workflow), for the top pick or one issue you name,
+#   as a dry run unless you turn that off.
+#
+# agent-followup.yml stands down while a run of this workflow is queued or in progress (it looks
+# for this file's name), since a run fixes its own PR's CI.
+name: Agent Issue to PR
+
+on:
+  schedule:
+    - cron: '13 3,13,19 * * *'
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Only this issue, as owner/repo#n (empty to pick the top issue in both repos)
+        type: string
+        default: ''
+      dry_run:
+        description: Report which issue it would pick and why, and change nothing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# One run at a time, whatever started it: runs pick from the same issues and finish each other's
+# PRs.
+concurrency:
+  group: agent-issue-to-pr
+  cancel-in-progress: false
+
+jobs:
+  # Fails fast on a malformed issue, before the runner spends any time on setup.
+  inputs:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the inputs
+        env:
+          ISSUE: ${{ inputs.issue }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          if [ -n "$ISSUE" ] && ! [[ "$ISSUE" =~ ^$OWNER/(xcwds|xcwds\.github\.io)#[1-9][0-9]*$ ]]; then
+            echo "::error::issue must look like $OWNER/xcwds#12 or $OWNER/xcwds.github.io#34, not '$ISSUE'"
+            exit 1
+          fi
+
+  issue-to-pr:
+    needs: inputs
+    if: >-
+      !cancelled() && !failure()
+      && (github.event_name == 'workflow_dispatch'
+        || (github.event_name == 'schedule' && vars.AGENT_ISSUE_TO_PR == 'on'))
+    uses: xcwds/xcwds/.github/workflows/agent.yml@main
+    with:
+      prompt: .github/agents/issue-to-pr.md
+      repos: both
+      tools: pr
+      dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      # A full app e2e run, up to 3 review rounds and the CI waits.
+      timeout: 180
+      max_turns: 600
+      context: >-
+        ${{ (github.event_name == 'workflow_dispatch' && inputs.issue != '')
+          && format('One issue: {0}. The owner named it, so work this one instead of picking.', inputs.issue)
+          || 'Pick: finish the previous PR if one is open, otherwise the top issue in both repos.' }}
+    secrets:
+      AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
