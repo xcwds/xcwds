@@ -1,0 +1,6 @@
+/*
+ * Lets Tailwind see the classes this package's components use. Import it after Tailwind and
+ * `@xcwds/plugin-theme/tailwind.css` (whose `dark` variant it uses):
+ *   @import '@xcwds/plugin-notion/styles.css';
+ */
+@source './';

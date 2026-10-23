@@ -10,6 +10,7 @@
 @import '@xcwds/plugin-qr/styles.css';
 @import '@xcwds/plugin-recorder/styles.css';
 @import '@xcwds/plugin-blocks/styles.css';
+@import '@xcwds/plugin-notion/styles.css';
 
 /* What e2e/theme.test.ts checks paints before any app code runs. */
 html {

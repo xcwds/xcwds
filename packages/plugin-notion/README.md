@@ -51,6 +51,23 @@ So far it holds:
   storage until [#79](https://github.com/xcwds/xcwds/issues/79), so use a read-only integration
   shared with only the pages you need.
 
-Still to come: the docs and an example app with e2e tests (the rest of
-[#106](https://github.com/xcwds/xcwds/issues/106)), and the pages that show sources and copies
-([#107](https://github.com/xcwds/xcwds/issues/107)).
+- **`<NotionDocument document={copy} />`** (`./NotionDocument.svelte`): draws one saved copy.
+  The icon and title come first, as an `<h2>`, since the shell's header holds the page's `<h1>`.
+  Then come the properties as a short list, then the blocks. Notion's headings 1–3 become
+  `<h3>`–`<h5>`. It draws paragraphs, nested bulleted and numbered lists, to-dos (read-only
+  checkboxes), toggles and toggle headings, quotes, callouts, code, dividers, tables with header
+  rows and columns, child pages and links to pages (by title), bookmarks and embeds (as links),
+  equations (as their source) and columns (stacked on phones). Bold, italic, strikethrough,
+  underline, code and Notion's colours carry over, in light and dark mode. Images and files
+  show a placeholder until [#108](https://github.com/xcwds/xcwds/issues/108). Anything else says
+  "Not shown here" with an Open in Notion link. Text is always text, never HTML. Links keep only
+  `https:`, `http:` and `mailto:` addresses (anything else keeps its text without the link), and
+  open in a new tab with `rel="noopener noreferrer"`. Import `@xcwds/plugin-notion/styles.css`
+  after Tailwind and `@xcwds/plugin-theme/tailwind.css` so Tailwind sees its classes.
+  `./render` holds the helpers it uses (`safeHref`, `colorClass`, `groupBlocks` and the rest).
+
+The example app's base-path build runs the plugin at `/utils/notion`, with e2e tests against a
+mocked relay.
+
+Still to come: the sources page and the page that shows one copy, with their routes and
+`xcwds add notion` (the rest of [#107](https://github.com/xcwds/xcwds/issues/107)).

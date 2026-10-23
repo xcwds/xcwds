@@ -87,7 +87,28 @@ async function mockRelay(context: BrowserContext): Promise<Relay> {
 					id: `${blocks.slice(0, -4)}aaaa`,
 					type: 'paragraph',
 					has_children: false,
-					paragraph: { rich_text: [{ plain_text: `Inside ${TITLES[blocks]}` }] }
+					paragraph: {
+						rich_text: [
+							{ plain_text: `Inside ${TITLES[blocks]}, ` },
+							{ plain_text: 'a link', href: 'https://example.org/read' },
+							{ plain_text: ' and ' },
+							{ plain_text: 'a script', href: 'javascript:alert(1)' }
+						]
+					}
+				},
+				{
+					object: 'block',
+					id: `${blocks.slice(0, -4)}bbbb`,
+					type: 'to_do',
+					has_children: false,
+					to_do: { rich_text: [{ plain_text: 'Buy milk' }], checked: true }
+				},
+				{
+					object: 'block',
+					id: `${blocks.slice(0, -4)}cccc`,
+					type: 'bookmark',
+					has_children: false,
+					bookmark: { url: 'https://example.org/bookmarked', caption: [] }
 				}
 			]);
 		return json({ object: 'error', code: 'object_not_found' }, 404);
@@ -97,7 +118,7 @@ async function mockRelay(context: BrowserContext): Promise<Relay> {
 
 const sources = (page: Page) => page.getByRole('list', { name: 'Sources' }).getByTestId('source');
 const source = (page: Page, label: string) =>
-	sources(page).filter({ has: page.getByRole('heading', { name: label }) });
+	sources(page).filter({ has: page.getByTestId('source-label').getByText(label, { exact: true }) });
 
 async function connect(page: Page, token: string) {
 	await page.getByLabel('Integration token').fill(token);
@@ -142,6 +163,20 @@ test('connects, downloads each kind of source, keeps copies when the relay fails
 	);
 	await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Reading list');
 	await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Inside Reading list');
+	// Drawn by `<NotionDocument>`: the title under the shell's h1, then the blocks.
+	await expect(
+		source(page, 'Reading').getByRole('heading', { level: 2, name: 'Reading list' })
+	).toBeVisible();
+	const copy = source(page, 'Reading').getByTestId('copy');
+	await expect(copy.getByRole('link', { name: 'a link' })).toHaveAttribute(
+		'href',
+		'https://example.org/read'
+	);
+	// A link Notion sent with an unsafe scheme keeps only its text.
+	await expect(copy.getByText('a script')).toBeVisible();
+	await expect(copy.getByRole('link', { name: 'a script' })).toHaveCount(0);
+	await expect(copy.getByRole('checkbox', { name: 'Buy milk' })).toBeChecked();
+	await expect(copy.getByRole('checkbox', { name: 'Buy milk' })).toBeDisabled();
 	await expect(source(page, 'Reading').getByTestId('source-status')).toHaveText(/^Downloaded /);
 	// The newest child page: the last one Notion lists.
 	await addSource(page, 'Newest child page', 'Journal', PARENT);
