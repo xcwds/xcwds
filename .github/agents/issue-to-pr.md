@@ -19,6 +19,12 @@ list --repo <owner/repo> --state open --author app/<slug> --search "head:claude/
 it to done under the rules below (checks, review rounds, CI, merge) instead of starting a new issue,
 and report on it. If there are several, take the oldest, and list the others in your report.
 
+Pass over a PR that's only waiting on the owner, the ones step 5 leaves for them: it changes
+workflows, needs their call, is red only because `main` is, or its 3 fix rounds are used up (its
+latest comment or your review there says so). Unless the owner has commented or pushed since,
+there's nothing for you to do on it: list it in your report under what's needed from them and go
+on to the next PR, or to step 2.
+
 When "Context" names an issue, skip this step: the owner chose what this run works on.
 
 ## 2. Pick the issue
