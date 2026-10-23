@@ -6,6 +6,8 @@
 	let { runs }: { runs: readonly Run[] } = $props();
 </script>
 
+<!-- Every link here leaves the app (Notion's own links, checked by `safeHref`), so it isn't a route to resolve. -->
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
 {#each runs as run, i (i)}{@const href = safeHref(run.href)}{@const cls = runClass(run)}{#if href}<a
 			{href}
 			target="_blank"

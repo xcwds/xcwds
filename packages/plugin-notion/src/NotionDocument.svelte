@@ -16,6 +16,8 @@
 	);
 </script>
 
+<!-- Every link here leaves the app (Notion's own links, checked by `safeHref`), so it isn't a route to resolve. -->
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
 <article class="flex flex-col gap-3 leading-relaxed" data-testid="notion-document">
 	<h2 class="text-2xl font-bold">
 		{#if document.icon}<span aria-hidden="true">{document.icon}</span>{/if}
