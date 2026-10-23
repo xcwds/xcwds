@@ -1,0 +1,88 @@
+# Follows up on the agent's own PRs (#204), as the cloud sessions do when they wake on a PR event:
+# when CI fails on a PR the bot opened on a claude/ branch, or the owner reviews one (requested
+# changes or commented), the agent fixes it, answers and merges per .github/agents/followup.md on
+# the pr profile. xcwds.github.io's caller listens for the same events there and runs this by
+# workflow_call; it must grant the gate's `actions: read` and `pull-requests: read`.
+#
+# - A review that tags @claude, in its body or any of its comments, goes to agent-mention.yml
+#   instead. Every review comment, a reply on a thread included, arrives as a submitted review,
+#   so there is no pull_request_review_comment trigger: it would start a second run for each one.
+# - It stands down while an Issue to PR run is in progress: that run fixes its own PR's CI and
+#   finishes its previous PR first, so two agents never push to one branch.
+# - Never for Renovate's PRs (agent-renovate.yml) or anyone else's.
+name: Agent follow-up
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  pull_request_review:
+    types: [submitted]
+  workflow_call:
+    secrets:
+      AGENT_APP_PRIVATE_KEY:
+        required: true
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  # A cheap first filter in the `if`, then followup-gate.mjs (from main) checks the PR itself,
+  # the Issue to PR runs and how many fixes this workflow already pushed.
+  gate:
+    if: >-
+      (github.event_name == 'workflow_run'
+        && github.event.workflow_run.conclusion == 'failure'
+        && github.event.workflow_run.event == 'pull_request'
+        && startsWith(github.event.workflow_run.head_branch, 'claude/'))
+      || (github.event_name == 'pull_request_review'
+        && github.event.review.user.login == github.repository_owner
+        && contains(fromJSON('["changes_requested","commented"]'), github.event.review.state)
+        && github.event.pull_request.user.type == 'Bot'
+        && startsWith(github.event.pull_request.head.ref, 'claude/')
+        && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+      pr: ${{ steps.gate.outputs.pr }}
+      context: ${{ steps.gate.outputs.context }}
+    steps:
+      - name: Check out the gate script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: xcwds/xcwds
+          ref: main
+          sparse-checkout: .github/agents/bin
+          persist-credentials: false
+
+      - name: Decide whether to follow up
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/agents/bin/followup-gate.mjs
+
+  followup:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    # One run per PR at a time. A newer event replacing a pending one is fine: a run looks at the
+    # PR's current state, not at the event that started it.
+    concurrency:
+      group: agent-pr-${{ github.event.repository.name }}-${{ needs.gate.outputs.pr }}
+      cancel-in-progress: false
+    uses: xcwds/xcwds/.github/workflows/agent.yml@main
+    with:
+      prompt: .github/agents/followup.md
+      repos: ${{ github.event.repository.name }}
+      tools: pr
+      timeout: 60
+      max_turns: 200
+      context: ${{ needs.gate.outputs.context }}
+    secrets:
+      AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
