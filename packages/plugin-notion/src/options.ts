@@ -15,17 +15,22 @@ export type NotionPluginOptions = {
 	 * time, since the page's content security policy allows exactly this origin.
 	 */
 	relay: string;
-	/** The sources page's path; `/notion` by default. */
+	/** The sources page's path; `/notion` by default. The copy shows at `<page>/view#<source id>`. */
 	page?: string;
+	/**
+	 * Registers `page` itself as a route (private, titled "Notion"). Leave it off when the app
+	 * lists the page some other way, as a tool in `@xcwds/plugin-tools` for instance.
+	 */
+	register?: boolean;
 };
 
-export type ResolvedOptions = { relay: string; page: string };
+export type ResolvedOptions = { relay: string; page: string; register: boolean };
 
 /** Why the plugin contacts the relay, as Settings → Privacy says it. */
 export const REASON =
 	'Downloads the Notion pages you choose, through a relay that adds the headers browsers need. Your token goes to Notion with each request; nothing is stored on the way.';
 
-const KEYS = ['relay', 'page'];
+const KEYS = ['relay', 'page', 'register'];
 const PAGE = /^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/;
 
 function fail(message: string): never {
@@ -39,12 +44,13 @@ export function resolveOptions(input: unknown): ResolvedOptions {
 	const options = input as Record<string, unknown>;
 	const unknown = Object.keys(options).filter((k) => !KEYS.includes(k));
 	if (unknown.length) fail(`unknown option ${unknown.map((k) => `\`${k}\``).join(', ')}.`);
-	const { relay, page = '/notion' } = options;
+	const { relay, page = '/notion', register = false } = options;
 	if (relay === undefined)
 		fail('`relay` is required: the origin of your Notion relay (see the relay README).');
 	if (!isOrigin(relay) || !String(relay).startsWith('https:'))
 		fail('`relay` must be an https: origin, such as "https://notion-relay.example.com".');
 	if (typeof page !== 'string' || !PAGE.test(page))
 		fail('`page` must be a path such as "/notion" (lower case letters, digits and dashes).');
-	return { relay, page };
+	if (typeof register !== 'boolean') fail('`register` must be true or false.');
+	return { relay, page, register };
 }

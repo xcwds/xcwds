@@ -135,8 +135,11 @@ export default defineConfig({
 		// Voice memos as `app.recorder` and `app.recordings`; /utils/recorder shows `<Recorder>` and
 		// `<Recordings>`.
 		recorder(),
-		// Notion pages downloaded through the relay as `app.notion` (#106); /utils/notion uses it. Only
-		// the base-path build sets a relay, so the root build still contacts no server.
-		...(process.env.NOTION_RELAY ? [notion({ relay: process.env.NOTION_RELAY })] : [])
+		// Notion pages downloaded through the relay as `app.notion` (#106); /utils/notion uses it, and
+		// /utils/notion/view shows one copy (`<NotionView>`). Only the base-path build sets a relay,
+		// so the root build still contacts no server.
+		...(process.env.NOTION_RELAY
+			? [notion({ relay: process.env.NOTION_RELAY, page: '/utils/notion' })]
+			: [])
 	]
 });

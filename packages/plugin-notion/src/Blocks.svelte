@@ -11,6 +11,8 @@
 	let { blocks, url }: { blocks: readonly Block[]; url?: string | undefined } = $props();
 </script>
 
+<!-- Every link here leaves the app (Notion's own links, checked by `safeHref`), so it isn't a route to resolve. -->
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
 {#snippet children(block: Block)}
 	{#if 'children' in block && block.children?.length}
 		<div class="mt-1 flex flex-col gap-2 ps-6"><Blocks blocks={block.children} {url} /></div>

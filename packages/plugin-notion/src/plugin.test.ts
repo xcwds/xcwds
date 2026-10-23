@@ -71,7 +71,11 @@ const agenda: Source = {
 
 describe('options', () => {
 	it('needs an https relay origin and a page path, and declares the relay as its network use', async () => {
-		expect(resolveOptions({ relay: RELAY })).toEqual({ relay: RELAY, page: '/notion' });
+		expect(resolveOptions({ relay: RELAY })).toEqual({
+			relay: RELAY,
+			page: '/notion',
+			register: false
+		});
 		expect(resolveOptions({ relay: RELAY, page: '/utils/notion' })).toMatchObject({
 			page: '/utils/notion'
 		});
@@ -86,6 +90,8 @@ describe('options', () => {
 		expect(() => resolveOptions({ relay: RELAY, page: 'notion' })).toThrow(/`page`/);
 		expect(() => resolveOptions({ relay: RELAY, token: 'x' })).toThrow(/unknown option `token`/);
 		expect(() => resolveOptions(null)).toThrow(/must be an object/);
+		expect(() => resolveOptions({ relay: RELAY, register: 'yes' })).toThrow(/`register`/);
+		expect(resolveOptions({ relay: RELAY, register: true })).toMatchObject({ register: true });
 
 		const network = { origins: [RELAY], reason: REASON };
 		for (const plugin of [build, client]) {
@@ -118,6 +124,34 @@ describe('options', () => {
 		expect(entries['app:notion:copies']).toMatchObject({ backup: false, sensitive: true });
 		expect(app.settings.get().notionRefreshMinutes).toBe(REFRESH_MINUTES);
 		await app.close();
+	});
+
+	it('registers the private view page, and the sources page only with `register`', async () => {
+		const app = await buildTestApp(
+			{ plugins: [notionFactory({ relay: RELAY, page: '/utils/notion' })] },
+			{ import: importer }
+		);
+		expect(app.routes.get('/utils/notion/view')).toMatchObject({
+			title: 'Notion page',
+			parent: '/utils/notion',
+			width: 'wide',
+			private: true
+		});
+		// Listed by the app (as a tool, say), so not registered here.
+		expect(app.routes.get('/utils/notion')).toBeUndefined();
+		await app.close();
+
+		const registered = await buildTestApp(
+			{ plugins: [notionFactory({ relay: RELAY, register: true })] },
+			{ import: importer }
+		);
+		expect(registered.routes.get('/notion')).toMatchObject({
+			title: 'Notion',
+			width: 'wide',
+			private: true
+		});
+		expect(registered.routes.get('/notion/view')).toMatchObject({ parent: '/notion' });
+		await registered.close();
 	});
 });
 
