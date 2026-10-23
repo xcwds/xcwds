@@ -76,7 +76,8 @@ async function mockRelay(context: BrowserContext): Promise<Relay> {
 			return json({
 				object: 'page',
 				id: page,
-				created_time: '2026-10-22T06:00:00.000Z',
+				// The newest agenda is from today; the other pages are older.
+				created_time: page === NEWEST ? new Date().toISOString() : '2026-10-22T06:00:00.000Z',
 				properties: { Name: { type: 'title', title: [{ plain_text: TITLES[page] }] } }
 			});
 		const blocks = /^\/v1\/blocks\/(.+)\/children$/.exec(path)?.[1];
@@ -265,6 +266,80 @@ test.describe('with the service worker', () => {
 		await source(page, 'Reading').getByRole('button', { name: 'Refresh' }).click();
 		await expect(source(page, 'Reading').getByTestId('source-status')).toHaveText(OFFLINE);
 		await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Inside Reading list');
+
+		// The page for one copy opens offline too, from the worker's cache.
+		await source(page, 'Reading').getByTestId('source-label').click();
+		await expect(page.getByRole('heading', { level: 2, name: 'Reading list' })).toBeVisible();
+		await page.reload();
+		await expect(page.locator('html')).toHaveAttribute('data-hydrated', '');
+		await expect(page.getByTestId('notion-view')).toContainText('Inside Reading list');
+		await expect(page.getByTestId('notion-view-status')).toHaveText(/^Downloaded /);
 		await context.setOffline(false);
 	});
 });
+
+const SIZES = { phone: { width: 390, height: 844 }, computer: { width: 1280, height: 800 } };
+
+for (const [size, viewport] of Object.entries(SIZES)) {
+	test(`one copy opens on its own page on a ${size}, its id in the fragment`, async ({
+		page,
+		context
+	}) => {
+		const relay = await mockRelay(context);
+		await page.setViewportSize(viewport);
+		await gotoHydrated(page, url('/utils/notion'));
+		await connect(page, TOKEN);
+		await expect(page.getByTestId('notion-connected')).toBeVisible();
+		await addSource(page, 'Newest child page', 'Journal', PARENT);
+		await expect(source(page, 'Journal').getByTestId('copy')).toContainText('Thursday notes');
+		await addSource(page, 'Newest in a data source', 'Agenda', DS);
+		await expect(source(page, 'Agenda').getByTestId('copy')).toContainText('Agenda for today');
+
+		const link = source(page, 'Journal').getByTestId('source-label');
+		const id = (await link.getAttribute('href'))!.split('#')[1]!;
+		// Its copy has gone stale (older than the 30-minute setting): opening it downloads it again.
+		await page.evaluate((id) => {
+			const copies = JSON.parse(localStorage.getItem('app:notion:copies')!);
+			copies[id].fetchedAt = Date.now() - 60 * 60_000;
+			localStorage.setItem('app:notion:copies', JSON.stringify(copies));
+		}, id);
+		const before = relay.urls.length;
+		await link.click();
+		await expect
+			.poll(() => relay.urls.slice(before))
+			.toContainEqual(`${RELAY}/v1/blocks/${PARENT}/children?page_size=100`);
+		await expect(page).toHaveURL(`${url('/utils/notion/view')}#${id}`);
+		expect(new URL(page.url()).search).toBe('');
+		await expect(page.getByRole('heading', { level: 1, name: 'Notion page' })).toBeVisible();
+		const view = page.getByTestId('notion-view');
+		await expect(view.getByRole('heading', { level: 2, name: 'Thursday notes' })).toBeVisible();
+		await expect(view.getByRole('checkbox', { name: 'Buy milk' })).toBeChecked();
+		await expect(page.getByTestId('notion-view-status')).toHaveText(/^Downloaded /);
+		// Yesterday's page isn't taken for today's.
+		await expect(page.getByTestId('notion-view-old')).toContainText(
+			'No newer page yet: this one is from'
+		);
+		const overflow = await page.evaluate(
+			() => document.documentElement.scrollWidth - document.documentElement.clientWidth
+		);
+		expect(overflow).toBeLessThanOrEqual(0);
+		expect(await auditTapTargets(page)).toEqual([]);
+
+		// The back arrow goes to the sources page.
+		await page.locator('header [data-shell-back]').click();
+		await expect(page).toHaveURL(url('/utils/notion'));
+		await source(page, 'Agenda').getByTestId('source-label').click();
+		await expect(page.getByTestId('notion-view')).toContainText('Agenda for today');
+		await expect(page.getByTestId('notion-view-old')).toHaveCount(0);
+
+		// A failed refresh keeps the copy and says why.
+		relay.down = true;
+		await page.getByRole('button', { name: 'Refresh' }).click();
+		await expect(page.getByTestId('notion-view-status')).toHaveText(OFFLINE);
+		await expect(page.getByTestId('notion-view')).toContainText('Agenda for today');
+
+		// An id that isn't on this device says so.
+		await gotoHydrated(page, `${url('/utils/notion/view')}#nope`);
+		await expect(page.getByTestId('notion-view-missing')).toBeVisible();
+	});
+}

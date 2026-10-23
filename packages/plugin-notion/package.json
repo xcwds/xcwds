@@ -45,6 +45,11 @@
 			"svelte": "./dist/NotionDocument.svelte",
 			"default": "./dist/NotionDocument.svelte"
 		},
+		"./NotionView.svelte": {
+			"types": "./dist/NotionView.svelte.d.ts",
+			"svelte": "./dist/NotionView.svelte",
+			"default": "./dist/NotionView.svelte"
+		},
 		"./styles.css": "./dist/styles.css",
 		"./package.json": "./package.json"
 	},
@@ -61,12 +66,15 @@
 	},
 	"peerDependencies": {
 		"@xcwds/core": "workspace:^",
+		"@xcwds/sveltekit": "workspace:^",
 		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
+		"@sveltejs/kit": "^3.1.0",
 		"@sveltejs/package": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@xcwds/core": "workspace:^",
+		"@xcwds/sveltekit": "workspace:^",
 		"@xcwds/testing": "workspace:*",
 		"svelte": "^5.57.2",
 		"svelte-check": "^4.3.4",

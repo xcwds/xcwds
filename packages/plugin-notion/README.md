@@ -66,8 +66,18 @@ So far it holds:
   after Tailwind and `@xcwds/plugin-theme/tailwind.css` so Tailwind sees its classes.
   `./render` holds the helpers it uses (`safeHref`, `colorClass`, `groupBlocks` and the rest).
 
-The example app's base-path build runs the plugin at `/utils/notion`, with e2e tests against a
-mocked relay.
+- **`<NotionView />`** (`./NotionView.svelte`): the page for one source's copy, at
+  `<page>/view#<source id>`. The id goes in the fragment, so it never reaches a server. Render it
+  from that route's file inside `<main class="page-wide">`. It shows when the copy was downloaded
+  and has a Refresh button. Opening it downloads the source again when its copy is older than
+  the refresh setting, and the saved copy stays in view offline or when a download fails. A
+  "newest" source whose page isn't from today says "No newer page yet", so yesterday's agenda
+  isn't taken for today's. The build entry registers `<page>/view` (title "Notion page", private,
+  `wide`). `page` itself is the app's to list (as a tool, say), or pass `register: true` and the
+  plugin registers it (title "Notion", private, `wide`).
 
-Still to come: the sources page and the page that shows one copy, with their routes and
-`xcwds add notion` (the rest of [#107](https://github.com/xcwds/xcwds/issues/107)).
+The example app's base-path build runs the plugin at `/utils/notion`, with `/utils/notion/view`
+for one copy, and e2e tests against a mocked relay.
+
+Still to come: `<NotionSources>` for the sources page and `xcwds add notion` (the rest of
+[#107](https://github.com/xcwds/xcwds/issues/107)).

@@ -5,6 +5,7 @@
 	import type { NotionDocument as Copy } from '@xcwds/plugin-notion/document';
 	import { parseId } from '@xcwds/plugin-notion/api';
 	import type { Source } from '@xcwds/plugin-notion/client';
+	import { resolve } from '$app/paths';
 	import { useApp } from '@xcwds/sveltekit';
 
 	const app = useApp();
@@ -140,7 +141,11 @@
 			{#each view.sources as { source, status, copy } (source.id)}
 				<li class="flex flex-col gap-2 rounded-xl border p-3" data-testid="source">
 					<div class="flex flex-wrap items-center gap-2">
-						<p class="font-semibold" data-testid="source-label">{source.label}</p>
+						<a
+							class="flex min-h-11 items-center font-semibold underline underline-offset-2"
+							href="{resolve('/utils/notion/view')}#{encodeURIComponent(source.id)}"
+							data-testid="source-label">{source.label}</a
+						>
 						<button
 							type="button"
 							class="min-h-11 rounded-xl border px-3"
