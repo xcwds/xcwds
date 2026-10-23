@@ -140,6 +140,7 @@ describe('NotionDocument', () => {
 						{ text: 'both', strike: true, underline: true },
 						{ text: 'fn()', code: true },
 						{ text: 'safe', href: 'https://ok.example/x' },
+						{ text: 'gone', href: 'https://ok.example/y', strike: true },
 						{ text: 'evil', href: 'javascript:alert(1)' },
 						{ text: 'data', href: 'data:text/html,hi' },
 						{ text: '<img src=x onerror=alert(1)>' }
@@ -151,10 +152,14 @@ describe('NotionDocument', () => {
 		expect(out).toContain('[text-decoration-line:underline_line-through]');
 		expect(out).toMatch(/<code class="[^"]*font-mono[^"]*">fn\(\)<\/code>/);
 		expect(out).toContain(
-			'<a href="https://ok.example/x" target="_blank" rel="noopener noreferrer" class="underline underline-offset-2 ">safe</a>'
+			'<a href="https://ok.example/x" target="_blank" rel="noopener noreferrer" class="underline-offset-2 underline">safe</a>'
+		);
+		// A struck-through link keeps both lines.
+		expect(out).toMatch(
+			/<a href="https:\/\/ok\.example\/y"[^>]*class="underline-offset-2 \[text-decoration-line:underline_line-through\]">gone<\/a>/
 		);
 		// Unsafe links keep their text, with no link.
-		expect(out).toMatch(/>safe<\/a>evildata/);
+		expect(out).toMatch(/>gone<\/a>evildata/);
 		expect(out).not.toContain('javascript:');
 		expect(out).not.toContain('data:text');
 		// Text is text, never markup.

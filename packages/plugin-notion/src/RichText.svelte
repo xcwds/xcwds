@@ -10,7 +10,7 @@
 			{href}
 			target="_blank"
 			rel="noopener noreferrer"
-			class="underline underline-offset-2 {cls}"
+			class="underline-offset-2 {runClass({ ...run, underline: true })}"
 			>{#if run.code}<code>{run.text}</code>{:else}{run.text}{/if}</a
 		>{:else if run.code}<code class={cls}>{run.text}</code>{:else if cls}<span class={cls}
 			>{run.text}</span

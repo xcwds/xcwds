@@ -67,7 +67,7 @@
 			{/if}
 		{:else if block.type === 'todo'}
 			<div>
-				<label class="flex items-start gap-2 {colorClass(block.color)}">
+				<label class="flex min-h-11 items-start gap-2 py-2.5 {colorClass(block.color)}">
 					<input type="checkbox" class="mt-1 size-4 shrink-0" checked={block.checked} disabled />
 					<span class={block.checked ? 'line-through opacity-70' : ''}
 						><RichText runs={block.text} /></span
