@@ -1,0 +1,236 @@
+// @xcwds/plugin-notion (#106) in the base-path build, which sets a relay (NOTION_RELAY in
+// `build:base`): /utils/notion connects, adds each kind of source and downloads it through the
+// relay, mocked here with route interception. The token never reaches a URL or a backup.
+import { expect, test, type BrowserContext, type Page, type Route } from '@playwright/test';
+import {
+	auditTapTargets,
+	gotoHydrated,
+	serveStatic,
+	waitForServiceWorker,
+	type StaticServer
+} from '@xcwds/testing/playwright';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+
+const build = fileURLToPath(new URL('../build-sub', import.meta.url));
+let server: StaticServer;
+const url = (path: string) => server.url(path);
+
+test.beforeAll(async () => {
+	server = await serveStatic(build, { base: '/sub' });
+});
+test.afterAll(() => server.close());
+
+const RELAY = 'https://notion-relay.example';
+const TOKEN = 'ntn_good_token_1234';
+const PAGE = '0c940186-ab70-4351-bb34-2d16f0635d49';
+const PARENT = '11111111-2222-4333-8444-555555555555';
+const DS = '59833787-2cf9-4fdf-8782-e53db20768a5';
+const OLD_CHILD = '22222222-2222-4333-8444-555555555555';
+const NEW_CHILD = '33333333-2222-4333-8444-555555555555';
+const NEWEST = '44444444-2222-4333-8444-555555555555';
+
+const TITLES: Record<string, string> = {
+	[PAGE]: 'Reading list',
+	[NEW_CHILD]: 'Thursday notes',
+	[NEWEST]: 'Agenda for today'
+};
+
+const CORS = {
+	'access-control-allow-origin': '*',
+	'access-control-allow-headers': 'authorization, notion-version, content-type',
+	'access-control-allow-methods': 'GET, POST'
+};
+
+type Relay = { urls: string[]; down: boolean };
+
+/** A relay that answers like Notion for the pages above, and fails while `down`. */
+async function mockRelay(context: BrowserContext): Promise<Relay> {
+	const relay: Relay = { urls: [], down: false };
+	await context.route(`${RELAY}/**`, async (route: Route) => {
+		const request = route.request();
+		if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+		relay.urls.push(request.url());
+		if (relay.down) return route.abort('internetdisconnected');
+		const json = (body: unknown, status = 200) =>
+			route.fulfill({
+				status,
+				headers: CORS,
+				contentType: 'application/json',
+				body: JSON.stringify(body)
+			});
+		if (request.headers()['authorization'] !== `Bearer ${TOKEN}`)
+			return json({ object: 'error', code: 'unauthorized', message: 'API token is invalid.' }, 401);
+		const path = new URL(request.url()).pathname;
+		const list = (results: unknown[]) => json({ results, has_more: false, next_cursor: null });
+		if (path === '/v1/users/me') return json({ object: 'user', id: 'bot', name: 'Agenda reader' });
+		if (path === `/v1/data_sources/${DS}/query`) return list([{ object: 'page', id: NEWEST }]);
+		if (path === `/v1/blocks/${PARENT}/children`)
+			return list([
+				{ object: 'block', id: OLD_CHILD, type: 'child_page', child_page: { title: 'Wednesday' } },
+				{ object: 'block', id: NEW_CHILD, type: 'child_page', child_page: { title: 'Thursday' } }
+			]);
+		const page = /^\/v1\/pages\/(.+)$/.exec(path)?.[1];
+		if (page && TITLES[page])
+			return json({
+				object: 'page',
+				id: page,
+				created_time: '2026-10-22T06:00:00.000Z',
+				properties: { Name: { type: 'title', title: [{ plain_text: TITLES[page] }] } }
+			});
+		const blocks = /^\/v1\/blocks\/(.+)\/children$/.exec(path)?.[1];
+		if (blocks && TITLES[blocks])
+			return list([
+				{
+					object: 'block',
+					id: `${blocks.slice(0, -4)}aaaa`,
+					type: 'paragraph',
+					has_children: false,
+					paragraph: { rich_text: [{ plain_text: `Inside ${TITLES[blocks]}` }] }
+				}
+			]);
+		return json({ object: 'error', code: 'object_not_found' }, 404);
+	});
+	return relay;
+}
+
+const sources = (page: Page) => page.getByRole('list', { name: 'Sources' }).getByTestId('source');
+const source = (page: Page, label: string) =>
+	sources(page).filter({ has: page.getByRole('heading', { name: label }) });
+
+async function connect(page: Page, token: string) {
+	await page.getByLabel('Integration token').fill(token);
+	await page.getByRole('button', { name: 'Test connection' }).click();
+}
+
+async function addSource(page: Page, kind: string, label: string, link: string) {
+	await page.getByLabel('Kind').selectOption({ label: kind });
+	await page.getByLabel('Label').fill(label);
+	await page.getByLabel('Link or id').fill(link);
+	await page.getByRole('button', { name: 'Add', exact: true }).click();
+}
+
+test.use({ viewport: { width: 390, height: 844 } });
+
+test('connects, downloads each kind of source, keeps copies when the relay fails, and disconnects', async ({
+	page,
+	context
+}) => {
+	const relay = await mockRelay(context);
+	await gotoHydrated(page, url('/utils/notion'));
+	await expect(page.getByRole('heading', { level: 1, name: 'Notion' })).toBeVisible();
+
+	// A token Notion refuses isn't saved.
+	await connect(page, 'ntn_wrong_token_99');
+	await expect(page.getByTestId('connect-note')).not.toHaveText('');
+	await expect(page.getByTestId('connect-note')).not.toContainText('Connected');
+	expect(await page.evaluate(() => localStorage.getItem('app:notion:token'))).toBeNull();
+
+	await connect(page, TOKEN);
+	await expect(page.getByTestId('connect-note')).toHaveText('Connected as Agenda reader.');
+	await expect(page.getByTestId('notion-connected')).toBeVisible();
+
+	// One page, by link.
+	await addSource(
+		page,
+		'Page',
+		'Reading',
+		`https://www.notion.so/Reading-list-${PAGE.replace(/-/g, '')}`
+	);
+	await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Reading list');
+	await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Inside Reading list');
+	await expect(source(page, 'Reading').getByTestId('source-status')).toHaveText(/^Downloaded /);
+	// The newest child page: the last one Notion lists.
+	await addSource(page, 'Newest child page', 'Journal', PARENT);
+	await expect(source(page, 'Journal').getByTestId('copy')).toContainText('Inside Thursday notes');
+	// The newest page of a data source.
+	await addSource(page, 'Newest in a data source', 'Agenda', DS);
+	await expect(source(page, 'Agenda').getByTestId('copy')).toContainText('Agenda for today');
+	await expect(sources(page)).toHaveCount(3);
+	expect(relay.urls).toContainEqual(`${RELAY}/v1/data_sources/${DS}/query`);
+	expect(await auditTapTargets(page)).toEqual([]);
+
+	// The relay goes away: a reload still shows every copy, and a failed refresh keeps it.
+	relay.down = true;
+	await gotoHydrated(page, url('/utils/notion'));
+	await expect(sources(page)).toHaveCount(3);
+	await expect(source(page, 'Agenda').getByTestId('copy')).toContainText('Agenda for today');
+	await source(page, 'Agenda').getByRole('button', { name: 'Refresh' }).click();
+	await expect(source(page, 'Agenda').getByTestId('source-status')).not.toHaveText(
+		/^(Downloaded|Downloading)/
+	);
+	await expect(source(page, 'Agenda').getByTestId('copy')).toContainText('Agenda for today');
+
+	// Removing a source removes its copy.
+	await source(page, 'Reading').getByRole('button', { name: 'Remove' }).click();
+	await expect(sources(page)).toHaveCount(2);
+	const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('app:notion:copies')!));
+	expect(Object.keys(saved)).toHaveLength(2);
+
+	// The token only ever went in a header.
+	for (const target of relay.urls) expect(target).not.toContain(TOKEN);
+
+	// Disconnecting removes the token and every copy, and keeps the sources.
+	await page.getByRole('button', { name: 'Disconnect' }).click();
+	await expect(page.getByLabel('Integration token')).toBeVisible();
+	await expect(page.getByTestId('copy')).toHaveCount(0);
+	await expect(sources(page)).toHaveCount(2);
+	expect(
+		await page.evaluate(() => [
+			localStorage.getItem('app:notion:token'),
+			localStorage.getItem('app:notion:copies')
+		])
+	).toEqual([null, null]);
+});
+
+test('a backup carries the sources but never the token or the copies', async ({
+	page,
+	context
+}) => {
+	await mockRelay(context);
+	await gotoHydrated(page, url('/utils/notion'));
+	await connect(page, TOKEN);
+	await expect(page.getByTestId('notion-connected')).toBeVisible();
+	await addSource(page, 'Page', 'Reading', PAGE);
+	await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Reading list');
+
+	await gotoHydrated(page, url('/settings'));
+	const download = page.waitForEvent('download');
+	await page.getByRole('button', { name: 'Download backup' }).click();
+	const backup = JSON.parse(await readFile((await (await download).path())!, 'utf8'));
+	expect(backup.data['app:notion:sources']).toMatchObject([{ label: 'Reading', page: PAGE }]);
+	expect(Object.keys(backup.data)).not.toContain('app:notion:token');
+	expect(Object.keys(backup.data)).not.toContain('app:notion:copies');
+	expect(JSON.stringify(backup)).not.toContain(TOKEN);
+	// The refresh setting has its own section.
+	await expect(page.getByRole('heading', { name: 'Notion' })).toBeVisible();
+	const more = page.getByRole('button', { name: 'More Download Notion pages again after' });
+	await expect(more.locator('xpath=preceding-sibling::output')).toHaveText('30 min');
+});
+
+test.describe('with the service worker', () => {
+	test.use({ serviceWorkers: 'allow' });
+
+	test('offline, the saved copy still shows', async ({ page, context }) => {
+		const relay = await mockRelay(context);
+		await gotoHydrated(page, url('/utils/notion'));
+		await waitForServiceWorker(page);
+		await connect(page, TOKEN);
+		await expect(page.getByTestId('notion-connected')).toBeVisible();
+		await addSource(page, 'Page', 'Reading', PAGE);
+		await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Inside Reading list');
+
+		// Route interception still answers while offline, so the relay goes down with the network.
+		relay.down = true;
+		await context.setOffline(true);
+		await page.reload();
+		await expect(page.locator('html')).toHaveAttribute('data-hydrated', '');
+		await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Inside Reading list');
+		await source(page, 'Reading').getByRole('button', { name: 'Refresh' }).click();
+		await expect(source(page, 'Reading').getByTestId('source-status')).not.toHaveText(
+			/^(Downloaded|Downloading)/
+		);
+		await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Inside Reading list');
+		await context.setOffline(false);
+	});
+});
