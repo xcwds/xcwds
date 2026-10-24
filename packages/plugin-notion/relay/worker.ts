@@ -16,8 +16,8 @@
  *   body of at most 64 KB (`BODY_LIMIT`); no cookies or client address headers. Only `Content-Type` and
  *   `Retry-After` come back from Notion's headers.
  * - `GET /file?url=…` (#108) fetches an image Notion hosts, from the signed link Notion gave the
- *   app, so the app never contacts the file's origin itself. Only `https:` links on the hosts in
- *   `FILE_HOSTS`, sent with no headers at all (the token stays behind), and only images
+ *   app, so the app never contacts the file's origin itself. Only `https:` links on the hosts
+ *   `fileHost` accepts, sent with no headers at all (the token stays behind), and only images
  *   (`FILE_TYPES`) of at most `FILE_LIMIT` bytes come back.
  *
  * No dependencies beyond the Workers runtime (standard `fetch`, `Request` and `Response`).

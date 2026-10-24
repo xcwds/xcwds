@@ -300,6 +300,7 @@ test('connects, downloads each kind of source, keeps copies when the relay fails
 		EXTERNAL
 	);
 	expect(elsewhere).toEqual([]);
+	expect(await auditTapTargets(page)).toEqual([]);
 	await backToSources(page);
 	copy = await openCopy(page, 'Journal');
 	await expect(copy).toContainText('Inside Thursday notes');
