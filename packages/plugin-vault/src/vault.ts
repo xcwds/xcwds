@@ -4,7 +4,8 @@
  * sensitive key can't be read or saved (`XCWDS_ERR_LOCKED`). Writes go to memory at once and are
  * re-sealed asynchronously, one group at a time, in order. Another tab's re-seal is opened again
  * here. Lock-agnostic: whoever holds the passcode derives the key (`deriveKey` from `./seal`)
- * with `salt()` and calls `enable`, `unlock`, `lock`, `disable` or `drop`.
+ * with `salt()` and calls `enable`, `unlock`, `lock`, `rekey`, `disable` or `drop`
+ * (`passcodeKeeper` in `./keeper` does it for `@xcwds/plugin-lock`).
  *
  * Imported at prerender too, so nothing touches browser globals until a function runs.
  */
@@ -37,6 +38,11 @@ export type Vault = {
 	/** Forgets the key and the open data, once writes still being sealed are saved. */
 	lock(): void;
 	/**
+	 * Seals everything again with `key` (unlocked only), derived from a new passcode and a fresh
+	 * `salt`. False when it couldn't save; the old key and salt stay then.
+	 */
+	rekey(key: CryptoKey, salt: string): Promise<boolean>;
+	/**
 	 * Turns the vault off (unlocked only): writes the sensitive groups back as plaintext and
 	 * removes the sealed copies and the salt. False when it couldn't save; nothing changes then.
 	 */
@@ -60,6 +66,11 @@ export type VaultOptions = {
 	 * clearing that group drops the vault, as clearing the passcode clears what it guarded.
 	 */
 	group?: string;
+	/**
+	 * Called when another tab sealed everything again with a new key (the passcode changed
+	 * there): this tab's key no longer opens anything, so the vault locks, and the app should too.
+	 */
+	onLocked?: () => void;
 };
 
 const SALT_FIELD = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -106,6 +117,18 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 	let failures = 0;
 	/** Set while this tab changes the salt itself, so the listener below lets it go. */
 	let changing = false;
+	/**
+	 * Moves on whenever the key the groups are sealed with changes (`rekey`, or another tab's):
+	 * a seal queued before then mustn't save over what's sealed with the new key.
+	 */
+	let epoch = 0;
+	/** The salt the key in memory was derived with. */
+	let keySalt: string | undefined;
+	/**
+	 * Whether a seal made with the key of `at` may still be saved: no new key since, here or in
+	 * another tab (whose new salt shows in storage before its event reaches this one).
+	 */
+	const current = (at: number) => epoch === at && savedSalt() === keySalt;
 
 	/**
 	 * The saved salt, read from the adapter below: reading it through the registry would come
@@ -184,18 +207,30 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 		if (queued || !key) return;
 		queued = true;
 		const sealingKey = key;
+		const at = epoch;
 		const run = async () => {
 			queued = false;
+			if (epoch !== at) {
+				// Queued before a new key: seal them with that one instead (nothing while locked).
+				for (const group of [...dirty]) {
+					dirty.delete(group);
+					schedule(group);
+				}
+				return;
+			}
 			const groups = [...dirty];
 			dirty.clear();
 			for (const group of groups) {
 				const c = memory.get(group);
 				const id = blobKey(group);
 				try {
-					if (!c || c.size === 0) inner.remove(id);
-					else {
+					if (!c || c.size === 0) {
+						if (current(at)) inner.remove(id);
+					} else {
 						const text = JSON.stringify(Object.fromEntries(c));
-						inner.set(id, JSON.stringify(await seal(sealingKey, text, context(group))));
+						const sealed = JSON.stringify(await seal(sealingKey, text, context(group)));
+						// Sealed again with a new key meanwhile, from what memory holds now.
+						if (current(at)) inner.set(id, sealed);
 					}
 				} catch (cause) {
 					failures++;
@@ -286,6 +321,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 	/** Forgets the open data (not the sealed copies). */
 	function forget() {
 		key = null;
+		keySalt = undefined;
 		memory = new Map();
 		dirty.clear();
 	}
@@ -299,6 +335,15 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 	const stopListening = storage.onChange((k) => {
 		if (k === null || changing) return;
 		if (k === saltEntry.key) {
+			if (key && enabled() && savedSalt() !== keySalt) {
+				// Sealed again with another tab's new passcode: what's open here can't be saved any
+				// more, and its writes would overwrite theirs. Locked until the new passcode.
+				epoch++;
+				forget();
+				storage.reload();
+				options.onLocked?.();
+				return;
+			}
 			if (!enabled()) {
 				// Off or reset elsewhere (or "Clear" on the salt's group): nothing here opens any more.
 				forget();
@@ -362,6 +407,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 			}
 			changing = false;
 			key = newKey;
+			keySalt = salt;
 			memory = groups;
 			// Writes that landed while sealing went to storage as plaintext: take them in, and remove
 			// their plaintext only once they're sealed.
@@ -397,6 +443,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 			}
 			if (key) return true;
 			key = newKey;
+			keySalt = savedSalt();
 			memory = opened;
 			// Plaintext of entries that became sensitive since: move it in and seal it.
 			const moved: string[] = [];
@@ -421,6 +468,49 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 				if (key === null && memory === pending) memory = new Map();
 			};
 			void sealing.then(done, done);
+		},
+		async rekey(newKey, salt) {
+			if (!enabled() || !key) return false;
+			const was = key;
+			if (!(await vault.flush()) || key !== was) return false;
+			const sealed = new Map<string, string>();
+			for (const [group, c] of memory)
+				if (c.size)
+					sealed.set(
+						blobKey(group),
+						JSON.stringify(
+							await seal(newKey, JSON.stringify(Object.fromEntries(c)), context(group))
+						)
+					);
+			sealed.set(checkKey, JSON.stringify(await seal(newKey, CHECK, 'check')));
+			if (key !== was) return false;
+			// What's saved now, to put back if a write fails part way.
+			const before = new Map<string, string | null>();
+			for (const k of sealed.keys()) before.set(k, inner.get(k));
+			const oldSalt = savedSalt();
+			changing = true;
+			try {
+				for (const [k, text] of sealed) inner.set(k, text);
+				if (!storage.write(saltEntry, salt)) throw new Error('The salt could not be saved.');
+			} catch {
+				try {
+					for (const [k, text] of before)
+						if (text === null) inner.remove(k);
+						else inner.set(k, text);
+					if (oldSalt !== undefined) storage.write(saltEntry, oldSalt);
+				} catch {
+					// Blocked storage: nothing more to put back.
+				}
+				return false;
+			} finally {
+				changing = false;
+			}
+			epoch++;
+			key = newKey;
+			keySalt = salt;
+			// Writes made while sealing above: seal the groups again from memory, with the new key.
+			for (const group of memory.keys()) schedule(group);
+			return vault.flush();
 		},
 		async disable() {
 			if (!enabled() || !key) return false;

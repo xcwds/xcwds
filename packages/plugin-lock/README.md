@@ -79,7 +79,7 @@ The API:
 - `setUp(code, kind)` sets the first passcode: 6+ digits, or a passphrase of 8+ characters. It
   resolves to a sentence saying what's wrong, or `undefined` once saved.
 - `unlock(code)`, `change(current, next, kind)` and `turnOff(current)` resolve to `'ok'`,
-  `'wrong'` or `'wait'`. After 5 wrong tries the next one waits 30 s, then 1 min, 5 min, 15 min
+  `'wrong'` or `'wait'` (`change` and `turnOff` to a sentence when the passcode couldn't be saved). After 5 wrong tries the next one waits 30 s, then 1 min, 5 min, 15 min
   and an hour, and the count survives a reload. `lock()` locks now.
 - `hides(path)` says whether a notice raised on `path` must hide what it says: the app is locked
   and the lock keeps that page out (any page but the unlock screen for the whole app). False
@@ -89,6 +89,13 @@ The API:
 - `reset()` is for a forgotten passcode: there's no recovery, so it clears every storage group
   marked `sensitive` (`sensitiveGroups()` lists them) along with the passcode, including the
   group's files (`app.blobs` collections), which go in the background.
+- `keep(keeper)` hands the passcode to something kept with it, such as `@xcwds/plugin-vault`'s
+  encryption key, so it needs no passcode of its own (one keeper per app; it returns a function
+  that stops it). The keeper's `setUp(code)`, `change(current, next)` and `turnOff(current)` run
+  once the lock has checked the passcode, and resolving to false undoes the change, which then
+  reports that it couldn't save. `unlock(code)` runs before the lock opens, so pages see what it
+  opened. `lock()` and `reset()` are told after the fact; `reset()` runs first when sensitive
+  data is cleared, by a reset or by the passcode being cleared some other way.
 
 Only a verifier is saved (`app:lock:verifier`: PBKDF2-SHA-256, 600,000 iterations, a random
 16-byte salt), never the passcode, and unlocking lives in memory, so every start is locked. The

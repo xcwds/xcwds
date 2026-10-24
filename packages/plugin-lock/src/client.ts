@@ -35,7 +35,7 @@ import {
 	type LockSetting
 } from './options.js';
 
-export type { AppLock, LockState, TryResult } from './lock.js';
+export type { AppLock, LockState, PasscodeKeeper, TryResult } from './lock.js';
 
 /** `app.lockScreen`: what the unlock screen needs besides `app.lock`. */
 export type LockScreen = {

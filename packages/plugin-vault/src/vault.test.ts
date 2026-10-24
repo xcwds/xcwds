@@ -6,14 +6,14 @@ import { createVault } from './vault.js';
 const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
 const SECRET = 'cycle day 12';
 
-function setup(adapter = memoryStorage()) {
+function setup(adapter = memoryStorage(), onLocked?: () => void) {
 	const storage = createStorage({ adapter, onError: vi.fn() });
 	const diary = storage.scope('diary');
 	const note = diary.entry('note', { label: 'Note', parse: text, sensitive: true });
 	const mood = diary.entry('mood', { label: 'Mood', parse: text });
 	const other = storage.scope('other').entry('n', { label: 'N', parse: text });
 	const onError = vi.fn();
-	const vault = createVault(storage.scope('vault'), { onError });
+	const vault = createVault(storage.scope('vault'), { onError, onLocked });
 	return { adapter, storage, note, mood, other, vault, onError };
 }
 
@@ -246,6 +246,77 @@ describe('the vault', () => {
 		tab.dispatchEvent(Object.assign(new Event('storage'), { key: 'app:vault:sealed:diary' }));
 		await vi.waitFor(() => expect(a.storage.read(a.note)).toBe('from tab b'));
 		expect(changes).toContain(null);
+	});
+
+	it('seals everything again with a new key, and keeps a write made meanwhile', async () => {
+		const { storage, adapter, note, mood, vault, salt } = await enabled();
+		const salt2 = newSalt();
+		const key2 = await key(salt2, '654321');
+		const rekeying = vault.rekey(key2, salt2);
+		storage.write(mood, 'calmer');
+		expect(await rekeying).toBe(true);
+		expect(vault.salt()).toBe(salt2);
+		expect(await vault.flush()).toBe(true);
+		expect(dump(adapter)).not.toContain('calm');
+		const next = setup(adapter);
+		expect(await next.vault.unlock(await key(salt))).toBe(false);
+		expect(await next.vault.unlock(await key(salt2))).toBe(false);
+		expect(await next.vault.unlock(key2)).toBe(true);
+		expect(next.storage.read(next.note)).toBe(SECRET);
+		expect(next.storage.read(next.mood)).toBe('calmer');
+		expect(storage.read(note)).toBe(SECRET);
+	});
+
+	it("won't rekey while locked, and keeps the old key when storage refuses", async () => {
+		const mem = memoryStorage();
+		const full = { on: false };
+		const adapter = {
+			...mem,
+			set(k: string, v: string) {
+				if (full.on && k.startsWith('app:vault:'))
+					throw new DOMException('full', 'QuotaExceededError');
+				mem.set(k, v);
+			}
+		};
+		const s = setup(adapter as ReturnType<typeof memoryStorage>);
+		s.storage.write(s.note, SECRET);
+		const salt = newSalt();
+		expect(await s.vault.enable(await key(salt), salt)).toBe(true);
+		const salt2 = newSalt();
+		const key2 = await key(salt2, '654321');
+		full.on = true;
+		expect(await s.vault.rekey(key2, salt2)).toBe(false);
+		full.on = false;
+		expect(s.vault.salt()).toBe(salt);
+		s.vault.lock();
+		expect(await s.vault.rekey(key2, salt2)).toBe(false);
+		expect(await s.vault.unlock(await key(salt))).toBe(true);
+		expect(s.storage.read(s.note)).toBe(SECRET);
+	});
+
+	it("locks when another tab seals everything again, and doesn't save over it", async () => {
+		const { adapter, salt } = await enabled();
+		const onLocked = vi.fn();
+		const a = setup(adapter, onLocked);
+		const b = setup(adapter);
+		const tab = new EventTarget();
+		a.storage.startSync(tab);
+		await a.vault.unlock(await key(salt));
+		await b.vault.unlock(await key(salt));
+		const salt2 = newSalt();
+		const key2 = await key(salt2, '654321');
+		expect(await b.vault.rekey(key2, salt2)).toBe(true);
+		// Tab A writes before the event arrives: it isn't sealed over tab B's new key.
+		a.storage.write(a.mood, 'from tab a');
+		expect(await a.vault.flush()).toBe(true);
+		tab.dispatchEvent(Object.assign(new Event('storage'), { key: 'app:vault:salt' }));
+		expect(onLocked).toHaveBeenCalledOnce();
+		expect(a.vault.state).toEqual({ enabled: true, locked: true });
+		expect(a.storage.read(a.note)).toBeUndefined();
+		expect(await a.vault.unlock(await key(salt))).toBe(false);
+		expect(await a.vault.unlock(key2)).toBe(true);
+		expect(a.storage.read(a.note)).toBe(SECRET);
+		expect(a.storage.read(a.mood)).toBe('calm');
 	});
 
 	it('reports a seal storage refused', async () => {

@@ -1,7 +1,7 @@
 /**
  * The plugin's name and the @xcwds/core versions it works with. The plugin's entries (`index.ts`,
- * `client.ts`) come in later slices of #79; until then only `./seal`, `./vault` and `./blobs`
- * are exported.
+ * `client.ts`) come in later slices of #79; until then only `./seal`, `./vault`, `./blobs`
+ * and `./keeper` are exported.
  */
 export const NAME = '@xcwds/plugin-vault';
 /**

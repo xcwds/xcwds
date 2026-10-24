@@ -1,6 +1,6 @@
 import { createBlobs, createStorage, memoryBlobs, memoryStorage } from '@xcwds/core';
 import { describe, expect, it, vi } from 'vitest';
-import { createLock, lockEntries } from './lock.js';
+import { createLock, lockEntries, type PasscodeKeeper } from './lock.js';
 
 /** A device: storage with the lock's entries, a sensitive journal and a plain setting. */
 function device(adapter = memoryStorage(), clock = { t: 1_000_000 }) {
@@ -148,5 +148,105 @@ describe('the lock', () => {
 		tell(b.entries.verifier.key);
 		expect(inB.state.enabled).toBe(false);
 		expect(b.storage.read(b.journal)).toBeUndefined();
+	});
+
+	describe('a passcode keeper', () => {
+		/** A keeper that records what it's told, and fails the steps named in `fail`. */
+		function keeper(fail: string[] = []) {
+			const told: string[] = [];
+			const step =
+				(name: string) =>
+				async (...codes: string[]) => {
+					told.push([name, ...codes].join(' '));
+					return !fail.includes(name);
+				};
+			const k: PasscodeKeeper = {
+				setUp: step('setUp'),
+				unlock: step('unlock'),
+				change: step('change'),
+				turnOff: step('turnOff'),
+				lock: () => void told.push('lock'),
+				reset: () => void told.push('reset')
+			};
+			return { k, told };
+		}
+
+		it('is handed each passcode once the lock has checked it', async () => {
+			const d = device();
+			const { k, told } = keeper();
+			let { lock } = d.open();
+			lock.keep(k);
+			expect(() => lock.keep(keeper().k)).toThrowError(/already has a passcode keeper/);
+			expect(await lock.setUp('123', 'digits')).toBe('Use at least 6 digits.');
+			expect(await lock.setUp('123456', 'digits')).toBeUndefined();
+			lock.lock();
+			expect(await lock.unlock('000000')).toBe('wrong');
+			// The keeper opens before the lock does, so pages see what it opened.
+			const seen: string[] = [];
+			lock.subscribe((s) => void seen.push(`${s.locked} ${told.at(-1)}`));
+			expect(await lock.unlock('123456')).toBe('ok');
+			expect(seen.at(-1)).toBe('false unlock 123456');
+			expect(await lock.change('000000', '654321', 'digits')).toBe('wrong');
+			expect(await lock.change('123456', '654321', 'digits')).toBe('ok');
+			expect(await lock.turnOff('654321')).toBe('ok');
+			expect(told).toEqual([
+				'setUp 123456',
+				'lock',
+				'unlock 123456',
+				'change 123456 654321',
+				'turnOff 654321'
+			]);
+
+			await lock.setUp('123456', 'digits');
+			({ lock } = d.open());
+			lock.keep(k);
+			lock.reset();
+			expect(told.slice(-2)).toEqual(['setUp 123456', 'reset']);
+		});
+
+		it('undoes a set-up, change or turn-off it failed', async () => {
+			const d = device();
+			const failing = keeper(['setUp', 'change', 'turnOff']);
+			const { lock } = d.open();
+			const stop = lock.keep(failing.k);
+			expect(await lock.setUp('123456', 'digits')).toMatch(/Couldn't save/);
+			expect(lock.state).toMatchObject({ enabled: false, locked: false });
+			expect(d.adapter.data.has(d.entries.verifier.key)).toBe(false);
+
+			// Set up without it, then the keeper refuses the change: the old passcode stays.
+			stop();
+			expect(await lock.setUp('123456', 'digits')).toBeUndefined();
+			lock.keep(failing.k);
+			expect(await lock.change('123456', '654321', 'digits')).toMatch(/Couldn't save/);
+			expect(await lock.turnOff('654321')).toBe('wrong');
+			expect(await lock.turnOff('123456')).toMatch(/Couldn't save/);
+			expect(lock.state).toMatchObject({ enabled: true, locked: false });
+			lock.lock();
+			expect(await lock.unlock('123456')).toBe('ok');
+		});
+
+		it('a keeper that throws counts as one that failed, and a failed unlock still opens', async () => {
+			const d = device();
+			const { lock } = d.open();
+			const stop = lock.keep({ setUp: () => Promise.reject(new Error('boom')) });
+			expect(await lock.setUp('123456', 'digits')).toMatch(/Couldn't save/);
+			stop();
+			expect(await lock.setUp('123456', 'digits')).toBeUndefined();
+			lock.keep({ unlock: async () => false, lock: () => {} });
+			lock.lock();
+			expect(await lock.unlock('123456')).toBe('ok');
+			expect(lock.state.locked).toBe(false);
+		});
+
+		it("is reset when the passcode is cleared without its owner's say", async () => {
+			const d = device();
+			const { k, told } = keeper();
+			const { lock } = d.open();
+			lock.keep(k);
+			await lock.setUp('123456', 'digits');
+			d.storage.clear(d.storage.groups().find((g) => g.id === 'lock')!.entries);
+			expect(told.at(-1)).toBe('reset');
+			expect(lock.state.enabled).toBe(false);
+		});
 	});
 });
