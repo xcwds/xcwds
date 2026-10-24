@@ -1,5 +1,17 @@
 # @xcwds/plugin-lock
 
+## 0.5.0
+
+### Minor Changes
+
+- 5a26733: `app.lock.keep(keeper)` hands the passcode, once checked, to something kept with it (the coming
+  `@xcwds/plugin-vault`'s encryption key). A keeper that can't save undoes a set-up, change or
+  turn-off, so `turnOff` can now resolve to a sentence, as `change` already could.
+
+### Patch Changes
+
+- 4189b86: Settings → Privacy says which groups the passcode encrypts when the app has `@xcwds/plugin-vault`, instead of "it doesn't encrypt what's saved".
+
 ## 0.4.1
 
 ### Patch Changes
