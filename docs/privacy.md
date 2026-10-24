@@ -184,11 +184,15 @@ What it does and doesn't protect against:
 - **It keeps people out of the pages.** Someone who picks up an unlocked phone sees the unlock
   screen, not the pages. After 5 wrong tries each next try waits longer (30 seconds, then 1, 5
   and 15 minutes, then an hour), and the count survives a reload.
-- **It doesn't encrypt what's saved.** Someone with the device's storage (developer tools, a
-  copy of the browser profile) can read it. They can also try passcodes against the saved
-  verifier offline, as fast as their computer allows; that's why only a PBKDF2-SHA-256 verifier
-  with 600,000 iterations is saved, never the passcode, and why short PINs aren't allowed.
-  Encrypting saved data is planned ([#79](https://github.com/xcwds/xcwds/issues/79)).
+- **On its own, it doesn't encrypt what's saved.** Someone with the device's storage (developer
+  tools, a copy of the browser profile) can read it. They can also try passcodes against the
+  saved verifier offline, as fast as their computer allows; that's why only a PBKDF2-SHA-256
+  verifier with 600,000 iterations is saved, never the passcode, and why short PINs aren't
+  allowed. With `@xcwds/plugin-vault` (in progress, [#79](https://github.com/xcwds/xcwds/issues/79)),
+  the passcode also encrypts every storage group with a `sensitive` entry, files included, with
+  AES-GCM and a key that exists only in memory while the app is unlocked. Settings → Privacy
+  then names those groups and says they're encrypted; without the vault, it says the lock
+  doesn't encrypt. Everything else, and the verifier, stays readable as before.
 - **There's no recovery.** "Forgot passcode" turns the lock off and clears every storage group
   with a `sensitive` entry, after two confirmations that name them. Setting up offers a backup
   first; it isn't encrypted. The unlock screen offers no backup, since one made while locked
@@ -206,9 +210,10 @@ one plugin that contacts a server, and only when someone connects it and downloa
   Settings → Privacy names the relay, and the page's CSP allows it and nothing else.
 - **What stays on the device:** the token, the list of sources and the latest copy of each.
   Backups carry the list but never the token or the copies, and Disconnect removes both.
-- **The token is saved unencrypted** in browser storage until encryption lands
-  ([#79](https://github.com/xcwds/xcwds/issues/79)), like everything else saved. Use an
-  integration with "Read content" only, shared with just the pages you want on the device.
+- **The token is saved unencrypted** in browser storage, like everything else saved, unless
+  the app has `@xcwds/plugin-vault` and a passcode is set: the token and the copies are
+  `sensitive`, so the vault encrypts them ([#79](https://github.com/xcwds/xcwds/issues/79)). Use
+  an integration with "Read content" only, shared with just the pages you want on the device.
 
 ## Plugins are trusted code
 

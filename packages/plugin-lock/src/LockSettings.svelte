@@ -2,7 +2,8 @@
 	/**
 	 * Settings → Privacy for `@xcwds/plugin-lock` (the `lock` field): the app-switcher cover, and
 	 * the passcode lock (set up, what it locks, auto-lock, lock now, change, turn off, forgot).
-	 * While locked, only unlocking and "Forgot passcode" are offered.
+	 * While locked, only unlocking and "Forgot passcode" are offered. With `@xcwds/plugin-vault`,
+	 * it says which groups the passcode encrypts.
 	 */
 	import { settings, useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
@@ -17,7 +18,7 @@
 		type LockSetting
 	} from './options.js';
 	import type { PasscodeKind } from './passcode.js';
-	import { passcodeAttributes, toast, ui, waitText } from './ui.js';
+	import { groupLabel, passcodeAttributes, toast, ui, waitText } from './ui.js';
 
 	let { name = 'lock' }: { name?: string } = $props();
 	const app = useApp();
@@ -27,7 +28,20 @@
 
 	/** Undefined until mounted, so the prerendered page matches the first render. */
 	let lock = $state.raw<LockState>();
-	onMount(() => app.lock?.subscribe((state) => (lock = state)));
+	/** `@xcwds/plugin-vault`'s `app.vault`, when the app has it (it depends on this plugin). */
+	const vault = (app as { vault?: { readonly state: { readonly enabled: boolean } } }).vault;
+	/** Whether the vault keeps sensitive groups sealed, read whenever the lock changes. */
+	let encrypted = $state(false);
+	/** The sensitive groups the vault seals, by name. */
+	let sealed = $state('');
+	onMount(() =>
+		app.lock?.subscribe((state) => {
+			lock = state;
+			// The keeper runs before the lock's state changes, so the vault is up to date here.
+			encrypted = vault?.state.enabled ?? false;
+			sealed = (app.lock?.sensitiveGroups() ?? []).map(groupLabel(app)).join(', ');
+		})
+	);
 
 	const scopes: { value: LockScope; label: string }[] = [
 		{ value: 'private', label: 'Private pages' },
@@ -274,9 +288,23 @@
 			</form>
 		{/if}
 
-		<p class={ui.muted}>
-			The lock keeps people out of {locks}; it doesn't encrypt what's saved on this device, and
-			there's no way to recover a forgotten passcode.
+		<p class={ui.muted} data-testid="lock-encryption">
+			{#if !lock}
+				<!-- Filled in once mounted, so it never says "not encrypted" before it knows. -->
+			{:else if !vault || !sealed}
+				The lock keeps people out of {locks}; it doesn't encrypt what's saved on this device, and
+				there's no way to recover a forgotten passcode.
+			{:else if encrypted}
+				The lock keeps people out of {locks}, and what's saved for <strong>{sealed}</strong> is encrypted
+				on this device with the passcode, readable only while unlocked. There's no way to recover a forgotten
+				passcode.
+			{:else if lock.enabled}
+				The lock keeps people out of {locks}. What's saved for <strong>{sealed}</strong> is encrypted
+				with the passcode the next time you unlock. There's no way to recover a forgotten passcode.
+			{:else}
+				Setting a passcode also encrypts what's saved for <strong>{sealed}</strong> on this device, so
+				it can be read only while unlocked.
+			{/if}
 		</p>
 	</section>
 </div>

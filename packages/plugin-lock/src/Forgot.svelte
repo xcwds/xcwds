@@ -6,13 +6,11 @@
 	import { useApp } from '@xcwds/sveltekit';
 	import type { Group } from '@xcwds/core';
 	import type {} from './client.js';
-	import { toast, ui } from './ui.js';
+	import { groupLabel, toast, ui } from './ui.js';
 
 	let { onreset }: { onreset?: () => void } = $props();
 	const app = useApp();
-	const names = (app as { settingsPage?: { options: { groups: Record<string, string> } } })
-		.settingsPage?.options.groups;
-	const label = (group: Group) => names?.[group.id] ?? group.label;
+	const label = groupLabel(app);
 
 	let step = $state<0 | 1 | 2>(0);
 	let groups = $state.raw<Group[]>([]);

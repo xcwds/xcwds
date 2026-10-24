@@ -2,7 +2,7 @@
 
 Encryption at rest for the sensitive storage groups of an @xcwds app that uses
 [`@xcwds/plugin-lock`](../plugin-lock). **Work in progress** ([#79](https://github.com/xcwds/xcwds/issues/79)):
-not published yet. Backups of sealed groups (format 3) and the Privacy section's wording come next.
+not published yet. Backups of sealed groups (format 3) come next.
 
 ```ts
 import lock from '@xcwds/plugin-lock';
@@ -16,7 +16,8 @@ over the app's storage and hands it the lock's passcode: setting a passcode encr
 groups, they open only while the app is unlocked, and turning the lock off writes them back as
 plaintext. A vault added to an app that already has a passcode turns on at the next unlock. When
 another tab changes the passcode, this tab locks and asks for the new one. App updates wait until
-the latest writes are sealed.
+the latest writes are sealed. Settings → Privacy (`@xcwds/plugin-lock`'s controls) names the
+sensitive groups and says they're encrypted with the passcode, or will be once one is set.
 
 Files are sealed too ([#149](https://github.com/xcwds/xcwds/issues/149)): every blob collection
 of a sensitive group (photos, recordings) is kept sealed in IndexedDB while a passcode is set,
