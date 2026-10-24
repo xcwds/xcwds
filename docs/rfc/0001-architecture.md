@@ -240,7 +240,8 @@ import).
 
 `@xcwds/plugin-vault` is the first layer: with `@xcwds/plugin-lock`, it keeps each sensitive
 group sealed below as one AES-GCM blob, decrypts it into memory on unlock, serves the group's
-keys from there, and re-seals asynchronously after writes. WebCrypto is asynchronous, which is
+keys from there, and re-seals asynchronously after writes. It takes its key from the lock's
+passcode, which the lock hands over once checked (`app.lock.keep(...)`), so people have one secret. WebCrypto is asynchronous, which is
 why the layer serves a decrypted copy rather than decrypting on read. Backups get `format: 3`
 with the sealed groups in an encrypted section, made with the passcode, so a backup made while
 locked still carries them; format 2 still imports. That format lands with the vault, after this

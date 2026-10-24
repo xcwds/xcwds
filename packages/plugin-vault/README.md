@@ -13,7 +13,17 @@ in order. Locked, sensitive keys read as `undefined` and refuse writes, and migr
 `unlock(key)`. `lock()` still saves writes already made. `disable()` writes the plaintext back.
 `drop()` deletes the sealed groups unread, for a forgotten passcode, as does clearing the group
 its salt is saved in (`lock` by default). Another tab's re-seal is opened again in each unlocked
-tab. Connecting it to `@xcwds/plugin-lock`'s passcode comes next.
+tab. `rekey(key, salt)` seals everything again with a key from a new passcode; a tab whose key
+another tab's `rekey` replaced locks itself (and calls `onLocked`) rather than seal over it, as
+does a tab that was open while another one turned the vault on.
+
+From `@xcwds/plugin-vault/keeper`, `app.lock.keep(passcodeKeeper(vault))` connects it to
+`@xcwds/plugin-lock`'s passcode: the lock hands over the passcode once it has checked it, and the
+keeper derives the vault's key from it with the vault's own salt. Setting up a passcode turns the
+vault on, unlocking opens it (and turns it on, for a vault installed after the passcode was set),
+changing the passcode re-keys it with a fresh salt, turning the lock off writes the plaintext
+back, and a forgotten passcode's reset deletes the sealed groups unread. The plugin entry that
+does this for you comes next.
 
 From `@xcwds/plugin-vault/blobs` ([#149](https://github.com/xcwds/xcwds/issues/149)),
 `createBlobVault({ sensitive, enabled })` does the same for files: install its `layer` with

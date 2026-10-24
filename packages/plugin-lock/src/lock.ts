@@ -32,6 +32,26 @@ export type LockState = {
 /** What a try with a passcode did: `wait` means it wasn't checked (too soon after wrong ones). */
 export type TryResult = 'ok' | 'wrong' | 'wait';
 
+/**
+ * Something kept with the passcode, such as `@xcwds/plugin-vault`'s encryption key (#79). The lock
+ * hands it the passcode once it has checked it, so it never needs a passcode of its own.
+ *
+ * `setUp`, `change` and `turnOff` run after the passcode is checked and before the change counts:
+ * resolving to false (or throwing) undoes the change and the lock reports that it couldn't save.
+ * `unlock` runs before the lock opens, so pages see what it opened; its result is only advice (a
+ * keeper that can't open stays locked itself, and the app still opens). `lock` and `reset` are
+ * told after the fact; `reset` runs before sensitive data is cleared, and also when the passcode
+ * is cleared without its owner's say (Settings → Your data, or another tab).
+ */
+export type PasscodeKeeper = {
+	setUp?(code: string): Promise<boolean>;
+	unlock?(code: string): Promise<boolean>;
+	change?(current: string, next: string): Promise<boolean>;
+	turnOff?(current: string): Promise<boolean>;
+	lock?(): void;
+	reset?(): void;
+};
+
 /** `app.lock`. */
 export type AppLock = {
 	readonly state: LockState;
@@ -59,8 +79,16 @@ export type AppLock = {
 	here(): string | undefined;
 	/** Changes the passcode; a problem with the new one comes back as a sentence. */
 	change(current: string, next: string, kind: PasscodeKind): Promise<TryResult | string>;
-	/** Turns the lock off; private pages open freely again. */
-	turnOff(current: string): Promise<TryResult>;
+	/**
+	 * Turns the lock off; private pages open freely again. A sentence comes back when a keeper
+	 * couldn't let go of the passcode.
+	 */
+	turnOff(current: string): Promise<TryResult | string>;
+	/**
+	 * Hands the passcode to `keeper` from now on (one keeper per app); returns a function that
+	 * stops it.
+	 */
+	keep(keeper: PasscodeKeeper): () => void;
 	/** The storage groups a reset clears (those marked sensitive). */
 	sensitiveGroups(): Group[];
 	/**
@@ -132,6 +160,17 @@ export function createLock(
 	/** Set while this tab removes the passcode itself, so the listener below lets it go. */
 	let removing = false;
 	let state = snapshot();
+	let keeper: PasscodeKeeper | null = null;
+	/** Runs a keeper step; one that throws counts as one that failed. */
+	const kept = async (step: (k: PasscodeKeeper) => Promise<boolean> | undefined) => {
+		if (!keeper) return true;
+		try {
+			return (await step(keeper)) ?? true;
+		} catch {
+			return false;
+		}
+	};
+	const KEEPER_FAILED = "Couldn't update the encrypted data, so nothing changed.";
 	// One try at a time, so two quick taps can't both slip under the wait.
 	let queue: Promise<unknown> = Promise.resolve();
 	const serial = <T>(task: () => Promise<T>): Promise<T> => {
@@ -153,6 +192,12 @@ export function createLock(
 	const sensitiveGroups = () => storage.groups().filter((g) => g.sensitive);
 
 	function clearSensitive(): Group[] {
+		// First, so what the keeper sealed with the passcode is gone and the rest clears plainly.
+		try {
+			keeper?.reset?.();
+		} catch {
+			// Nothing more to do: the sensitive data is cleared below all the same.
+		}
 		const groups = sensitiveGroups();
 		storage.clear(groups.flatMap((g) => g.entries));
 		// Files go too, in the background: blob storage is asynchronous. A core before #144 has no
@@ -217,6 +262,20 @@ export function createLock(
 				if (problem) return problem;
 				if (!storage.write(entries.verifier, await createVerifier(code, kind, iterations)))
 					return "Couldn't save the passcode (storage is full or blocked).";
+				// Unlocked from here on, so the listener below doesn't lock while the keeper works.
+				enabled = true;
+				locked = false;
+				if (!(await kept((k) => k.setUp?.(code)))) {
+					removing = true;
+					try {
+						storage.remove(entries.verifier);
+					} finally {
+						removing = false;
+					}
+					enabled = false;
+					changed();
+					return KEEPER_FAILED;
+				}
 				storage.remove(entries.off);
 				enabled = true;
 				locked = false;
@@ -227,6 +286,7 @@ export function createLock(
 			serial(async () => {
 				const result = await check(code);
 				if (result === 'ok') {
+					await kept((k) => k.unlock?.(code));
 					locked = false;
 					changed();
 				}
@@ -235,6 +295,11 @@ export function createLock(
 		lock() {
 			if (!enabled || locked) return;
 			locked = true;
+			try {
+				keeper?.lock?.();
+			} catch {
+				// The lock still locks.
+			}
 			changed();
 		},
 		hides: (path) => state.locked && path !== undefined && locks(path),
@@ -245,8 +310,15 @@ export function createLock(
 				if (problem) return problem;
 				const result = await check(current);
 				if (result !== 'ok') return result;
+				const before = verifier();
 				if (!storage.write(entries.verifier, await createVerifier(next, kind, iterations)))
 					return "Couldn't save the passcode (storage is full or blocked).";
+				if (!(await kept((k) => k.change?.(current, next)))) {
+					// The keeper still holds the current passcode: so does the lock.
+					if (before) storage.write(entries.verifier, before);
+					changed();
+					return KEEPER_FAILED;
+				}
 				changed();
 				return 'ok';
 			}),
@@ -254,12 +326,20 @@ export function createLock(
 			serial(async () => {
 				const result = await check(current);
 				if (result !== 'ok') return result;
+				if (!(await kept((k) => k.turnOff?.(current)))) return KEEPER_FAILED;
 				removePasscode();
 				enabled = false;
 				locked = false;
 				changed();
 				return 'ok';
 			}),
+		keep(next) {
+			if (keeper) throw new Error('The lock already has a passcode keeper.');
+			keeper = next;
+			return () => {
+				if (keeper === next) keeper = null;
+			};
+		},
 		sensitiveGroups,
 		reset() {
 			const groups = clearSensitive();

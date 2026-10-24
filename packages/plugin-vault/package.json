@@ -16,6 +16,10 @@
 			"types": "./dist/blobs.d.ts",
 			"default": "./dist/blobs.js"
 		},
+		"./keeper": {
+			"types": "./dist/keeper.d.ts",
+			"default": "./dist/keeper.js"
+		},
 		"./seal": {
 			"types": "./dist/seal.d.ts",
 			"default": "./dist/seal.js"
