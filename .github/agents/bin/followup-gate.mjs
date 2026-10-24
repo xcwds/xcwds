@@ -58,12 +58,19 @@ export function prProblem(pr, { repo }) {
 	return undefined;
 }
 
+/**
+ * Whether the owner wrote a comment themselves, not the agent with the owner's user token: those
+ * are marked as made via one of the owner's own apps.
+ */
+export const byOwner = (comment, owner) =>
+	comment.user?.login === owner && comment.performed_via_github_app?.owner?.login !== owner;
+
 /** When the owner last reviewed, commented on or pushed to the PR (ms, or 0 for never). */
 export function lastOwnerActivity({ reviews, reviewComments, comments, commits }, owner) {
 	const times = [
 		...reviews.filter((r) => r.user?.login === owner).map((r) => r.submitted_at),
 		...reviewComments.filter((c) => c.user?.login === owner).map((c) => c.created_at),
-		...comments.filter((c) => c.user?.login === owner).map((c) => c.created_at),
+		...comments.filter((c) => byOwner(c, owner)).map((c) => c.created_at),
 		...commits.filter((c) => c.author?.login === owner).map((c) => c.commit.committer.date)
 	];
 	return Math.max(0, ...times.filter(Boolean).map((t) => Date.parse(t)));

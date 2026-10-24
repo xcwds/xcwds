@@ -52,6 +52,11 @@ on:
       CLAUDE_CODE_OAUTH_TOKEN:
         description: The owner's Claude subscription token (claude setup-token)
         required: true
+      AGENT_USER_PRIVATE_KEY:
+        description: >-
+          Optional: the owner's user access token for the app (device flow), so comments and new
+          issues show as the owner's, via the app
+        required: false
 
 # All writes go through the app's tokens; the workflow's own token only reads.
 permissions:
@@ -115,16 +120,18 @@ jobs:
           sudo -n chown -R root:root "$AGENT_BIN"
           sudo -n chmod -R go-w "$AGENT_BIN"
 
-      # First, before anything else runs: the key goes in on stdin and only the helper (as root)
-      # holds it. sudo is taken away from the runner user below, so the agent can't read it back.
+      # First, before anything else runs: the key (and the owner's user token, if set) goes in on
+      # stdin and only the helper (as root) holds it. sudo is taken away from the runner user below,
+      # so the agent can't read either back.
       - name: Start the token helper
         env:
           AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          AGENT_USER_PRIVATE_KEY: ${{ secrets.AGENT_USER_PRIVATE_KEY }}
           APP_ID: ${{ vars.AGENT_APP_ID }}
           REPOS_CSV: ${{ steps.plan.outputs.repos_csv }}
         run: |
           log="$RUNNER_TEMP/agent-token.log"
-          printf '%s' "$AGENT_APP_PRIVATE_KEY" | env -u AGENT_APP_PRIVATE_KEY sudo -n env -i PATH="$PATH" setsid node "$AGENT_BIN/token-helper.mjs" \
+          printf '%s\n%s\n' "$AGENT_APP_PRIVATE_KEY" "$AGENT_USER_PRIVATE_KEY" | env -u AGENT_APP_PRIVATE_KEY -u AGENT_USER_PRIVATE_KEY sudo -n env -i PATH="$PATH" setsid node "$AGENT_BIN/token-helper.mjs" \
             --socket "$AGENT_TOKEN_SOCKET" --app-id "$APP_ID" --owner "$AGENT_OWNER" --repos "$REPOS_CSV" \
             > "$log" 2>&1 &
           for _ in $(seq 100); do
@@ -136,6 +143,11 @@ jobs:
             echo "::error::The token helper didn't start. Check the app's ID, key and installation (AGENTS.md, Agent workflows)."
             exit 1
           fi
+          user=$("$AGENT_BIN/agent-token" user-status)
+          if [ -n "$AGENT_USER_PRIVATE_KEY" ] && [ "$(jq -r .login <<< "$user")" = null ]; then
+            echo "::warning::Comments go out as the bot: $(jq -r .reason <<< "$user"). Renew AGENT_USER_PRIVATE_KEY (AGENTS.md, Agent workflows)."
+          fi
+          echo "AGENT_AS_USER=$(jq -r '.login // ""' <<< "$user")" >> "$GITHUB_ENV"
 
       - name: Set up git and gh as the bot
         run: |
@@ -305,6 +317,11 @@ jobs:
             echo "- Event: $GITHUB_EVENT_NAME in $GITHUB_REPOSITORY (run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
             echo "- Repos checked out: $REPOS"
             echo "- Bot: $AGENT_BOT_LOGIN (user id $AGENT_BOT_ID)"
+            if [ -n "$AGENT_AS_USER" ]; then
+              echo "- Comments and new issues you post with \`gh issue comment\`, \`gh pr comment\` or \`gh issue create\`"
+              echo "  show as @$AGENT_AS_USER, marked as made via the app. Reviews, review replies, labels, pushes,"
+              echo "  PRs and merges stay $AGENT_BOT_LOGIN."
+            fi
             echo "- Tool profile: $PROFILE"
             echo "- Run-log issues in xcwds/xcwds: Issue to PR #${LOG_ISSUE_TO_PR:-?}, Renovate #${LOG_RENOVATE:-?}, labeling #${LOG_LABELING:-?}"
             if [ "$DRY_RUN" = true ]; then

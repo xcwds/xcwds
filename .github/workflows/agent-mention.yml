@@ -23,12 +23,16 @@ jobs:
   mention:
     # A cheap first filter, so other comments start no runner: the text tags @claude, a person with
     # write access wrote it (the action checks that again), and never a bot, so the agent's own
-    # replies and Renovate can't trigger it. Review events on fork PRs get no secrets, so they're
-    # left out; a plain comment on a fork PR runs with the base branch and the read profile.
+    # replies and Renovate can't trigger it. With the owner's user token the agent posts comments
+    # and issues as the owner, so those made via one of the owner's own apps are left out too (it
+    # never reviews as the owner: reviews carry no such mark). Review events on fork PRs get no
+    # secrets, so they're left out; a plain comment on a fork PR runs with the base branch and the
+    # read profile.
     if: >-
       github.event.sender.type != 'Bot' && (
         (github.event_name == 'issue_comment'
           && contains(github.event.comment.body, '@claude')
+          && github.event.comment.performed_via_github_app.owner.login != github.repository_owner
           && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
         || (github.event_name == 'pull_request_review_comment'
           && contains(github.event.comment.body, '@claude')
@@ -39,6 +43,7 @@ jobs:
           && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)
           && github.event.pull_request.head.repo.full_name == github.repository)
         || (github.event_name == 'issues'
+          && github.event.issue.performed_via_github_app.owner.login != github.repository_owner
           && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude'))
           && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
       )
@@ -62,3 +67,4 @@ jobs:
     secrets:
       AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      AGENT_USER_PRIVATE_KEY: ${{ secrets.AGENT_USER_PRIVATE_KEY }}

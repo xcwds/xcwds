@@ -5,6 +5,8 @@
 //   agent-token status     prints the current token's fingerprint and expiry (no secret)
 //   agent-token refresh    mints a new token and prints its fingerprint and expiry (no secret)
 //   agent-token identity   prints the app's bot login and user id
+//   agent-token user-token prints the owner's user access token for the app (fails when there's none)
+//   agent-token user-status prints whose user token it is and its fingerprint, or why there's none
 
 import { connect } from 'node:net';
 
@@ -29,5 +31,7 @@ connection.on('end', () => {
 		console.error(`agent-token: ${reply.error}`);
 		process.exit(1);
 	}
-	console.log(command === 'token' ? reply.token : JSON.stringify(reply));
+	console.log(
+		command === 'token' || command === 'user-token' ? reply.token : JSON.stringify(reply)
+	);
 });

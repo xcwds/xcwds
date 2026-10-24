@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Serves GitHub App installation tokens on a local Unix socket, so agent runs longer than a token's
-// one-hour life keep working and the agent never sees the app's private key.
+// one-hour life keep working and the agent never sees the app's private key. When the owner's user
+// access token for the app follows the key on stdin, it serves that too: the gh wrapper uses it for
+// comments and new issues, which then show as the owner's, marked as made via the app.
 //
 // agent.yml starts it as root, before anything else, with the key on stdin (never in argv, env or a
 // file), then takes sudo away from the runner user: the agent can ask for tokens but can't read this
@@ -8,7 +10,8 @@
 // key, exchanged for an installation token scoped to the repos the run checked out.
 //
 // Usage: token-helper.mjs --socket <path> --app-id <client id> --owner <account> --repos <a,b>
-// Protocol: one command per connection (`token`, `refresh`, `status` or `identity`), one JSON line back.
+// Protocol: one command per connection (`token`, `refresh`, `status`, `identity`, `user-token` or
+// `user-status`), one JSON line back.
 
 import { createHash, createPrivateKey, createSign } from 'node:crypto';
 import { chmodSync, rmSync } from 'node:fs';
@@ -88,7 +91,30 @@ export function tokenSource({ key, appId, owner, repos, request = api, now = Dat
 	};
 }
 
-async function handle(source, command) {
+/** The private key and, after it, the owner's user access token if there is one. */
+export function splitSecrets(input) {
+	const end = /-----END [A-Z ]+-----/.exec(input);
+	if (!end) return { key: input, userToken: undefined };
+	const at = end.index + end[0].length;
+	return { key: input.slice(0, at), userToken: input.slice(at).trim() || undefined };
+}
+
+/**
+ * The owner's user access token, kept only if it really is the owner's. A token that fails the
+ * check (revoked, or someone else's) is dropped with the reason, and the agent stays the bot.
+ */
+export async function userSource({ token, owner, request = api }) {
+	if (!token) return { reason: 'no user token was given' };
+	try {
+		const { login } = await request('/user', token);
+		if (login !== owner) return { reason: `the user token belongs to ${login}, not ${owner}` };
+		return { token, login };
+	} catch (error) {
+		return { reason: `the user token doesn't work: ${error.message}` };
+	}
+}
+
+async function handle(source, user, command) {
 	switch (command) {
 		case 'token':
 			return { token: (await source.token()).token };
@@ -99,6 +125,13 @@ async function handle(source, command) {
 		}
 		case 'identity':
 			return source.identity();
+		case 'user-token':
+			if (!user.token) throw new Error(`no user token: ${user.reason}`);
+			return { token: user.token };
+		case 'user-status':
+			return user.token
+				? { login: user.login, fingerprint: fingerprint(user.token) }
+				: { login: null, reason: user.reason };
 		default:
 			throw new Error(`unknown command: ${command}`);
 	}
@@ -125,11 +158,14 @@ async function main() {
 			'usage: token-helper.mjs --socket <path> --app-id <id> --owner <owner> --repos <a,b>'
 		);
 	}
+	const secrets = splitSecrets(await readStdin());
 	// The key lives only in this KeyObject from here on.
-	const key = createPrivateKey(await readStdin());
+	const key = createPrivateKey(secrets.key);
 	const source = tokenSource({ key, appId, owner, repos: repos.split(',').filter(Boolean) });
 	// Fail fast, before the workflow goes on, when the app or its installation is misconfigured.
 	await source.token();
+	const user = await userSource({ token: secrets.userToken, owner });
+	console.log(user.token ? `user token for ${user.login}` : `no user token: ${user.reason}`);
 
 	rmSync(socket, { force: true });
 	const server = createServer((connection) => {
@@ -140,7 +176,7 @@ async function main() {
 			if (!input.includes('\n')) return;
 			const command = input.trim();
 			try {
-				connection.end(JSON.stringify(await handle(source, command)) + '\n');
+				connection.end(JSON.stringify(await handle(source, user, command)) + '\n');
 			} catch (error) {
 				connection.end(JSON.stringify({ error: error.message }) + '\n');
 			}
