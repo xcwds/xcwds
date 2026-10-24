@@ -2,7 +2,7 @@
 	"name": "@xcwds/plugin-vault",
 	"version": "0.0.0",
 	"private": true,
-	"description": "Encryption at rest for the sensitive storage groups of @xcwds apps that use @xcwds/plugin-lock. Work in progress (#79), not published yet.",
+	"description": "Encryption at rest for the sensitive storage groups of @xcwds apps that use @xcwds/plugin-lock, with the lock's passcode. Work in progress (#79), not published yet.",
 	"license": "MIT",
 	"type": "module",
 	"sideEffects": false,
@@ -11,7 +11,16 @@
 		"url": "git+https://github.com/xcwds/xcwds.git",
 		"directory": "packages/plugin-vault"
 	},
+	"types": "./dist/index.d.ts",
 	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./client": {
+			"types": "./dist/client.d.ts",
+			"default": "./dist/client.js"
+		},
 		"./blobs": {
 			"types": "./dist/blobs.d.ts",
 			"default": "./dist/blobs.js"
@@ -40,10 +49,13 @@
 		"publint": "publint"
 	},
 	"peerDependencies": {
-		"@xcwds/core": "workspace:^"
+		"@xcwds/core": "workspace:^",
+		"@xcwds/plugin-lock": "workspace:^"
 	},
 	"devDependencies": {
 		"@xcwds/core": "workspace:^",
+		"@xcwds/plugin-lock": "workspace:^",
+		"@xcwds/testing": "workspace:*",
 		"typescript": "~6.0.3",
 		"vitest": "^5.0.0"
 	},
