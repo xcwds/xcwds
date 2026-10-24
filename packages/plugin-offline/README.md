@@ -51,7 +51,9 @@ styles included, is precached as before.
   apps turned off.
 - An update precaches the shared pages plus the pages of the apps in the saved list, and fails
   to install (keeping the old version) rather than leave one of them out, so an update never
-  makes an app you use stop working offline.
+  makes an app you use stop working offline. The first update to a version with `byApp` has no
+  saved list yet, so it keeps every app, as the version before did. Apps turned on or off while
+  an update waits reach the new version when it takes over.
 - A page of an app that's off still opens online, and runtime caching keeps it as for any page
   that wasn't precached.
 - A page downloaded when an app is turned on comes from the server as it is then: if a newer
