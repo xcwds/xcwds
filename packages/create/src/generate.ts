@@ -2,7 +2,14 @@
  * The files of a new app: a SvelteKit project wired to @xcwds (RFC 0001 decisions 1-4), with the
  * thin route files each picked plugin needs, tests and a GitHub Pages deploy workflow.
  */
-import { CATALOG, callOf, withRequirements, type AppPlan, type PluginId } from './catalog.js';
+import {
+	CATALOG,
+	assertInstallable,
+	callOf,
+	withRequirements,
+	type AppPlan,
+	type PluginId
+} from './catalog.js';
 import { THIRD_PARTY_VERSIONS, XCWDS_VERSIONS } from './versions.js';
 
 export type PackageManager = 'pnpm' | 'npm';
@@ -616,6 +623,7 @@ export function appFiles(options: GenerateOptions): Map<string, string> {
 		tagline: line(options.tagline),
 		plugins: withRequirements(options.plugins)
 	};
+	assertInstallable(plan.plugins, options.workspace ?? false);
 	const pm = options.packageManager ?? 'pnpm';
 	const files = new Map<string, string>([
 		['package.json', packageJson(plan, options)],

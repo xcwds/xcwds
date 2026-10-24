@@ -5,7 +5,14 @@ import { join } from 'node:path';
 import * as prettier from 'prettier';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { addPlugins } from './add.js';
-import { TEMPLATES, withRequirements } from './catalog.js';
+import {
+	NOTION_RELAY_PLACEHOLDER,
+	NOTION_RELAY_STEP,
+	TEMPLATES,
+	isPublished,
+	offered,
+	withRequirements
+} from './catalog.js';
 import { appendToArray, addImport, writeApp } from './files.js';
 import { appFiles, quote, slug } from './generate.js';
 
@@ -143,6 +150,41 @@ describe('appFiles', () => {
 		expect(without.get('xcwds.config.ts')).toContain("share({ exclude: ['/settings'] })");
 	});
 
+	it('wires up Notion pages, with a relay placeholder the build refuses', async () => {
+		const files = appFiles({ name: 'Box', plugins: ['notion'], workspace: true });
+		const rc = files.get('.prettierrc')!;
+		for (const [path, content] of files)
+			expect(await formatted(path, content, rc), path).toBe(true);
+		const config = files.get('xcwds.config.ts')!;
+		expect(config).toContain("import notion from '@xcwds/plugin-notion';");
+		expect(config).toContain(
+			`\t\tnotion({ relay: '${NOTION_RELAY_PLACEHOLDER}', register: true })`
+		);
+		expect(NOTION_RELAY_PLACEHOLDER).toMatch(/^https:\/\/[a-z-]+\.invalid$/);
+		expect(config).toContain("\t{ path: '/notion', label: 'Notion', emoji: '🗒️' }");
+		expect(files.get('src/xcwds.css')).toContain("@import '@xcwds/plugin-notion/styles.css';");
+		expect(files.get('src/routes/notion/+page.svelte')).toContain(
+			'<main class="page-narrow pt-2 pb-6">\n\t<NotionSources />\n</main>'
+		);
+		expect(files.get('src/routes/notion/view/+page.svelte')).toContain(
+			'<main class="page-wide pt-2 pb-6">\n\t<NotionView />\n</main>'
+		);
+		expect(JSON.parse(files.get('package.json')!).dependencies['@xcwds/plugin-notion']).toBe(
+			'workspace:*'
+		);
+	});
+
+	// @xcwds/plugin-notion is private until its first release; then these flip.
+	it('offers unpublished plugins only inside this repository', () => {
+		expect(isPublished('notion')).toBe(false);
+		expect(offered(false)).not.toContain('notion');
+		expect(offered(false)).toContain('blocks');
+		expect(offered(true)).toContain('notion');
+		expect(() => appFiles({ name: 'Box', plugins: ['notion'] })).toThrow(
+			"@xcwds/plugin-notion isn't published yet"
+		);
+	});
+
 	it('depends on the workspace for this repository CI, and quotes names safely', () => {
 		const files = appFiles({ name: "Bob's {app}", plugins: [], workspace: true });
 		expect(JSON.parse(files.get('package.json')!).dependencies['@xcwds/core']).toBe('workspace:*');
@@ -226,6 +268,33 @@ describe('addPlugins', () => {
 		expect(readFileSync(join(root, 'src/routes/my-apps/app/+page.svelte'), 'utf8')).toContain(
 			'<BlocksApp />'
 		);
+	});
+
+	it('adds Notion and says to set its relay, but only once the package is published', () => {
+		writeApp(root, appFiles({ name: 'Box', plugins: TEMPLATES.minimal }));
+		const pkgFile = join(root, 'package.json');
+		const before = readFileSync(pkgFile, 'utf8');
+		expect(() => addPlugins(root, ['notion'])).toThrow("isn't published yet");
+		expect(readFileSync(pkgFile, 'utf8')).toBe(before);
+
+		const app = join(root, 'workspace-app');
+		writeApp(app, appFiles({ name: 'Box', plugins: TEMPLATES.minimal, workspace: true }));
+		const result = addPlugins(app, ['notion']);
+		expect(result.added).toEqual(['notion']);
+		expect(result.manual).toEqual([NOTION_RELAY_STEP]);
+		expect(NOTION_RELAY_STEP).toContain('relay/README.md');
+		const fresh = appFiles({
+			name: 'Box',
+			plugins: [...TEMPLATES.minimal, 'notion'],
+			workspace: true
+		});
+		for (const path of [
+			'xcwds.config.ts',
+			'src/xcwds.css',
+			'src/routes/notion/+page.svelte',
+			'src/routes/notion/view/+page.svelte'
+		])
+			expect(readFileSync(join(app, path), 'utf8'), path).toBe(fresh.get(path));
 	});
 
 	it('leaves files the app has taken over, and says what to do', () => {

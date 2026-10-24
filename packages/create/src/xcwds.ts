@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** `xcwds add <plugin...>`: adds first-party plugins to an existing app. */
-import { CATALOG, PLUGIN_IDS } from './catalog.js';
+import { CATALOG, offered } from './catalog.js';
 import { addPlugins, installedPlugins } from './add.js';
 import { detectPackageManager, install, parseArgs } from './cli.js';
 import { readText } from './files.js';
@@ -14,8 +14,9 @@ and its styles and notices.
 function list() {
 	const pkg = JSON.parse(readText('package.json') ?? '{}');
 	const installed = installedPlugins(pkg);
+	const workspace = pkg.dependencies?.['@xcwds/core']?.startsWith('workspace:') ?? false;
 	process.stdout.write('Plugins:\n');
-	for (const id of PLUGIN_IDS)
+	for (const id of offered(workspace))
 		process.stdout.write(
 			`  ${installed.includes(id) ? '✓' : ' '} ${id.padEnd(10)} ${CATALOG[id].summary}\n`
 		);

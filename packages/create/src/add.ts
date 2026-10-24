@@ -4,7 +4,15 @@
  * and refreshes the files the starter manages (`src/xcwds.css`, `src/lib/Notices.svelte`).
  */
 import { join } from 'node:path';
-import { CATALOG, PLUGIN_IDS, callOf, withRequirements, type PluginId } from './catalog.js';
+import {
+	CATALOG,
+	NOTION_RELAY_STEP,
+	PLUGIN_IDS,
+	assertInstallable,
+	callOf,
+	withRequirements,
+	type PluginId
+} from './catalog.js';
 import { addImport, appendToArray, readText, writeFile } from './files.js';
 import {
 	MANAGED,
@@ -49,6 +57,7 @@ export function addPlugins(root: string, requested: readonly string[]): AddResul
 
 	// package.json: the new packages, like the app's other @xcwds dependencies.
 	const workspace = pkg.dependencies?.['@xcwds/core']?.startsWith('workspace:') ?? false;
+	assertInstallable(added, workspace);
 	const deps = { ...pkg.dependencies };
 	for (const name of xcwdsDependencies(added))
 		deps[name] ??= workspace ? 'workspace:*' : `^${XCWDS_VERSIONS[name]}`;
@@ -102,6 +111,7 @@ export function addPlugins(root: string, requested: readonly string[]): AddResul
 		result.manual.push(
 			"Add '/my-apps' to `share({ exclude })` in your xcwds config: a link to a page that runs one of your apps opens nothing on another device."
 		);
+	if (added.includes('notion')) result.manual.push(NOTION_RELAY_STEP);
 	if (config !== undefined && configName) {
 		writeFile(join(root, configName), config);
 		result.changed.push(configName);

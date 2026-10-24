@@ -49,6 +49,11 @@ export function resolveOptions(input: unknown): ResolvedOptions {
 		fail('`relay` is required: the origin of your Notion relay (see the relay README).');
 	if (!isOrigin(relay) || !String(relay).startsWith('https:'))
 		fail('`relay` must be an https: origin, such as "https://notion-relay.example.com".');
+	// `xcwds add notion` writes a `.invalid` placeholder (a name that never resolves, RFC 2606).
+	if (new URL(relay).hostname.endsWith('.invalid'))
+		fail(
+			`\`relay\` is still a placeholder (${relay}): deploy the relay (relay/README.md in ${NAME}) and set \`relay\` to its origin.`
+		);
 	if (typeof page !== 'string' || !PAGE.test(page))
 		fail('`page` must be a path such as "/notion" (lower case letters, digits and dashes).');
 	if (typeof register !== 'boolean') fail('`register` must be true or false.');

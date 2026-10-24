@@ -1,9 +1,9 @@
 // What CI runs to prove the starter works (#23): generates the tools template into
 // examples/starter (git-ignored, inside the workspace so it uses these packages, not npm), adds
-// five plugins with `xcwds add` (qr brings camera), installs, then runs the app's own check,
-// lint, unit and e2e.
+// six plugins with `xcwds add` (qr brings camera), sets the Notion relay as its README asks,
+// installs, then runs the app's own check, lint, unit and e2e.
 import { execFileSync } from 'node:child_process';
-import { rmSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
@@ -38,10 +38,17 @@ run(
 		'changelog',
 		'qr',
 		'blocks',
+		'notion',
 		'--no-install'
 	],
 	app
 );
+// The build refuses the relay placeholder (`https://your-notion-relay.invalid`) until it's set.
+const config = `${app}/xcwds.config.ts`;
+const placeholder = /https:\/\/your-notion-relay\.invalid/;
+const source = readFileSync(config, 'utf8');
+if (!placeholder.test(source)) throw new Error('xcwds add notion wrote no relay placeholder.');
+writeFileSync(config, source.replace(placeholder, 'https://notion-relay.example'));
 run('pnpm', ['install', '--no-frozen-lockfile']);
 for (const script of [['check'], ['lint'], ['test:unit', '--run'], ['test:e2e']])
 	run('pnpm', script, app);

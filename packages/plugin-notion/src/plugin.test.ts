@@ -87,6 +87,10 @@ describe('options', () => {
 			'wss://x.example'
 		])
 			expect(() => resolveOptions({ relay }), relay).toThrow(/`relay` must be an https: origin/);
+		// The placeholder `xcwds add notion` writes fails the build, pointing at the relay's README.
+		expect(() => resolveOptions({ relay: 'https://your-notion-relay.invalid' })).toThrow(
+			/`relay` is still a placeholder .*relay\/README\.md/
+		);
 		expect(() => resolveOptions({ relay: RELAY, page: 'notion' })).toThrow(/`page`/);
 		expect(() => resolveOptions({ relay: RELAY, token: 'x' })).toThrow(/unknown option `token`/);
 		expect(() => resolveOptions(null)).toThrow(/must be an object/);
