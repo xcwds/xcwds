@@ -49,6 +49,7 @@ The plugins, `sveltekit` and `testing` peer on `@xcwds/core` (and the plugins on
 
 - Check the latest Release run before reviewing a Version packages PR. Runs have failed silently before ([#176](https://github.com/xcwds/xcwds/issues/176), [#177](https://github.com/xcwds/xcwds/issues/177)).
 - Preview a release with a full `pnpm version-packages` on a throwaway copy of `main`; `pnpm changeset status` doesn't run the peer-dependent script, so it under-reports bumps.
+- pnpm 12 refuses packages published less than a day ago (`minimumReleaseAge`), so a dependency released today installs tomorrow, and a lockfile error about the release-age cutoff clears by itself. xcwds.github.io exempts `@xcwds/*` (`minimumReleaseAgeExclude` in its `pnpm-workspace.yaml`), so the app can take a fresh release the same day.
 
 ## Package gotchas
 
@@ -108,3 +109,14 @@ The routines that run as scheduled tasks today are moving to GitHub Actions ([#1
    - optionally, variable `AGENT_MODEL` to pick the model (`--model`).
 3. Recommended: in both repos, add a branch ruleset on `main` and `changeset-release/main` (Settings → Rules) that blocks force pushes and direct pushes for everyone but you. Put yourself on the bypass list, plus GitHub Actions for `changeset-release/main`. Check first that it doesn't block how you push today.
 4. Run **Agent smoke test** (Actions → Agent smoke test → Run workflow) and check that its summary ends with "Smoke test passed".
+
+### Cutover
+
+Each routine moves from its scheduled task in the Claude project to its workflow one at a time, lowest risk first: labeling, Renovate, then Issue to PR ([#206](https://github.com/xcwds/xcwds/issues/206)). For each one:
+
+1. Run its workflow by hand with `dry_run` on, once or twice, and compare with what the scheduled task did.
+2. Run it by hand with `dry_run` off once, at a time the scheduled task isn't due.
+3. The same day, set its variable to `on` (`AGENT_LABELING`, `AGENT_RENOVATE` or `AGENT_ISSUE_TO_PR`; `AGENT_LABELING` in both repos) and turn off the matching scheduled task ("Issue labeling (Sun, Tue, Fri)", "Renovate PR review" or "Issue to PR (3× daily)"), so no day has both or neither.
+4. Watch its run-log issue for the next few runs.
+
+To roll back, set the variable to anything but `on` and turn the scheduled task back on. Once all three have moved, a small PR changes each workflow's `dry_run` input default to `false`.
