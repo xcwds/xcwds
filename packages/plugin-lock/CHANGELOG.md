@@ -1,5 +1,20 @@
 # @xcwds/plugin-lock
 
+## 0.6.0
+
+### Minor Changes
+
+- Needs `@xcwds/core` 0.5 (peer range `^0.5.0`).
+- Needs `@xcwds/sveltekit` 0.6 (peer range `^0.6.0`).
+- 715bcae: With `@xcwds/plugin-vault`, "Forgot passcode" first offers an encrypted backup: only what the passcode encrypts, still encrypted, which imports only with that passcode (#79). The backup offered before setting a passcode comes from `app.storage.exportBackup()`.
+
+### Patch Changes
+
+- Updated dependencies [715bcae]
+- Updated dependencies
+  - @xcwds/core@0.5.0
+  - @xcwds/sveltekit@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes

@@ -6,7 +6,7 @@ export const NAME = '@xcwds/plugin-qr';
  * The @xcwds/core versions this plugin works with, checked at boot: the same range as its peer
  * dependency (`scripts/sync-core-version.js` moves it along with core's minor versions).
  */
-export const CORE = '^0.4.0';
+export const CORE = '^0.5.0';
 
 /** No options yet: the components and functions take theirs where they're used. */
 export type QrPluginOptions = Record<string, never>;

@@ -1,5 +1,22 @@
 # @xcwds/plugin-tools
 
+## 0.8.0
+
+### Minor Changes
+
+- Needs `@xcwds/core` 0.5 (peer range `^0.5.0`).
+- Needs `@xcwds/plugin-shell` 0.6 (peer range `^0.6.0`).
+- Needs `@xcwds/sveltekit` 0.6 (peer range `^0.6.0`).
+
+### Patch Changes
+
+- Updated dependencies [715bcae]
+- Updated dependencies
+- Updated dependencies
+  - @xcwds/core@0.5.0
+  - @xcwds/plugin-shell@0.6.0
+  - @xcwds/sveltekit@0.6.0
+
 ## 0.7.0
 
 ### Minor Changes

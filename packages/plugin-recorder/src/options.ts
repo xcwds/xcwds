@@ -7,7 +7,7 @@ export const NAME = '@xcwds/plugin-recorder';
  * The same range as the peer dependency (`scripts/sync-core-version.js` moves it along with
  * core's minor versions).
  */
-export const CORE = '^0.4.0';
+export const CORE = '^0.5.0';
 
 /** The options, all JSON (RFC 0001, decision 1): the recorder's, as written. */
 export type RecorderPluginOptions = RecorderOptions;
