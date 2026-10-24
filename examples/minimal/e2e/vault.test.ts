@@ -1,5 +1,6 @@
-// @xcwds/plugin-vault (#79, #149) in examples/minimal: with a passcode set, photos are sealed in
-// IndexedDB, unreadable while the app is locked, and shown again once it's unlocked.
+// @xcwds/plugin-vault (#79, #149) in examples/minimal's base-path build (the only one with the
+// vault): with a passcode set, photos are sealed in IndexedDB, unreadable while the app is
+// locked, and shown again once it's unlocked.
 import { expect, test, type Page } from '@playwright/test';
 import { gotoHydrated, serveStatic, type StaticServer } from '@xcwds/testing/playwright';
 import { fileURLToPath } from 'node:url';
@@ -14,12 +15,12 @@ test.use({
 	}
 });
 
-const build = fileURLToPath(new URL('../build', import.meta.url));
+const build = fileURLToPath(new URL('../build-sub', import.meta.url));
 let server: StaticServer;
 const url = (path: string) => server.url(path);
 
 test.beforeAll(async () => {
-	server = await serveStatic(build);
+	server = await serveStatic(build, { base: '/sub' });
 });
 test.afterAll(() => server.close());
 
