@@ -1,6 +1,7 @@
-// @xcwds/plugin-notion (#106) in the base-path build, which sets a relay (NOTION_RELAY in
-// `build:base`): /utils/notion connects, adds each kind of source and downloads it through the
-// relay, mocked here with route interception. The token never reaches a URL or a backup.
+// @xcwds/plugin-notion (#106, #107) in the base-path build, which sets a relay (NOTION_RELAY in
+// `build:base`): /utils/notion is `<NotionSources>`, which connects, adds each kind of source and
+// downloads it through the relay, mocked here with route interception; each copy opens at
+// /utils/notion/view (`<NotionView>`). The token never reaches a URL or a backup.
 import { expect, test, type BrowserContext, type Page, type Route } from '@playwright/test';
 import {
 	auditTapTargets,
@@ -27,6 +28,10 @@ const OFFLINE = "Couldn't reach Notion. Check the connection.";
 const PAGE = '0c940186-ab70-4351-bb34-2d16f0635d49';
 const PARENT = '11111111-2222-4333-8444-555555555555';
 const DS = '59833787-2cf9-4fdf-8782-e53db20768a5';
+const DB = '66666666-2222-4333-8444-555555555555';
+/** A database with two data sources, so adding it asks which one. */
+const DB_TWO = '77777777-2222-4333-8444-555555555555';
+const DS_OTHER = '88888888-2222-4333-8444-555555555555';
 const OLD_CHILD = '22222222-2222-4333-8444-555555555555';
 const NEW_CHILD = '33333333-2222-4333-8444-555555555555';
 const NEWEST = '44444444-2222-4333-8444-555555555555';
@@ -43,7 +48,8 @@ const CORS = {
 	'access-control-allow-methods': 'GET, POST'
 };
 
-type Relay = { urls: string[]; down: boolean };
+/** `hold`, while set, delays answers about databases until it settles. */
+type Relay = { urls: string[]; down: boolean; hold?: Promise<void> };
 
 /** A relay that answers like Notion for the pages above, and fails while `down`. */
 async function mockRelay(context: BrowserContext): Promise<Relay> {
@@ -63,8 +69,21 @@ async function mockRelay(context: BrowserContext): Promise<Relay> {
 		if (request.headers()['authorization'] !== `Bearer ${TOKEN}`)
 			return json({ object: 'error', code: 'unauthorized', message: 'API token is invalid.' }, 401);
 		const path = new URL(request.url()).pathname;
+		if (path.startsWith('/v1/databases/')) await relay.hold;
 		const list = (results: unknown[]) => json({ results, has_more: false, next_cursor: null });
 		if (path === '/v1/users/me') return json({ object: 'user', id: 'bot', name: 'Agenda reader' });
+		if (path === `/v1/databases/${DB}`)
+			return json({ object: 'database', id: DB, data_sources: [{ id: DS, name: 'Agenda' }] });
+		if (path === `/v1/databases/${DB_TWO}`)
+			return json({
+				object: 'database',
+				id: DB_TWO,
+				data_sources: [
+					{ id: DS_OTHER, name: 'Archive' },
+					{ id: DS, name: 'Agenda' }
+				]
+			});
+		if (path === `/v1/data_sources/${DS_OTHER}/query`) return list([]);
 		if (path === `/v1/data_sources/${DS}/query`) return list([{ object: 'page', id: NEWEST }]);
 		if (path === `/v1/blocks/${PARENT}/children`)
 			return list([
@@ -126,11 +145,29 @@ async function connect(page: Page, token: string) {
 	await page.getByRole('button', { name: 'Test connection' }).click();
 }
 
-async function addSource(page: Page, kind: string, label: string, link: string) {
-	await page.getByLabel('Kind').selectOption({ label: kind });
-	await page.getByLabel('Label').fill(label);
-	await page.getByLabel('Link or id').fill(link);
+const KINDS = {
+	page: 'One page',
+	database: 'Newest page in a database',
+	child: 'Newest child page'
+} as const;
+
+async function addSource(page: Page, kind: keyof typeof KINDS, label: string, link: string) {
+	await page.getByLabel('Kind').selectOption({ label: KINDS[kind] });
+	await page.getByLabel('Label', { exact: true }).fill(label);
+	await page.getByLabel(/ link or id/).fill(link);
 	await page.getByRole('button', { name: 'Add', exact: true }).click();
+}
+
+/** Opens a source's copy on its own page, from the sources list. */
+async function openCopy(page: Page, label: string) {
+	await source(page, label).getByTestId('source-label').click();
+	await expect(page).toHaveURL(/\/utils\/notion\/view#/);
+	return page.getByTestId('notion-view');
+}
+
+async function backToSources(page: Page) {
+	await page.locator('header [data-shell-back]').click();
+	await expect(page).toHaveURL(url('/utils/notion'));
 }
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -154,21 +191,30 @@ test('connects, downloads each kind of source, keeps copies when the relay fails
 	await connect(page, TOKEN);
 	await expect(page.getByTestId('connect-note')).toHaveText('Connected as Agenda reader.');
 	await expect(page.getByTestId('notion-connected')).toBeVisible();
+	await expect(page.getByTestId('no-sources')).toHaveText('No sources yet.');
 
 	// One page, by link.
 	await addSource(
 		page,
-		'Page',
+		'page',
 		'Reading',
 		`https://www.notion.so/Reading-list-${PAGE.replace(/-/g, '')}`
 	);
-	await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Reading list');
-	await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Inside Reading list');
-	// Drawn by `<NotionDocument>`: the title under the shell's h1, then the blocks.
-	await expect(
-		source(page, 'Reading').getByRole('heading', { level: 2, name: 'Reading list' })
-	).toBeVisible();
-	const copy = source(page, 'Reading').getByTestId('copy');
+	await expect(source(page, 'Reading').getByTestId('source-status')).toHaveText(/^Downloaded /);
+	await expect(page.getByTestId('no-sources')).toHaveCount(0);
+	// The newest child page: the last one Notion lists.
+	await addSource(page, 'child', 'Journal', PARENT);
+	await expect(source(page, 'Journal').getByTestId('source-status')).toHaveText(/^Downloaded /);
+	// The newest page of a database with one data source, which is taken without asking.
+	await addSource(page, 'database', 'Agenda', DB);
+	await expect(source(page, 'Agenda').getByTestId('source-status')).toHaveText(/^Downloaded /);
+	await expect(sources(page)).toHaveCount(3);
+	expect(relay.urls).toContainEqual(`${RELAY}/v1/data_sources/${DS}/query`);
+	expect(await auditTapTargets(page)).toEqual([]);
+
+	// Each copy opens on its own page, drawn by `<NotionDocument>`.
+	let copy = await openCopy(page, 'Reading');
+	await expect(copy.getByRole('heading', { level: 2, name: 'Reading list' })).toBeVisible();
 	await expect(copy.getByRole('link', { name: 'a link' })).toHaveAttribute(
 		'href',
 		'https://example.org/read'
@@ -178,28 +224,31 @@ test('connects, downloads each kind of source, keeps copies when the relay fails
 	await expect(copy.getByRole('link', { name: 'a script' })).toHaveCount(0);
 	await expect(copy.getByRole('checkbox', { name: 'Buy milk' })).toBeChecked();
 	await expect(copy.getByRole('checkbox', { name: 'Buy milk' })).toBeDisabled();
-	await expect(source(page, 'Reading').getByTestId('source-status')).toHaveText(/^Downloaded /);
-	// The newest child page: the last one Notion lists.
-	await addSource(page, 'Newest child page', 'Journal', PARENT);
-	await expect(source(page, 'Journal').getByTestId('copy')).toContainText('Inside Thursday notes');
-	// The newest page of a data source.
-	await addSource(page, 'Newest in a data source', 'Agenda', DS);
-	await expect(source(page, 'Agenda').getByTestId('copy')).toContainText('Agenda for today');
-	await expect(sources(page)).toHaveCount(3);
-	expect(relay.urls).toContainEqual(`${RELAY}/v1/data_sources/${DS}/query`);
-	expect(await auditTapTargets(page)).toEqual([]);
+	await backToSources(page);
+	copy = await openCopy(page, 'Journal');
+	await expect(copy).toContainText('Inside Thursday notes');
+	await backToSources(page);
+	copy = await openCopy(page, 'Agenda');
+	await expect(copy).toContainText('Agenda for today');
+	await backToSources(page);
 
-	// The relay goes away: a reload still shows every copy, and a failed refresh keeps it.
+	// The relay goes away: a reload still lists every copy, and a failed refresh keeps it.
 	relay.down = true;
 	await gotoHydrated(page, url('/utils/notion'));
 	await expect(sources(page)).toHaveCount(3);
-	await expect(source(page, 'Agenda').getByTestId('copy')).toContainText('Agenda for today');
+	await expect(source(page, 'Agenda').getByTestId('source-status')).toHaveText(/^Downloaded /);
 	await source(page, 'Agenda').getByRole('button', { name: 'Refresh' }).click();
 	await expect(source(page, 'Agenda').getByTestId('source-status')).toHaveText(OFFLINE);
-	await expect(source(page, 'Agenda').getByTestId('copy')).toContainText('Agenda for today');
+	await expect(await openCopy(page, 'Agenda')).toContainText('Agenda for today');
+	await backToSources(page);
+	relay.down = false;
 
-	// Removing a source removes its copy.
-	await source(page, 'Reading').getByRole('button', { name: 'Remove' }).click();
+	// Removing asks first, then removes the source and its copy.
+	await source(page, 'Reading').getByRole('button', { name: 'Remove…' }).click();
+	await source(page, 'Reading').getByRole('button', { name: 'Cancel' }).click();
+	await expect(sources(page)).toHaveCount(3);
+	await source(page, 'Reading').getByRole('button', { name: 'Remove…' }).click();
+	await source(page, 'Reading').getByRole('button', { name: 'Remove Reading' }).click();
 	await expect(sources(page)).toHaveCount(2);
 	const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('app:notion:copies')!));
 	expect(Object.keys(saved)).toHaveLength(2);
@@ -207,17 +256,65 @@ test('connects, downloads each kind of source, keeps copies when the relay fails
 	// The token only ever went in a header.
 	for (const target of relay.urls) expect(target).not.toContain(TOKEN);
 
-	// Disconnecting removes the token and every copy, and keeps the sources.
-	await page.getByRole('button', { name: 'Disconnect' }).click();
+	// Disconnecting asks first, then removes the token and every copy, and keeps the sources.
+	await page.getByRole('button', { name: 'Disconnect…' }).click();
+	await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
 	await expect(page.getByLabel('Integration token')).toBeVisible();
-	await expect(page.getByTestId('copy')).toHaveCount(0);
 	await expect(sources(page)).toHaveCount(2);
+	await expect(source(page, 'Agenda').getByTestId('source-status')).toHaveText(
+		'Not downloaded yet.'
+	);
+	await expect(source(page, 'Agenda').getByRole('button', { name: 'Refresh' })).toBeDisabled();
 	expect(
 		await page.evaluate(() => [
 			localStorage.getItem('app:notion:token'),
 			localStorage.getItem('app:notion:copies')
 		])
 	).toEqual([null, null]);
+});
+
+test('a database with several data sources asks which one to read', async ({ page, context }) => {
+	const relay = await mockRelay(context);
+	await gotoHydrated(page, url('/utils/notion'));
+	await connect(page, TOKEN);
+	await expect(page.getByTestId('notion-connected')).toBeVisible();
+
+	// A link that isn't Notion's, and a missing label, are caught before anything is sent.
+	await addSource(page, 'database', 'Agenda', 'not a link');
+	await expect(page.getByTestId('source-note')).toHaveText('That isn’t a Notion link or id.');
+	await addSource(page, 'database', ' ', DB_TWO);
+	await expect(page.getByTestId('source-note')).toHaveText('Give the source a label.');
+	expect(relay.urls.filter((u) => u.includes('/v1/databases/'))).toEqual([]);
+
+	// An answer that arrives after the link changed is dropped, not offered for the new link.
+	let release!: () => void;
+	relay.hold = new Promise((resolve) => (release = resolve));
+	await addSource(page, 'database', 'Agenda', DB_TWO);
+	await expect(page.getByRole('button', { name: 'Checking…' })).toBeVisible();
+	await page.getByLabel(/ link or id/).fill(DB);
+	release();
+	await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeEnabled();
+	await expect(page.getByLabel('Data source')).toHaveCount(0);
+	await expect(page.getByTestId('source-note')).toBeEmpty();
+	await expect(page.getByTestId('no-sources')).toBeVisible();
+	relay.hold = undefined;
+
+	await page.getByLabel(/ link or id/).fill(DB_TWO);
+	await page.getByRole('button', { name: 'Add', exact: true }).click();
+	await expect(page.getByTestId('source-note')).toHaveText(
+		'This database has several data sources. Choose one, then Add again.'
+	);
+	await expect(page.getByTestId('no-sources')).toBeVisible();
+	const choice = page.getByLabel('Data source');
+	await expect(choice.locator('option')).toHaveText(['Archive', 'Agenda']);
+	await choice.selectOption({ label: 'Agenda' });
+	await page.getByRole('button', { name: 'Add', exact: true }).click();
+	await expect(source(page, 'Agenda').getByTestId('source-status')).toHaveText(/^Downloaded /);
+	expect(relay.urls).toContainEqual(`${RELAY}/v1/data_sources/${DS}/query`);
+	expect(relay.urls).not.toContainEqual(`${RELAY}/v1/data_sources/${DS_OTHER}/query`);
+	// The form is cleared, and with it the choice.
+	await expect(page.getByLabel('Data source')).toHaveCount(0);
+	await expect(page.getByTestId('source-note')).toBeEmpty();
 });
 
 test('a backup carries the sources but never the token or the copies', async ({
@@ -228,8 +325,8 @@ test('a backup carries the sources but never the token or the copies', async ({
 	await gotoHydrated(page, url('/utils/notion'));
 	await connect(page, TOKEN);
 	await expect(page.getByTestId('notion-connected')).toBeVisible();
-	await addSource(page, 'Page', 'Reading', PAGE);
-	await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Reading list');
+	await addSource(page, 'page', 'Reading', PAGE);
+	await expect(source(page, 'Reading').getByTestId('source-status')).toHaveText(/^Downloaded /);
 
 	await gotoHydrated(page, url('/settings'));
 	const download = page.waitForEvent('download');
@@ -254,18 +351,17 @@ test.describe('with the service worker', () => {
 		await waitForServiceWorker(page);
 		await connect(page, TOKEN);
 		await expect(page.getByTestId('notion-connected')).toBeVisible();
-		await addSource(page, 'Page', 'Reading', PAGE);
-		await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Inside Reading list');
+		await addSource(page, 'page', 'Reading', PAGE);
+		await expect(source(page, 'Reading').getByTestId('source-status')).toHaveText(/^Downloaded /);
 
 		// Route interception still answers while offline, so the relay goes down with the network.
 		relay.down = true;
 		await context.setOffline(true);
 		await page.reload();
 		await expect(page.locator('html')).toHaveAttribute('data-hydrated', '');
-		await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Inside Reading list');
+		await expect(source(page, 'Reading').getByTestId('source-status')).toHaveText(/^Downloaded /);
 		await source(page, 'Reading').getByRole('button', { name: 'Refresh' }).click();
 		await expect(source(page, 'Reading').getByTestId('source-status')).toHaveText(OFFLINE);
-		await expect(source(page, 'Reading').getByTestId('copy')).toContainText('Inside Reading list');
 
 		// The page for one copy opens offline too, from the worker's cache.
 		await source(page, 'Reading').getByTestId('source-label').click();
@@ -290,10 +386,10 @@ for (const [size, viewport] of Object.entries(SIZES)) {
 		await gotoHydrated(page, url('/utils/notion'));
 		await connect(page, TOKEN);
 		await expect(page.getByTestId('notion-connected')).toBeVisible();
-		await addSource(page, 'Newest child page', 'Journal', PARENT);
-		await expect(source(page, 'Journal').getByTestId('copy')).toContainText('Thursday notes');
-		await addSource(page, 'Newest in a data source', 'Agenda', DS);
-		await expect(source(page, 'Agenda').getByTestId('copy')).toContainText('Agenda for today');
+		await addSource(page, 'child', 'Journal', PARENT);
+		await expect(source(page, 'Journal').getByTestId('source-status')).toHaveText(/^Downloaded /);
+		await addSource(page, 'database', 'Agenda', DB);
+		await expect(source(page, 'Agenda').getByTestId('source-status')).toHaveText(/^Downloaded /);
 
 		const link = source(page, 'Journal').getByTestId('source-label');
 		const id = (await link.getAttribute('href'))!.split('#')[1]!;

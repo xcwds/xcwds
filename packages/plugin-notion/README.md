@@ -73,11 +73,21 @@ So far it holds:
   the refresh setting, and the saved copy stays in view offline or when a download fails. A
   "newest" source whose page isn't from today says "No newer page yet", so yesterday's agenda
   isn't taken for today's. The build entry registers `<page>/view` (title "Notion page", private,
-  `wide`). `page` itself is the app's to list (as a tool, say), or pass `register: true` and the
-  plugin registers it (title "Notion", private, `wide`).
+  `wide`).
 
-The example app's base-path build runs the plugin at `/utils/notion`, with `/utils/notion/view`
-for one copy, and e2e tests against a mocked relay.
+- **`<NotionSources />`** (`./NotionSources.svelte`): the sources page, at `page`. Render it
+  from that route's file inside `<main class="page-narrow">`. It connects (setup steps, a token
+  field and Test connection; Disconnect asks first and removes the token and every copy), lists
+  the sources with when each was last downloaded, a Refresh button and Remove (which asks
+  first), and adds a source: one page, the newest page in a database (newest by creation or by a
+  date property, optionally only titles containing some text) or the newest child page of a
+  page, from a Notion link or id. A database with several data sources asks which one to read.
+  Each source's label links to its copy at `<page>/view`. `page` is the app's to list (as a
+  tool, say), or pass `register: true` and the plugin registers it (title "Notion", private,
+  `narrow`).
 
-Still to come: `<NotionSources>` for the sources page and `xcwds add notion` (the rest of
+The example app's base-path build runs the plugin at `/utils/notion` (`<NotionSources>`), with
+`/utils/notion/view` for one copy, and e2e tests against a mocked relay.
+
+Still to come: `xcwds add notion` (the rest of
 [#107](https://github.com/xcwds/xcwds/issues/107)).
