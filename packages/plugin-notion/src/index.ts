@@ -30,7 +30,7 @@ export const build = definePlugin(
 	(app, input: NotionPluginOptions) => {
 		const { page, register } = resolveOptions(input);
 		if (register)
-			app.route({ path: page, title: 'Notion', emoji: '🗒️', width: 'wide', private: true });
+			app.route({ path: page, title: 'Notion', emoji: '🗒️', width: 'narrow', private: true });
 		app.route({
 			path: `${page}/view`,
 			title: 'Notion page',

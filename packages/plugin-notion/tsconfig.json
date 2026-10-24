@@ -2,7 +2,7 @@
 	"extends": "../../tsconfig.base.json",
 	"compilerOptions": {
 		"noEmit": true,
-		"types": [],
+		"types": ["@sveltejs/kit"],
 		"module": "NodeNext",
 		"moduleResolution": "NodeNext"
 	},

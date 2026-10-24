@@ -19,7 +19,14 @@ import { definePlugin, type Entry } from '@xcwds/core';
 import { NotionError, createNotionClient, type NotionErrorKind } from './api.js';
 import type { NotionDocument } from './document.js';
 import { CORE, NAME, REASON, resolveOptions, type NotionPluginOptions } from './options.js';
-import { download, fitCopy, parseCopies, parseSources, type Source } from './sources.js';
+import {
+	dataSources,
+	download,
+	fitCopy,
+	parseCopies,
+	parseSources,
+	type Source
+} from './sources.js';
 
 export type { NotionDocument } from './document.js';
 export type { Source } from './sources.js';
@@ -53,6 +60,16 @@ export type AppNotion = {
 	): Promise<{ ok: true; name: string } | { ok: false; error: SourceError; message: string }>;
 	/** Removes the token and every saved copy (the sources stay). */
 	disconnect(): void;
+	/**
+	 * A database's data sources (most have one), to choose from when adding a "newest in a
+	 * database" source; or why they couldn't be listed.
+	 */
+	dataSources(
+		database: string
+	): Promise<
+		| { ok: true; dataSources: { id: string; name: string }[] }
+		| { ok: false; error: SourceError; message: string }
+	>;
 	/** The saved sources, in order. */
 	sources(): Source[];
 	/**
@@ -255,6 +272,24 @@ export function notionPlugin(env: NotionPluginEnv = {}) {
 						statuses.clear();
 						notify();
 						return { ok: true, name: typeof me.name === 'string' ? me.name : '' };
+					} catch (error) {
+						const kind = error instanceof NotionError ? error.kind : 'failed';
+						return { ok: false, error: kind, message: failed(kind).message! };
+					}
+				},
+				async dataSources(database) {
+					const saved = read(token);
+					if (!saved)
+						return { ok: false, error: 'not-connected', message: MESSAGES['not-connected'] };
+					const client = createNotionClient({
+						relay: options.relay,
+						token: saved,
+						...(env.fetch ? { fetch: env.fetch } : {}),
+						...(env.sleep ? { sleep: env.sleep } : {}),
+						now
+					});
+					try {
+						return { ok: true, dataSources: await dataSources(client, database) };
 					} catch (error) {
 						const kind = error instanceof NotionError ? error.kind : 'failed';
 						return { ok: false, error: kind, message: failed(kind).message! };

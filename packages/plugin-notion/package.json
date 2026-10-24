@@ -50,6 +50,11 @@
 			"svelte": "./dist/NotionView.svelte",
 			"default": "./dist/NotionView.svelte"
 		},
+		"./NotionSources.svelte": {
+			"types": "./dist/NotionSources.svelte.d.ts",
+			"svelte": "./dist/NotionSources.svelte",
+			"default": "./dist/NotionSources.svelte"
+		},
 		"./styles.css": "./dist/styles.css",
 		"./package.json": "./package.json"
 	},
@@ -65,6 +70,7 @@
 		"publint": "publint"
 	},
 	"peerDependencies": {
+		"@sveltejs/kit": "^3.0.0",
 		"@xcwds/core": "workspace:^",
 		"@xcwds/sveltekit": "workspace:^",
 		"svelte": "^5.0.0"

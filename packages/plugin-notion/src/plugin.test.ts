@@ -147,7 +147,7 @@ describe('options', () => {
 		);
 		expect(registered.routes.get('/notion')).toMatchObject({
 			title: 'Notion',
-			width: 'wide',
+			width: 'narrow',
 			private: true
 		});
 		expect(registered.routes.get('/notion/view')).toMatchObject({ parent: '/notion' });
@@ -168,6 +168,27 @@ describe('app.notion', () => {
 		expect(await notion.connect(`  ${TOKEN}\n`)).toEqual({ ok: true, name: 'Agenda bot' });
 		expect(notion.connected()).toBe(true);
 		expect(String(fetch.mock.calls.at(-1)![0])).toBe(`${RELAY}/v1/users/me`);
+		await app.close();
+	});
+
+	it('lists a database’s data sources, or says why it can’t', async () => {
+		const DB = '11111111-2222-4333-8444-555555555555';
+		const { fetch } = relay((url) =>
+			url.pathname === `/v1/databases/${DB}`
+				? Response.json({ object: 'database', id: DB, data_sources: [{ id: DS, name: 'Tasks' }] })
+				: undefined
+		);
+		const app = await buildTestApp({ plugins: [[setup({ fetch }).plugin, { relay: RELAY }]] });
+		const notion = app.notion!;
+		expect(await notion.dataSources(DB)).toMatchObject({ ok: false, error: 'not-connected' });
+		await notion.connect(TOKEN);
+		expect(await notion.dataSources(DB)).toEqual({
+			ok: true,
+			dataSources: [{ id: DS, name: 'Tasks' }]
+		});
+		const missing = await notion.dataSources(PAGE);
+		expect(missing).toMatchObject({ ok: false, error: 'not-shared' });
+		expect(JSON.stringify(missing)).not.toContain(TOKEN);
 		await app.close();
 	});
 
