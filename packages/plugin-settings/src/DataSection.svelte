@@ -5,6 +5,9 @@
 	 * xcwds.github.io's Settings). A group's files (`app.blobs` collections, #144) are counted under
 	 * it and cleared with it; backups leave them out. While a passcode lock (`app.lock`, from `@xcwds/plugin-lock`)
 	 * is locked, none of it is offered: a backup would hand over what the lock keeps out.
+	 *
+	 * With `@xcwds/plugin-vault`, backups carry the sensitive groups encrypted (format 3, #79), and
+	 * importing one asks for the passcode it was made with to bring those back too.
 	 */
 	import type { Group, ParsedBackup, PrefixEntry } from '@xcwds/core';
 	import { brand, useApp } from '@xcwds/sveltekit';
@@ -29,7 +32,29 @@
 	let writable = $state(true);
 	let canShareFiles = $state(false);
 	let pending = $state<Extract<ParsedBackup, { ok: true }> | null>(null);
+	/** The chosen file's text, for opening its encrypted part. */
+	let pendingText = '';
 	let importError = $state('');
+	/** `@xcwds/plugin-vault`'s `app.vault`, when the app has it. */
+	type VaultLike = {
+		openBackup(
+			text: string,
+			passcode: string
+		): Promise<{ ok: true; text: string } | { ok: false; error: string }>;
+	};
+	const vault = (app as { vault?: VaultLike }).vault;
+	let passcode = $state('');
+	let opening = $state(false);
+	let openError = $state('');
+	/** The groups the pending backup carries encrypted, by name ('' when it carries none). */
+	const sealedGroups = $derived.by(() => {
+		const section = pending?.backup.sections?.vault as { groups?: unknown } | undefined;
+		if (!section || typeof section.groups !== 'object' || section.groups === null) return '';
+		const ids = Object.keys(section.groups);
+		// Named as under Clear data (the `groups` option, else the entries' labels).
+		const labels = new Map(groups.map((g) => [g.id, g.label]));
+		return ids.map((id) => labels.get(id) || id).join(', ');
+	});
 	let fileInput: HTMLInputElement | undefined = $state();
 	/** What this page uses of `app.lock` (from `@xcwds/plugin-lock`, if present). */
 	type LockLike = { subscribe(listener: (state: { locked: boolean }) => void): () => void };
@@ -78,7 +103,10 @@
 		groups = orderGroups(storage.groups(), app.settingsPage?.options.groups ?? {});
 		writable = storage.writable();
 		try {
-			canShareFiles = navigator.canShare?.({ files: [backupFile()] }) ?? false;
+			const probe = new File(['{}'], backupFileName(name, new Date()), {
+				type: 'application/json'
+			});
+			canShareFiles = navigator.canShare?.({ files: [probe] }) ?? false;
 		} catch {
 			canShareFiles = false;
 		}
@@ -92,19 +120,17 @@
 		return () => stops.forEach((stop) => stop());
 	});
 
-	function backupFile() {
+	async function backupFile() {
 		const now = new Date();
-		return new File(
-			[JSON.stringify(storage.exportData(now), null, '\t')],
-			backupFileName(name, now),
-			{
-				type: 'application/json'
-			}
-		);
+		// A core before #79 has no backup sections.
+		const backup = storage.exportBackup ? await storage.exportBackup(now) : storage.exportData(now);
+		return new File([JSON.stringify(backup, null, '\t')], backupFileName(name, now), {
+			type: 'application/json'
+		});
 	}
 
-	function download() {
-		const file = backupFile();
+	async function download() {
+		const file = await backupFile();
 		const url = URL.createObjectURL(file);
 		const a = Object.assign(document.createElement('a'), { href: url, download: file.name });
 		a.click();
@@ -114,7 +140,7 @@
 
 	async function share() {
 		try {
-			await navigator.share({ files: [backupFile()], title: `${brand.name} backup` });
+			await navigator.share({ files: [await backupFile()], title: `${brand.name} backup` });
 			toast('Backup shared.');
 		} catch {
 			// Share sheet dismissed.
@@ -124,12 +150,32 @@
 	async function chooseFile(event: Event & { currentTarget: HTMLInputElement }) {
 		const file = event.currentTarget.files?.[0];
 		event.currentTarget.value = '';
-		importError = '';
+		importError = openError = passcode = '';
 		pending = null;
 		if (!file) return;
-		const parsed = storage.parseBackup(await file.text());
+		pendingText = await file.text();
+		const parsed = storage.parseBackup(pendingText);
 		if (parsed.ok) pending = parsed;
 		else importError = parsed.error;
+	}
+
+	/** Opens the backup's encrypted part with the passcode, then shows what it holds. */
+	async function openSealed(event: SubmitEvent) {
+		event.preventDefault();
+		if (!vault || !pending || opening) return;
+		opening = true;
+		openError = '';
+		try {
+			const opened = await vault.openBackup(pendingText, passcode);
+			if (!opened.ok) return void (openError = opened.error);
+			const parsed = storage.parseBackup(opened.text);
+			if (!parsed.ok) return void (openError = parsed.error);
+			pendingText = opened.text;
+			pending = parsed;
+			passcode = '';
+		} finally {
+			opening = false;
+		}
 	}
 
 	function apply(mode: 'replace' | 'merge') {
@@ -238,8 +284,36 @@
 						<li>{e.label}</li>
 					{/each}
 				</ul>
-			{:else}
+			{:else if !sealedGroups}
 				<p class="text-sm">It has no data this app can use.</p>
+			{/if}
+			{#if sealedGroups && vault}
+				<form class="flex flex-col gap-2 text-sm" onsubmit={openSealed} data-testid="import-sealed">
+					<label for="import-passcode">
+						It also has <strong>{sealedGroups}</strong>, encrypted. Enter the passcode that was set
+						when it was made to import that too; without it, only the rest is imported.
+					</label>
+					<div class="flex gap-2">
+						<input
+							id="import-passcode"
+							class="min-h-11 min-w-0 flex-1 rounded-xl border border-(--xcwds-shell-border) bg-transparent px-3"
+							type="password"
+							autocomplete="off"
+							spellcheck="false"
+							bind:value={passcode}
+						/>
+						<button type="submit" class={button} disabled={!passcode || opening}>
+							{opening ? 'Opening…' : 'Open'}
+						</button>
+					</div>
+					{#if openError}
+						<p class="text-red-700 dark:text-red-400" role="alert">{openError}</p>
+					{/if}
+				</form>
+			{:else if sealedGroups}
+				<p class="text-sm text-amber-800 dark:text-amber-300" data-testid="import-sealed">
+					It also has encrypted data this app can't open; that part will be skipped.
+				</p>
 			{/if}
 			{#if pending.skipped.length}
 				<p class="text-sm text-amber-800 dark:text-amber-300">
@@ -263,7 +337,10 @@
 				>
 			</div>
 			<p class="text-xs text-(--xcwds-shell-muted)">
-				Merge keeps data that isn't in the backup. Replace clears everything first.
+				Merge keeps data that isn't in the backup. Replace clears everything first{#if sealedGroups}<span
+						data-testid="replace-sealed"
+						>, including {sealedGroups} on this device, which only the encrypted part could bring back</span
+					>{/if}.
 			</p>
 			<button type="button" class="{button} text-sm" onclick={() => (pending = null)}>Cancel</button
 			>

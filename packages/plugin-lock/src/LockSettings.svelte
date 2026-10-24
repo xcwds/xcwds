@@ -18,7 +18,7 @@
 		type LockSetting
 	} from './options.js';
 	import type { PasscodeKind } from './passcode.js';
-	import { groupLabel, passcodeAttributes, toast, ui, waitText } from './ui.js';
+	import { downloadBackup, groupLabel, passcodeAttributes, toast, ui, waitText } from './ui.js';
 
 	let { name = 'lock' }: { name?: string } = $props();
 	const app = useApp();
@@ -111,23 +111,11 @@
 		if (value.scope === 'private') toast(app, 'Locked.');
 	}
 
-	/** A backup before setting up, in case the passcode is forgotten (not encrypted yet, #79). */
-	function backup() {
-		const now = new Date();
-		const date = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
-			.map((n) => String(n).padStart(2, '0'))
-			.join('-');
-		const base =
-			(app as { settingsPage?: { options: { backupName: string } } }).settingsPage?.options
-				.backupName ?? 'backup';
-		const file = new File(
-			[JSON.stringify(app.storage.exportData(now), null, '\t')],
-			`${base}-${date}.json`,
-			{ type: 'application/json' }
-		);
-		const url = URL.createObjectURL(file);
-		Object.assign(document.createElement('a'), { href: url, download: file.name }).click();
-		setTimeout(() => URL.revokeObjectURL(url), 1000);
+	/** A backup before setting up, in case the passcode is forgotten (not encrypted: nothing is yet). */
+	async function backup() {
+		const storage = app.storage;
+		// A core before #79 has no backup sections.
+		downloadBackup(app, storage.exportBackup ? await storage.exportBackup() : storage.exportData());
 		toast(app, 'Backup downloaded.');
 	}
 </script>

@@ -9,6 +9,10 @@
  * files' key, through a blob layer over `app.blobs`. Files saved before the vault was on are
  * sealed in the background after unlocking (`app.vault.progress` says how far it has got).
  *
+ * Backups carry the sensitive groups sealed, in a section of their own (format 3), even while
+ * locked; `app.vault.openBackup` opens one with the passcode it was made under, for Settings'
+ * import.
+ *
  * `app.vault` says whether the data is encrypted (for the Privacy section's wording). App updates
  * wait for writes still being sealed, so a reload never loses one.
  *
@@ -20,9 +24,9 @@ import type {} from '@xcwds/plugin-lock/client';
 import { createBlobVault } from './blobs.js';
 import { passcodeKeeper } from './keeper.js';
 import { CORE, LOCK, NAME, resolveOptions, type VaultPluginOptions } from './options.js';
-import { createVault, type VaultState } from './vault.js';
+import { createVault, type OpenedBackup, type VaultState } from './vault.js';
 
-export type { VaultState } from './vault.js';
+export type { OpenedBackup, VaultState } from './vault.js';
 
 /** `app.vault`. */
 export type AppVault = {
@@ -32,6 +36,11 @@ export type AppVault = {
 	flush(): Promise<boolean>;
 	/** While files saved before the vault was on are being sealed: how many are done of how many. */
 	readonly progress: { done: number; total: number } | undefined;
+	/**
+	 * Opens the encrypted part of a backup file with the passcode that was set when it was made:
+	 * the file's text with that data moved in, for `app.storage.parseBackup`.
+	 */
+	openBackup(text: string, passcode: string): Promise<OpenedBackup>;
 };
 
 declare module '@xcwds/core' {
@@ -73,7 +82,8 @@ export default definePlugin(
 			flush: () => vault.flush(),
 			get progress() {
 				return progress;
-			}
+			},
+			openBackup: (text, passcode) => vault.openBackup(text, passcode)
 		} satisfies AppVault);
 		app.addHook('onBeforeReload', async () => {
 			await vault.flush();

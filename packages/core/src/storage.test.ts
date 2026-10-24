@@ -886,6 +886,106 @@ describe('storage layers (#79)', () => {
 		);
 		expect(() => storage.layer(() => ({}) as StorageAdapter)).toThrow(/`get`/);
 	});
+
+	it('exports the version a waiting migration leaves the data at', async () => {
+		const { storage, vault, other } = diary();
+		storage.layer(vault.layer);
+		storage.write(other, 1);
+		vault.state.locked = true;
+		storage.reload();
+		storage.scope('diary').migration({ to: 1, run: () => {} });
+		storage.scope('other').migration({ to: 2, run: () => {} });
+		// diary's migration waits for the unlock, so its data is still at version 0.
+		expect(storage.exportData().versions).toEqual({ diary: 0, other: 2 });
+		vault.state.locked = false;
+		storage.reload();
+		expect((await storage.exportBackup()).versions).toEqual({ diary: 1, other: 2 });
+	});
+});
+
+describe('backup sections (#79)', () => {
+	const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
+	function sectioned() {
+		const s = setup({ 'app:diary:note': '"cycle day 12"', 'app:other:n': '3' });
+		const note = s.storage.scope('diary').entry('note', { label: 'Note', parse: text });
+		const other = s.storage.scope('other').entry('n', { label: 'N', parse: isNumber });
+		const section = {
+			on: true,
+			covers: (key: string) => section.on && key.startsWith('app:diary:'),
+			export: vi.fn(async (): Promise<unknown> => (section.on ? { sealed: 'xyz' } : undefined))
+		};
+		s.storage.backupSection('vault', section);
+		return { ...s, note, other, section };
+	}
+
+	it('leaves what a section covers out of data, and adds the section as format 3', async () => {
+		const { storage, section } = sectioned();
+		const backup = await storage.exportBackup(new Date('2026-10-24T00:00:00Z'));
+		expect(backup).toMatchObject({
+			format: 3,
+			exportedAt: '2026-10-24T00:00:00.000Z',
+			data: { 'app:other:n': 3 },
+			sections: { vault: { sealed: 'xyz' } }
+		});
+		expect(backup.data).not.toHaveProperty('app:diary:note');
+		expect(section.export).toHaveBeenCalledOnce();
+		// exportData alone never includes sections.
+		expect(storage.exportData()).not.toHaveProperty('sections');
+	});
+
+	it('is format 2 when no section adds anything', async () => {
+		const { storage, section } = sectioned();
+		section.on = false;
+		const backup = await storage.exportBackup(new Date(0));
+		expect(backup).toEqual(storage.exportData(new Date(0)));
+		expect(backup.format).toBe(2);
+		expect(backup.data).toEqual({ 'app:diary:note': 'cycle day 12', 'app:other:n': 3 });
+	});
+
+	it('parses format 3 keeping its sections unread, and imports only data', async () => {
+		const a = sectioned();
+		const b = sectioned();
+		const parsed = b.storage.parseBackup(JSON.stringify(await a.storage.exportBackup()));
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		expect(parsed.backup.format).toBe(3);
+		expect(parsed.backup.sections).toEqual({ vault: { sealed: 'xyz' } });
+		expect(parsed.found.map((e) => e.key)).toEqual(['app:other:n']);
+		b.storage.clear();
+		expect(b.storage.importData(parsed.backup, 'merge')).toBe(true);
+		expect(b.storage.read(b.other)).toBe(3);
+		expect(b.storage.read(b.note)).toBeUndefined();
+		expect(b.adapter.data.has('app:sections')).toBe(false);
+	});
+
+	it('runs migrations before a section exports', async () => {
+		const { storage, adapter, section } = sectioned();
+		storage.scope('diary').migration({
+			to: 1,
+			run(data) {
+				data['app:diary:note'] = 'migrated';
+			}
+		});
+		section.export.mockImplementation(async () => adapter.data.get('app:diary:note'));
+		const backup = await storage.exportBackup();
+		expect(backup.sections).toEqual({ vault: '"migrated"' });
+		expect(backup.versions.diary).toBe(1);
+	});
+
+	it('refuses an unknown format, a duplicate id and a section without its functions', () => {
+		const { storage, section } = sectioned();
+		const parse = (format: unknown) =>
+			storage.parseBackup(JSON.stringify({ app: 'xcwds', format, versions: {}, data: {} }));
+		expect(parse(4)).toEqual({ ok: false, error: 'This backup has an unknown format.' });
+		expect(parse(3).ok).toBe(true);
+		expect(() => storage.backupSection('vault', section)).toThrow(
+			expect.objectContaining({ code: codes.STORAGE_KEY })
+		);
+		expect(() => storage.backupSection('bad id', section)).toThrow(/backup section id/);
+		expect(() =>
+			storage.backupSection('other', { covers: () => false } as unknown as typeof section)
+		).toThrow(/`covers` and `export`/);
+	});
 });
 
 describe('prefixed entries (#157)', () => {
