@@ -1,5 +1,23 @@
 # @xcwds/plugin-settings
 
+## 0.7.0
+
+### Minor Changes
+
+- Needs `@xcwds/core` 0.5 (peer range `^0.5.0`).
+- Needs `@xcwds/plugin-shell` 0.6 (peer range `^0.6.0`).
+- Needs `@xcwds/sveltekit` 0.6 (peer range `^0.6.0`).
+- 715bcae: Backups come from `app.storage.exportBackup()`, so with `@xcwds/plugin-vault` they carry the sensitive groups encrypted (#79). Importing one asks for the passcode it was made with to bring those back too; without it, or in an app without the vault, the rest imports.
+
+### Patch Changes
+
+- Updated dependencies [715bcae]
+- Updated dependencies
+- Updated dependencies
+  - @xcwds/core@0.5.0
+  - @xcwds/plugin-shell@0.6.0
+  - @xcwds/sveltekit@0.6.0
+
 ## 0.6.0
 
 ### Minor Changes

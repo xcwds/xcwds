@@ -1,5 +1,16 @@
 # @xcwds/sveltekit
 
+## 0.6.0
+
+### Minor Changes
+
+- Needs `@xcwds/core` 0.5 (peer range `^0.5.0`).
+
+### Patch Changes
+
+- Updated dependencies [715bcae]
+  - @xcwds/core@0.5.0
+
 ## 0.5.1
 
 ### Patch Changes
