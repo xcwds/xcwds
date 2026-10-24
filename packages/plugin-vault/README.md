@@ -2,9 +2,25 @@
 
 Encryption at rest for the sensitive storage groups of an @xcwds app that uses
 [`@xcwds/plugin-lock`](../plugin-lock). **Work in progress** ([#79](https://github.com/xcwds/xcwds/issues/79)):
-not published yet, and not a plugin you can install yet.
+not published yet. Backups of sealed groups (format 3), sealing files ([#149](https://github.com/xcwds/xcwds/issues/149)) and the Privacy
+section's wording come next.
 
-So far it holds the sealing and the storage layer the plugin will be built on.
+```ts
+import lock from '@xcwds/plugin-lock';
+import vault from '@xcwds/plugin-vault';
+export default defineConfig({ brand, plugins: [lock(), vault()] });
+```
+
+List it after `@xcwds/plugin-lock` (the build fails otherwise). It takes no options: every storage
+entry marked `sensitive` (so its whole group) is sealed. The plugin puts the vault's storage layer
+over the app's storage and hands it the lock's passcode: setting a passcode encrypts the sensitive
+groups, they open only while the app is unlocked, and turning the lock off writes them back as
+plaintext. A vault added to an app that already has a passcode turns on at the next unlock. When
+another tab changes the passcode, this tab locks and asks for the new one. App updates wait until
+the latest writes are sealed. `app.vault.state` says whether the data is encrypted (`enabled`)
+and whether it's open now (`locked`); `app.vault.flush()` resolves once every write is sealed.
+
+The pieces it's built from can also be used on their own:
 
 From `@xcwds/plugin-vault/vault`, `createVault(app.storage)` puts a storage layer over the app's
 storage (RFC 0001, decision 11). Once turned on with `enable(key, salt)`, it keeps every sensitive
@@ -22,8 +38,8 @@ From `@xcwds/plugin-vault/keeper`, `app.lock.keep(passcodeKeeper(vault))` connec
 keeper derives the vault's key from it with the vault's own salt. Setting up a passcode turns the
 vault on, unlocking opens it (and turns it on, for a vault installed after the passcode was set),
 changing the passcode re-keys it with a fresh salt, turning the lock off writes the plaintext
-back, and a forgotten passcode's reset deletes the sealed groups unread. The plugin entry that
-does this for you comes next.
+back, and a forgotten passcode's reset deletes the sealed groups unread. The plugin entry does
+this for you.
 
 From `@xcwds/plugin-vault/blobs` ([#149](https://github.com/xcwds/xcwds/issues/149)),
 `createBlobVault({ sensitive, enabled })` does the same for files: install its `layer` with
