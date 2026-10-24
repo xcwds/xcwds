@@ -192,6 +192,8 @@ test('backups carry the journal encrypted, and import it with the passcode (#79)
 	const form = preview.getByTestId('import-sealed');
 	await expect(form).toContainText('Journal');
 	await expect(preview.getByRole('button', { name: 'Merge' })).toBeDisabled();
+	// Replacing without opening it would clear the journal here: the preview says so.
+	await expect(preview.getByTestId('replace-sealed')).toContainText('including Journal');
 	await form.getByLabel(/Enter the passcode/).fill('000000');
 	await form.getByRole('button', { name: 'Open' }).click();
 	await expect(form.getByRole('alert')).toHaveText(
@@ -201,6 +203,7 @@ test('backups carry the journal encrypted, and import it with the passcode (#79)
 	await form.getByRole('button', { name: 'Open' }).click();
 	await expect(preview.getByRole('listitem')).toHaveText(['Journal']);
 	await expect(preview.getByTestId('import-sealed')).toHaveCount(0);
+	await expect(preview.getByTestId('replace-sealed')).toHaveCount(0);
 	await preview.getByRole('button', { name: 'Merge' }).click();
 	await expect(page.getByTestId('toast').filter({ hasText: 'Imported 1 item.' })).toBeVisible();
 

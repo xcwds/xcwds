@@ -337,7 +337,10 @@
 				>
 			</div>
 			<p class="text-xs text-(--xcwds-shell-muted)">
-				Merge keeps data that isn't in the backup. Replace clears everything first.
+				Merge keeps data that isn't in the backup. Replace clears everything first{#if sealedGroups}<span
+						data-testid="replace-sealed"
+						>, including {sealedGroups} on this device, which only the encrypted part could bring back</span
+					>{/if}.
 			</p>
 			<button type="button" class="{button} text-sm" onclick={() => (pending = null)}>Cancel</button
 			>
