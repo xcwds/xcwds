@@ -299,7 +299,7 @@
 				on this device with the passcode, readable only while unlocked. There's no way to recover a forgotten
 				passcode.
 			{:else if lock.enabled}
-				The lock keeps people out of {locks}. What's saved for <strong>{sealed}</strong> is encrypted
+				The lock keeps people out of {locks}. What's saved for <strong>{sealed}</strong> will be encrypted
 				with the passcode the next time you unlock. There's no way to recover a forgotten passcode.
 			{:else}
 				Setting a passcode also encrypts what's saved for <strong>{sealed}</strong> on this device, so
