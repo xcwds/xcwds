@@ -1,6 +1,18 @@
 #!/bin/sh
 # Runs the real gh (AGENT_REAL_GH, set by agent.yml) with a fresh token from the token helper, so
-# runs longer than a token's one-hour life keep working.
-GH_TOKEN=$(agent-token) || exit 1
+# runs longer than a token's one-hour life keep working. Comments and new issues go out as the
+# owner (the owner's user token, marked as made via the app) when the helper has that token; all
+# else, and editing or deleting "the last comment" (which would pick the owner's own), stays the bot.
+token=
+case "$1 $2" in
+'issue comment' | 'pr comment' | 'issue create')
+	case " $* " in
+	*' --edit-last '* | *' --delete-last '*) ;;
+	*) token=$(agent-token user-token 2> /dev/null) ;;
+	esac
+	;;
+esac
+[ -n "$token" ] || token=$(agent-token) || exit 1
+GH_TOKEN=$token
 export GH_TOKEN
 exec "${AGENT_REAL_GH:?AGENT_REAL_GH is not set}" "$@"

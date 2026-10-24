@@ -152,6 +152,19 @@ describe('followup-gate', () => {
 		expect(lastOwnerActivity(activity({ commits: [] }), 'xcwds')).toBe(0);
 	});
 
+	it("doesn't count the agent's comments as the owner's, only the owner's own", () => {
+		const viaAgent = { owner: { login: 'xcwds' }, slug: 'gwgsbot' };
+		const viaClaude = { owner: { login: 'anthropics' }, slug: 'claude' };
+		const at = (comments) =>
+			lastOwnerActivity({ reviews: [], reviewComments: [], comments, commits: [] }, 'xcwds');
+		const comment = { user: { login: 'xcwds' }, created_at: '2026-10-23T16:00:00Z' };
+		expect(at([{ ...comment, performed_via_github_app: viaAgent }])).toBe(0);
+		expect(at([{ ...comment, performed_via_github_app: viaClaude }])).toBe(
+			Date.parse('2026-10-23T16:00:00Z')
+		);
+		expect(at([comment])).toBe(Date.parse('2026-10-23T16:00:00Z'));
+	});
+
 	it('tells the agent what happened and how many fixes it has left', () => {
 		const ci = context({
 			name: 'workflow_run',
