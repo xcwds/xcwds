@@ -89,5 +89,8 @@ So far it holds:
 The example app's base-path build runs the plugin at `/utils/notion` (`<NotionSources>`), with
 `/utils/notion/view` for one copy, and e2e tests against a mocked relay.
 
-Still to come: `xcwds add notion` (the rest of
-[#107](https://github.com/xcwds/xcwds/issues/107)).
+`xcwds add notion` (from [`@xcwds/create`](../create)) writes both pages, `/notion` with
+`<NotionSources>` and `/notion/view` with `<NotionView>`, a Notion tab, the styles and
+`notion({ relay: 'https://your-notion-relay.invalid', register: true })`. The build refuses a
+relay on `.invalid`, so it fails until you deploy the relay ([`relay/README.md`](relay/README.md))
+and put its origin there. It's offered once this package is published.

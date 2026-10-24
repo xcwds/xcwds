@@ -3,6 +3,7 @@
  * CSS, the layout's notices and the routes (RFC 0001, decision 2: plugin pages are thin route
  * files in the app).
  */
+import { XCWDS_VERSIONS } from './versions.js';
 
 /** What an app looks like, for the files a plugin writes. */
 export type AppPlan = {
@@ -58,9 +59,19 @@ export const PLUGIN_IDS = [
 	'lock',
 	'camera',
 	'qr',
-	'blocks'
+	'blocks',
+	'notion'
 ] as const;
 export type PluginId = (typeof PLUGIN_IDS)[number];
+
+/**
+ * What `xcwds add notion` writes for the relay's origin. `.invalid` never resolves (RFC 2606),
+ * and the plugin's build refuses it until the app sets its own relay.
+ */
+export const NOTION_RELAY_PLACEHOLDER = 'https://your-notion-relay.invalid';
+
+/** The step left to do by hand after adding notion. */
+export const NOTION_RELAY_STEP = `Deploy the Notion relay (relay/README.md in @xcwds/plugin-notion) and set \`relay\` in \`notion({ ... })\` in your xcwds config to its origin: the build fails while it's ${NOTION_RELAY_PLACEHOLDER}.`;
 
 const page = (body: string, script = '') =>
 	`${script ? `<script lang="ts">\n${script}\n</script>\n\n` : ''}${body}\n`;
@@ -304,8 +315,58 @@ export const changelog: ChangelogEntry[] = [
 				)
 			}
 		]
+	},
+	notion: {
+		id: 'notion',
+		package: '@xcwds/plugin-notion',
+		recommended: false,
+		summary: 'Notion pages downloaded through your relay and read offline',
+		requires: ['shell'],
+		// The build fails until the placeholder is your relay's origin (the plugin's relay/README.md).
+		call: `notion({ relay: '${NOTION_RELAY_PLACEHOLDER}', register: true })`,
+		css: '@xcwds/plugin-notion/styles.css',
+		section: { path: '/notion', label: 'Notion', emoji: '🗒️' },
+		files: () => [
+			{
+				path: 'src/routes/notion/+page.svelte',
+				content: page(
+					'<main class="page-narrow pt-2 pb-6">\n\t<NotionSources />\n</main>',
+					"\timport NotionSources from '@xcwds/plugin-notion/NotionSources.svelte';"
+				)
+			},
+			{
+				path: 'src/routes/notion/view/+page.svelte',
+				content: page(
+					'<main class="page-wide pt-2 pb-6">\n\t<NotionView />\n</main>',
+					"\timport NotionView from '@xcwds/plugin-notion/NotionView.svelte';"
+				)
+			}
+		]
 	}
 };
+
+/**
+ * Whether the plugin's package is on npm. One that isn't yet (it's private in this repository)
+ * can only be added to an app that depends on the workspace, as `pnpm test:starter`'s does.
+ */
+export function isPublished(id: PluginId): boolean {
+	return CATALOG[id].package in XCWDS_VERSIONS;
+}
+
+/** The plugins to offer: the published ones, or all of them inside this repository. */
+export function offered(workspace: boolean): PluginId[] {
+	return PLUGIN_IDS.filter((id) => workspace || isPublished(id));
+}
+
+/** Throws for a plugin an app outside this repository can't install yet. */
+export function assertInstallable(ids: readonly PluginId[], workspace: boolean): void {
+	if (workspace) return;
+	const missing = ids.filter((id) => !isPublished(id));
+	if (missing.length)
+		throw new Error(
+			`${missing.map((id) => CATALOG[id].package).join(', ')} isn't published yet, so it can't be added.`
+		);
+}
 
 /** A plugin's call in xcwds.config.ts, in an app with `plugins`. */
 export function callOf(id: PluginId, plugins: readonly PluginId[]): string {

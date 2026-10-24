@@ -8,9 +8,10 @@ import { basename, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import {
 	CATALOG,
-	PLUGIN_IDS,
+	NOTION_RELAY_STEP,
 	RECOMMENDED,
 	TEMPLATES,
+	offered,
 	pluginId,
 	withRequirements,
 	type PluginId,
@@ -28,7 +29,7 @@ Makes a new installable, offline-first PWA on @xcwds.
   --tagline <text>         One line about it
   --icon <file.svg>        A square SVG icon (default: a neutral one)
   --template <name>        minimal (the recommended plugins) or tools (plus tools and timers)
-  --plugins <a,b>          Plugins to use instead of a template's (${PLUGIN_IDS.join(', ')})
+  --plugins <a,b>          Plugins to use instead of a template's (${offered(false).join(', ')})
   -y, --yes                Don't ask: use the defaults for anything not given
   --no-install             Don't install dependencies
   -h, --help               Show this
@@ -69,7 +70,7 @@ async function main(argv: string[]) {
 				iconPath = (await question('Square SVG icon file (Enter for a neutral one)')) || undefined;
 			if (!text('plugins') && template === undefined) {
 				process.stdout.write('\nPlugins:\n');
-				for (const id of PLUGIN_IDS)
+				for (const id of offered(flags.has('workspace')))
 					process.stdout.write(
 						`  [${plugins.includes(id) ? 'x' : ' '}] ${id.padEnd(10)} ${CATALOG[id].summary}\n`
 					);
@@ -127,7 +128,7 @@ Next:
 
 Deploy: push to GitHub and set Settings → Pages → Source to "GitHub Actions";
 .github/workflows/deploy.yml tests and publishes main. The README says more.
-${RECOMMENDED.every((id) => plugins.includes(id)) ? '' : '\nSome recommended plugins are left out; add them with xcwds add.\n'}`);
+${RECOMMENDED.every((id) => plugins.includes(id)) ? '' : '\nSome recommended plugins are left out; add them with xcwds add.\n'}${plugins.includes('notion') ? `\n${NOTION_RELAY_STEP}\n` : ''}`);
 }
 
 main(process.argv.slice(2)).catch((error: unknown) => {
