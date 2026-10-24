@@ -405,24 +405,22 @@ describe("the files' key (#149)", () => {
 		expect(await sameKey(before, next.vault.fileKey()!)).toBe(true);
 	});
 
-	it("won't unlock or rekey when its record was changed", async () => {
+	it('opens the rest, without files, when its record was changed', async () => {
 		const { adapter, vault, salt } = await enabled();
 		const k = await key(salt);
 		vault.lock();
-		const saved = adapter.get(FILES)!;
-		const changed = JSON.parse(saved) as { data: string };
+		const changed = JSON.parse(adapter.get(FILES)!) as { data: string };
 		changed.data = changed.data.replace(/^./, (c) => (c === 'A' ? 'B' : 'A'));
 		adapter.set(FILES, JSON.stringify(changed));
 		const next = setup(adapter);
-		expect(await next.vault.unlock(k)).toBe(false);
-		expect(next.vault.state.locked).toBe(true);
-
-		adapter.set(FILES, saved);
 		expect(await next.vault.unlock(k)).toBe(true);
-		adapter.set(FILES, JSON.stringify(changed));
+		expect(next.storage.read(next.note)).toBe(SECRET);
+		expect(next.vault.fileKey()).toBeUndefined();
+		expect(next.onError).toHaveBeenCalledOnce();
+		// A new passcode still works, and leaves the record as it was (it opens with nothing).
 		const salt2 = newSalt();
-		expect(await next.vault.rekey(await key(salt2, '654321'), salt2)).toBe(false);
-		expect(next.vault.salt()).toBe(salt);
+		expect(await next.vault.rekey(await key(salt2, '654321'), salt2)).toBe(true);
+		expect(JSON.parse(adapter.get(FILES)!)).toEqual(changed);
 	});
 
 	it('gets one at unlock when the vault was turned on without', async () => {

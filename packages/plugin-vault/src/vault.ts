@@ -330,6 +330,38 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 		}
 	}
 
+	/**
+	 * The files' key for `with_` (a key `unlock` checked), making one when the vault was turned on
+	 * before files had a key of their own. Undefined when the saved one doesn't open (changed, or
+	 * sealed with a key another tab has just made) or a new one can't be saved: the files stay
+	 * sealed and refuse saves, but the rest of the vault opens.
+	 */
+	async function loadFileKey(with_: CryptoKey): Promise<CryptoKey | undefined> {
+		const saved = inner.get(filesKey);
+		if (saved === null) {
+			const made = await newFileKey(with_);
+			// Another tab made one meanwhile: that one, so both seal files alike.
+			if (inner.get(filesKey) !== null) return loadFileKey(with_);
+			try {
+				inner.set(filesKey, made.sealed);
+				return made.key;
+			} catch (cause) {
+				onError(new Error("Couldn't save the files' key.", { cause }));
+				return undefined;
+			}
+		}
+		const raw = await openFileKey(with_, saved);
+		if (!raw) {
+			onError(new Error("The files' key doesn't open, so files stay sealed."));
+			return undefined;
+		}
+		try {
+			return await importFileKey(raw);
+		} finally {
+			raw.fill(0);
+		}
+	}
+
 	const importFileKey = (raw: Uint8Array) =>
 		globalThis.crypto.subtle.importKey('raw', raw as BufferSource, 'AES-GCM', false, [
 			'encrypt',
@@ -498,36 +530,8 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 				if (!c) return false;
 				opened.set(group, c);
 			}
-			// Turned on before files had a key of their own: they get one now.
-			const savedFiles = inner.get(filesKey);
-			const raw = savedFiles === null ? undefined : await openFileKey(newKey, savedFiles);
-			if (savedFiles !== null && !raw) return false;
-			let files: CryptoKey;
-			let made: string | undefined;
-			try {
-				if (raw) files = await importFileKey(raw);
-				else ({ key: files, sealed: made } = await newFileKey(newKey));
-			} finally {
-				raw?.fill(0);
-			}
+			const files = await loadFileKey(newKey);
 			if (key) return true;
-			if (made !== undefined) {
-				// Another tab made one meanwhile: use that one, so both seal files alike.
-				const now = inner.get(filesKey);
-				if (now !== null) {
-					const theirs = await openFileKey(newKey, now);
-					if (!theirs) return false;
-					files = await importFileKey(theirs);
-					theirs.fill(0);
-				} else
-					try {
-						inner.set(filesKey, made);
-					} catch {
-						// Blocked storage: files stay as they are until an unlock can save a key.
-						return false;
-					}
-				if (key) return true;
-			}
 			key = newKey;
 			keySalt = savedSalt();
 			fileKey = files;
@@ -574,8 +578,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 			// The files' key stays the same: only its record is sealed again, with the new key.
 			const savedFiles = inner.get(filesKey);
 			const raw = savedFiles === null ? undefined : await openFileKey(was, savedFiles);
-			// One that doesn't open would stay sealed with the old key, and no unlock would open again.
-			if (savedFiles !== null && !raw) return false;
+			// One that doesn't open is left as it is: it opens with no key, old or new.
 			if (raw)
 				try {
 					sealed.set(

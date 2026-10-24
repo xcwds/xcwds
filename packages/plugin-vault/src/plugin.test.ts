@@ -253,5 +253,28 @@ describe('the plugin', () => {
 			await vi.waitFor(async () => expect(await raw.list(mine.key)).toEqual([]));
 			await app.close();
 		});
+
+		it("still opens the rest, and turns off, when the files' key doesn't open", async () => {
+			const storage = sharedStorage(memoryStorage());
+			const app = await open(storage);
+			expect(await app.lock!.setUp('123456', 'digits')).toBeUndefined();
+			diary(app).write(SECRET);
+			await app.vault!.flush();
+			const data = (storage.backing as ReturnType<typeof memoryStorage>).data;
+			const files = [...data.keys()].find((k) => k.endsWith(':files'))!;
+			data.set(
+				files,
+				JSON.stringify({ v: 1, iv: 'AAAAAAAAAAAAAAAA', data: 'AAAAAAAAAAAAAAAAAAAAAA==' })
+			);
+			const next = await app.openTab();
+			// Not strict about the reported error: it's the point of this test.
+			const errors = app.errors.length;
+			expect(await next.lock!.unlock('123456')).toBe('ok');
+			expect(diary(next).read()).toBe(SECRET);
+			expect(app.errors.length).toBeGreaterThan(errors);
+			expect(await next.blobs.put(photos(next).private, photo())).toBe(false);
+			expect(await next.lock!.turnOff('123456')).toBe('ok');
+			expect(await app.close()).toBeUndefined();
+		});
 	});
 });

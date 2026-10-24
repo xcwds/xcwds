@@ -93,16 +93,18 @@ export function passcodeKeeper(vault: Vault, options: KeeperOptions = {}): Keepe
 		async turnOff(current) {
 			if (!vault.state.enabled) return true;
 			if (!(await open(current))) return false;
-			if (files) {
+			// Without the files' key (its record doesn't open) nothing could open them: they stay.
+			const key = vault.fileKey();
+			const opening = files && key;
+			if (opening) {
 				await sealing;
-				const key = vault.fileKey();
-				if (key) files.unlock(key);
+				files.unlock(key);
 				// Opened while still on first: cut short here, nothing is lost and the vault stays on.
 				if (!(await files.openAll())) return false;
 			}
 			if (!(await vault.disable())) return false;
 			// Saved while the first pass ran, and sealed: opened now, while the key is still held.
-			if (files && !(await files.openAll())) {
+			if (opening && !(await files.openAll())) {
 				// Kept in memory, so they still open until the page closes.
 				onError(
 					new Error("Some files couldn't be decrypted; they'll be unreadable after a reload.")
