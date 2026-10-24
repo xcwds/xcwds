@@ -29,8 +29,9 @@ When "Context" names an issue, skip this step: the owner chose what this run wor
 
 ## 2. Pick the issue
 
-Candidates are the open issues in both repos (`gh issue list --repo <owner/repo> --state open
---limit 200 --json number,title,labels,createdAt,body`). Skip:
+Candidates are the open issues in both repos: list each repo in its own call (`gh issue list
+--repo <owner/repo> --state open --limit 200 --json number,title,labels,createdAt,body`) and make
+sure you have every issue from both before you rank them. Skip:
 
 - issues labeled `tracking` or `needs decision`, Renovate's "Dependency Dashboard" and the run-log
   issues;
@@ -46,8 +47,9 @@ Candidates are the open issues in both repos (`gh issue list --repo <owner/repo>
 Rank what's left by its `priority: …` label (`critical`, `high`, `medium`, `low`), then, as
 `.github/labels.md` says, toward the smaller issue, then the older one. An issue without a priority
 label ranks by the guide's table, as the labeling routine would label it. Read the top few issues in
-full (`gh issue view <n> --comments`) before you choose: one may turn out to need a decision, or say
-what must come first. When the issue is a sub-issue, read its parent too.
+full (`gh issue view <n> --repo <owner/repo> --comments`, one call each) before you choose: one may
+turn out to need a decision, or say what must come first. When the issue is a sub-issue, read its
+parent too. Only say you read an issue when you saw its body in a command's output.
 
 When "Context" names an issue, work that one, but still check it against the skip list: if it
 fails, change nothing and say why in your report. If its open PR is the bot's own
