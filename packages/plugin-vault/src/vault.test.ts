@@ -319,6 +319,25 @@ describe('the vault', () => {
 		expect(a.storage.read(a.mood)).toBe('calm');
 	});
 
+	it('tells a tab that was open when another tab turned the vault on', async () => {
+		const onLocked = vi.fn();
+		const a = setup(memoryStorage(), onLocked);
+		const tab = new EventTarget();
+		a.storage.startSync(tab);
+		a.storage.write(a.note, SECRET);
+		const b = setup(a.adapter);
+		const salt = newSalt();
+		expect(await b.vault.enable(await key(salt), salt)).toBe(true);
+		tab.dispatchEvent(Object.assign(new Event('storage'), { key: 'app:vault:salt' }));
+		expect(onLocked).toHaveBeenCalledOnce();
+		expect(a.vault.state).toEqual({ enabled: true, locked: true });
+		expect(await a.vault.unlock(await key(salt))).toBe(true);
+		expect(a.storage.read(a.note)).toBe(SECRET);
+		// Its own key from then on: another salt event that changes nothing doesn't lock it.
+		tab.dispatchEvent(Object.assign(new Event('storage'), { key: 'app:vault:salt' }));
+		expect(onLocked).toHaveBeenCalledOnce();
+	});
+
 	it('reports a seal storage refused', async () => {
 		const mem = memoryStorage();
 		const full = { on: false };

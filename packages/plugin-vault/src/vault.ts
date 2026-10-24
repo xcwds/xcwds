@@ -67,8 +67,9 @@ export type VaultOptions = {
 	 */
 	group?: string;
 	/**
-	 * Called when another tab sealed everything again with a new key (the passcode changed
-	 * there): this tab's key no longer opens anything, so the vault locks, and the app should too.
+	 * Called when another tab turned the vault on or sealed everything again with a new key (the
+	 * passcode changed there): this tab has no key that opens it, so the vault locks, and the app
+	 * should too.
 	 */
 	onLocked?: () => void;
 };
@@ -335,9 +336,10 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 	const stopListening = storage.onChange((k) => {
 		if (k === null || changing) return;
 		if (k === saltEntry.key) {
-			if (key && enabled() && savedSalt() !== keySalt) {
-				// Sealed again with another tab's new passcode: what's open here can't be saved any
-				// more, and its writes would overwrite theirs. Locked until the new passcode.
+			if (enabled() && savedSalt() !== keySalt) {
+				// Turned on, or sealed again with a new passcode, in another tab: what's open here (if
+				// anything) can't be saved any more, and its writes would overwrite theirs. Locked
+				// until the passcode, and the app is told so it locks too.
 				epoch++;
 				forget();
 				storage.reload();

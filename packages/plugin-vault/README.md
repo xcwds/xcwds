@@ -14,7 +14,8 @@ in order. Locked, sensitive keys read as `undefined` and refuse writes, and migr
 `drop()` deletes the sealed groups unread, for a forgotten passcode, as does clearing the group
 its salt is saved in (`lock` by default). Another tab's re-seal is opened again in each unlocked
 tab. `rekey(key, salt)` seals everything again with a key from a new passcode; a tab whose key
-another tab's `rekey` replaced locks itself (and calls `onLocked`) rather than seal over it.
+another tab's `rekey` replaced locks itself (and calls `onLocked`) rather than seal over it, as
+does a tab that was open while another one turned the vault on.
 
 From `@xcwds/plugin-vault/keeper`, `app.lock.keep(passcodeKeeper(vault))` connects it to
 `@xcwds/plugin-lock`'s passcode: the lock hands over the passcode once it has checked it, and the

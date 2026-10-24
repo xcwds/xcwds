@@ -209,7 +209,7 @@ describe('the lock', () => {
 			const failing = keeper(['setUp', 'change', 'turnOff']);
 			const { lock } = d.open();
 			const stop = lock.keep(failing.k);
-			expect(await lock.setUp('123456', 'digits')).toMatch(/Couldn't save/);
+			expect(await lock.setUp('123456', 'digits')).toMatch(/nothing changed/);
 			expect(lock.state).toMatchObject({ enabled: false, locked: false });
 			expect(d.adapter.data.has(d.entries.verifier.key)).toBe(false);
 
@@ -217,9 +217,9 @@ describe('the lock', () => {
 			stop();
 			expect(await lock.setUp('123456', 'digits')).toBeUndefined();
 			lock.keep(failing.k);
-			expect(await lock.change('123456', '654321', 'digits')).toMatch(/Couldn't save/);
+			expect(await lock.change('123456', '654321', 'digits')).toMatch(/nothing changed/);
 			expect(await lock.turnOff('654321')).toBe('wrong');
-			expect(await lock.turnOff('123456')).toMatch(/Couldn't save/);
+			expect(await lock.turnOff('123456')).toMatch(/nothing changed/);
 			expect(lock.state).toMatchObject({ enabled: true, locked: false });
 			lock.lock();
 			expect(await lock.unlock('123456')).toBe('ok');
@@ -229,7 +229,7 @@ describe('the lock', () => {
 			const d = device();
 			const { lock } = d.open();
 			const stop = lock.keep({ setUp: () => Promise.reject(new Error('boom')) });
-			expect(await lock.setUp('123456', 'digits')).toMatch(/Couldn't save/);
+			expect(await lock.setUp('123456', 'digits')).toMatch(/nothing changed/);
 			stop();
 			expect(await lock.setUp('123456', 'digits')).toBeUndefined();
 			lock.keep({ unlock: async () => false, lock: () => {} });

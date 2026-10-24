@@ -170,7 +170,7 @@ export function createLock(
 			return false;
 		}
 	};
-	const KEEPER_FAILED = "Couldn't save the passcode's encrypted data (storage is full or blocked).";
+	const KEEPER_FAILED = "Couldn't update the encrypted data, so nothing changed.";
 	// One try at a time, so two quick taps can't both slip under the wait.
 	let queue: Promise<unknown> = Promise.resolve();
 	const serial = <T>(task: () => Promise<T>): Promise<T> => {
