@@ -2,8 +2,7 @@
 
 Encryption at rest for the sensitive storage groups of an @xcwds app that uses
 [`@xcwds/plugin-lock`](../plugin-lock). **Work in progress** ([#79](https://github.com/xcwds/xcwds/issues/79)):
-not published yet. Backups of sealed groups (format 3), sealing files ([#149](https://github.com/xcwds/xcwds/issues/149)) and the Privacy
-section's wording come next.
+not published yet. Backups of sealed groups (format 3) and the Privacy section's wording come next.
 
 ```ts
 import lock from '@xcwds/plugin-lock';
@@ -17,7 +16,16 @@ over the app's storage and hands it the lock's passcode: setting a passcode encr
 groups, they open only while the app is unlocked, and turning the lock off writes them back as
 plaintext. A vault added to an app that already has a passcode turns on at the next unlock. When
 another tab changes the passcode, this tab locks and asks for the new one. App updates wait until
-the latest writes are sealed. `app.vault.state` says whether the data is encrypted (`enabled`)
+the latest writes are sealed.
+
+Files are sealed too ([#149](https://github.com/xcwds/xcwds/issues/149)): every blob collection
+of a sensitive group (photos, recordings) is kept sealed in IndexedDB while a passcode is set,
+reads as empty and refuses saves while locked, and opens again after unlocking. Files saved before
+the passcode are sealed in the background after setting it (or at the next unlock, if that was
+cut short), and turning the lock off opens them all back before it finishes. They use a random
+key of their own, kept sealed with the passcode's key, so changing the passcode doesn't touch
+them. `app.vault.progress` says how far sealing the existing files has got while it runs.
+`app.vault.state` says whether the data is encrypted (`enabled`)
 and whether it's open now (`locked`); `app.vault.flush()` resolves once every write is sealed.
 
 The pieces it's built from can also be used on their own:
@@ -31,15 +39,18 @@ in order. Locked, sensitive keys read as `undefined` and refuse writes, and migr
 its salt is saved in (`lock` by default). Another tab's re-seal is opened again in each unlocked
 tab. `rekey(key, salt)` seals everything again with a key from a new passcode; a tab whose key
 another tab's `rekey` replaced locks itself (and calls `onLocked`) rather than seal over it, as
-does a tab that was open while another one turned the vault on.
+does a tab that was open while another one turned the vault on. `fileKey()` is the files' key
+while unlocked: made at random by `enable`, kept sealed with the vault's key, sealed again (not
+changed) by `rekey`, and removed by `disable` and `drop`.
 
 From `@xcwds/plugin-vault/keeper`, `app.lock.keep(passcodeKeeper(vault))` connects it to
 `@xcwds/plugin-lock`'s passcode: the lock hands over the passcode once it has checked it, and the
 keeper derives the vault's key from it with the vault's own salt. Setting up a passcode turns the
 vault on, unlocking opens it (and turns it on, for a vault installed after the passcode was set),
 changing the passcode re-keys it with a fresh salt, turning the lock off writes the plaintext
-back, and a forgotten passcode's reset deletes the sealed groups unread. The plugin entry does
-this for you.
+back, and a forgotten passcode's reset deletes the sealed groups unread. With `files` (a blob
+vault, below), it also hands the files' key to the blob layer, seals files saved before in the
+background, and opens them back when the lock is turned off. The plugin entry does this for you.
 
 From `@xcwds/plugin-vault/blobs` ([#149](https://github.com/xcwds/xcwds/issues/149)),
 `createBlobVault({ sensitive, enabled })` does the same for files: install its `layer` with

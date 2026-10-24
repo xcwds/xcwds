@@ -7,6 +7,11 @@
  * with `salt()` and calls `enable`, `unlock`, `lock`, `rekey`, `disable` or `drop`
  * (`passcodeKeeper` in `./keeper` does it for `@xcwds/plugin-lock`).
  *
+ * Files (#149) are sealed with a key of their own, made at random when the vault is turned on and
+ * kept sealed with the passcode's key beside the check value. `fileKey()` hands it to the blob
+ * layer (`./blobs`) while unlocked. A new passcode only seals that small record again, so photos
+ * never need sealing again, and a change cut short can't leave some of them under a lost key.
+ *
  * Imported at prerender too, so nothing touches browser globals until a function runs.
  */
 import { XcwdsError, codes, type Entry, type StorageAdapter, type StorageScope } from '@xcwds/core';
@@ -54,6 +59,11 @@ export type Vault = {
 	drop(): void;
 	/** Resolves once every write so far is sealed and saved (false if one couldn't be saved). */
 	flush(): Promise<boolean>;
+	/**
+	 * The key files are sealed with (non-extractable), while unlocked: give it to the blob layer's
+	 * `unlock`. Undefined while off or locked.
+	 */
+	fileKey(): CryptoKey | undefined;
 	/** Stops following other tabs. */
 	stop(): void;
 };
@@ -107,6 +117,9 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 	/** A value sealed with the key on `enable`, so `unlock` can tell a wrong key with nothing else saved. */
 	const checkKey = `${storage.prefix}${storage.namespace}:check`;
 	const CHECK = 'xcwds-vault';
+	/** The files' key, sealed with the vault key (bound to `files`). */
+	const filesKey = `${storage.prefix}${storage.namespace}:files`;
+	const FILES = 'files';
 
 	let inner!: StorageAdapter;
 	let key: CryptoKey | null = null;
@@ -125,6 +138,8 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 	let epoch = 0;
 	/** The salt the key in memory was derived with. */
 	let keySalt: string | undefined;
+	/** The files' key, while unlocked. */
+	let fileKey: CryptoKey | undefined;
 	/**
 	 * Whether a seal made with the key of `at` may still be saved: no new key since, here or in
 	 * another tab (whose new salt shows in storage before its event reaches this one).
@@ -157,7 +172,8 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 		if (
 			storageKey.startsWith(sealedPrefix) ||
 			storageKey === saltEntry.key ||
-			storageKey === checkKey
+			storageKey === checkKey ||
+			storageKey === filesKey
 		)
 			return undefined;
 		// An exact entry, or a prefixed one (#157) that claims the key.
@@ -288,6 +304,70 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 		if (locked()) throw lockedError();
 	};
 
+	/** A new files' key: its raw bytes sealed with `with_`, and the key itself. */
+	async function newFileKey(with_: CryptoKey) {
+		const raw = globalThis.crypto.getRandomValues(new Uint8Array(32));
+		try {
+			return {
+				sealed: JSON.stringify(await seal(with_, btoa(String.fromCharCode(...raw)), FILES)),
+				key: await importFileKey(raw)
+			};
+		} finally {
+			raw.fill(0);
+		}
+	}
+
+	/** The raw bytes of the saved files' key, opened with `with_`; undefined when it doesn't open. */
+	async function openFileKey(with_: CryptoKey, text: string | null) {
+		const sealed = parseSealed(json(text));
+		const opened = sealed && (await open(with_, sealed, FILES));
+		if (opened === undefined) return undefined;
+		try {
+			const raw = Uint8Array.from(atob(opened), (c) => c.charCodeAt(0));
+			return raw.length === 32 ? raw : undefined;
+		} catch {
+			return undefined;
+		}
+	}
+
+	/**
+	 * The files' key for `with_` (a key `unlock` checked), making one when the vault was turned on
+	 * before files had a key of their own. Undefined when the saved one doesn't open (changed, or
+	 * sealed with a key another tab has just made) or a new one can't be saved: the files stay
+	 * sealed and refuse saves, but the rest of the vault opens.
+	 */
+	async function loadFileKey(with_: CryptoKey): Promise<CryptoKey | undefined> {
+		const saved = inner.get(filesKey);
+		if (saved === null) {
+			const made = await newFileKey(with_);
+			// Another tab made one meanwhile: that one, so both seal files alike.
+			if (inner.get(filesKey) !== null) return loadFileKey(with_);
+			try {
+				inner.set(filesKey, made.sealed);
+				return made.key;
+			} catch (cause) {
+				onError(new Error("Couldn't save the files' key.", { cause }));
+				return undefined;
+			}
+		}
+		const raw = await openFileKey(with_, saved);
+		if (!raw) {
+			onError(new Error("The files' key doesn't open, so files stay sealed."));
+			return undefined;
+		}
+		try {
+			return await importFileKey(raw);
+		} finally {
+			raw.fill(0);
+		}
+	}
+
+	const importFileKey = (raw: Uint8Array) =>
+		globalThis.crypto.subtle.importKey('raw', raw as BufferSource, 'AES-GCM', false, [
+			'encrypt',
+			'decrypt'
+		]);
+
 	storage.layer((below) => {
 		inner = below;
 		return {
@@ -311,7 +391,9 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 				if (memory.get(group)?.delete(k)) schedule(group);
 			},
 			keys() {
-				const out = below.keys().filter((k) => !k.startsWith(sealedPrefix) && k !== checkKey);
+				const out = below
+					.keys()
+					.filter((k) => !k.startsWith(sealedPrefix) && k !== checkKey && k !== filesKey);
 				if (!enabled()) return out;
 				const open = key ? [...memory.values()].flatMap((c) => [...c.keys()]) : [];
 				return [...new Set([...out, ...open])];
@@ -323,6 +405,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 	function forget() {
 		key = null;
 		keySalt = undefined;
+		fileKey = undefined;
 		memory = new Map();
 		dirty.clear();
 	}
@@ -330,6 +413,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 	function dropSealed() {
 		for (const k of inner.keys()) if (k.startsWith(sealedPrefix)) inner.remove(k);
 		inner.remove(checkKey);
+		inner.remove(filesKey);
 	}
 
 	// Another tab re-sealed a group, turned the vault off or dropped it.
@@ -393,6 +477,8 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 					JSON.stringify(await seal(newKey, JSON.stringify(Object.fromEntries(c)), context(group)))
 				);
 			sealed.set(checkKey, JSON.stringify(await seal(newKey, CHECK, 'check')));
+			const files = await newFileKey(newKey);
+			sealed.set(filesKey, files.sealed);
 			if (enabled()) return false;
 			const written: string[] = [];
 			changing = true;
@@ -410,6 +496,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 			changing = false;
 			key = newKey;
 			keySalt = salt;
+			fileKey = files.key;
 			memory = groups;
 			// Writes that landed while sealing went to storage as plaintext: take them in, and remove
 			// their plaintext only once they're sealed.
@@ -443,9 +530,11 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 				if (!c) return false;
 				opened.set(group, c);
 			}
+			const files = await loadFileKey(newKey);
 			if (key) return true;
 			key = newKey;
 			keySalt = savedSalt();
+			fileKey = files;
 			memory = opened;
 			// Plaintext of entries that became sensitive since: move it in and seal it.
 			const moved: string[] = [];
@@ -463,6 +552,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 		lock() {
 			if (!key) return;
 			key = null;
+			fileKey = undefined;
 			// Sensitive keys refuse at once; the open data goes once pending writes are sealed.
 			const pending = memory;
 			storage.reload();
@@ -485,6 +575,19 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 						)
 					);
 			sealed.set(checkKey, JSON.stringify(await seal(newKey, CHECK, 'check')));
+			// The files' key stays the same: only its record is sealed again, with the new key.
+			const savedFiles = inner.get(filesKey);
+			const raw = savedFiles === null ? undefined : await openFileKey(was, savedFiles);
+			// One that doesn't open is left as it is: it opens with no key, old or new.
+			if (raw)
+				try {
+					sealed.set(
+						filesKey,
+						JSON.stringify(await seal(newKey, btoa(String.fromCharCode(...raw)), FILES))
+					);
+				} finally {
+					raw.fill(0);
+				}
 			if (key !== was) return false;
 			// What's saved now, to put back if a write fails part way.
 			const before = new Map<string, string | null>();
@@ -558,6 +661,7 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 			failures = 0;
 			return ok;
 		},
+		fileKey: () => (key ? fileKey : undefined),
 		stop: stopListening
 	};
 	return vault;
