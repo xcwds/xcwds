@@ -130,6 +130,31 @@ describe('NotionDocument', () => {
 		);
 	});
 
+	it('draws images: saved ones once read, links for others, and why the rest are missing (#108)', () => {
+		const out = html(
+			doc([
+				{ type: 'image', caption: t('The cat'), file: 'blob-1' },
+				{ type: 'image', caption: [], external: 'https://a.example/i.png' },
+				{ type: 'image', caption: [], external: 'javascript:alert(1)' },
+				{ type: 'image', caption: [], skipped: 'too-large' },
+				{ type: 'image', caption: [], skipped: 'not-downloaded' }
+			])
+		);
+		// A saved image is read on the device after the page starts, so the server draws none, and
+		// no image is ever loaded from another site.
+		expect(out).not.toContain('<img');
+		expect(out).toMatch(/<figcaption[^>]*>\s*The cat\s*<\/figcaption>/);
+		expect(out).toMatch(
+			/data-notion="image-external"[^>]*>\s*Image from another site, not loaded here:\s*<a href="https:\/\/a\.example\/i\.png"[^>]*rel="noopener noreferrer"[^>]*>Open it on a\.example<\/a>/
+		);
+		expect(out).not.toContain('javascript:');
+		expect(out).toMatch(
+			/data-notion="image-skipped"[^>]*>\s*Image not saved on this device: it’s over 5 MB\./
+		);
+		expect(out).toMatch(/data-notion="image-skipped"[^>]*>\s*Image not shown here\./);
+		expect(out.match(/data-notion="image-skipped"/g)).toHaveLength(3);
+	});
+
 	it('formats rich text and links only safe schemes', () => {
 		const out = html(
 			doc([

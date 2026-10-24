@@ -232,6 +232,123 @@ describe('app.notion', () => {
 		await app.close();
 	});
 
+	it('keeps the images Notion hosts on the device with their copy, and lets go of old ones (#108)', async () => {
+		const S3 = 'https://prod-files-secure.s3.us-west-2.amazonaws.com/ws';
+		let shown = ['a.png', 'b.png'];
+		let signature = 1;
+		let filesDown = false;
+		const { fetch } = relay((url, init) => {
+			if (url.pathname === '/file') {
+				expect(init.headers).toBeUndefined();
+				if (filesDown) throw new TypeError('network');
+				const name = new URL(url.searchParams.get('url')!).pathname.split('/').pop()!;
+				return new Response(name, { headers: { 'Content-Type': 'image/png' } });
+			}
+			if (url.pathname.endsWith('/children'))
+				return Response.json({
+					results: shown.map((name, i) => ({
+						id: `i${i}`,
+						type: 'image',
+						image: { type: 'file', file: { url: `${S3}/${name}?sig=${signature}` }, caption: [] }
+					})),
+					has_more: false,
+					next_cursor: null
+				});
+			return undefined;
+		});
+		const app = await buildTestApp({ plugins: [[setup({ fetch }).plugin, { relay: RELAY }]] });
+		const notion = app.notion!;
+		const collection = app.blobs.collections().find((c) => c.key === 'app:notion:images')!;
+		expect(collection).toMatchObject({ group: 'notion', backup: false, sensitive: true });
+		// Clearing the copies' group clears the images too.
+		const copiesEntry = app.storage.entries().find((e) => e.key === 'app:notion:copies')!;
+		expect(copiesEntry.group).toBe(collection.group);
+		const saved = async () =>
+			(await app.blobs.list(collection)).map(
+				(row) => row.meta as { source: string; key: string } | undefined
+			);
+		const files = (copy = notion.copy('s1')!) =>
+			copy.blocks.map((b) => (b.type === 'image' ? b.file : undefined));
+		const fileCalls = () => fetch.mock.calls.filter(([u]) => String(u).includes('/file?')).length;
+
+		notion.saveSources(() => [agenda]);
+		await notion.connect(TOKEN);
+		await notion.refresh('s1');
+		const [a, b] = files();
+		expect(await (await notion.image(a!))!.text()).toBe('a.png');
+		expect(await (await notion.image(b!))!.text()).toBe('b.png');
+		expect(await saved()).toEqual(
+			expect.arrayContaining([
+				{ source: 's1', key: `${S3}/a.png` },
+				{ source: 's1', key: `${S3}/b.png` }
+			])
+		);
+		expect(fileCalls()).toBe(2);
+
+		// Downloaded again with fresh links: the same files are reused, and the one no longer shown
+		// is deleted.
+		await new Promise((resolve) => setTimeout(resolve, 2));
+		shown = ['b.png', 'c.png'];
+		signature = 2;
+		await notion.refresh('s1', { force: true });
+		const [b2, c] = files();
+		expect(b2).toBe(b);
+		expect(fileCalls()).toBe(3);
+		expect(await notion.image(a!)).toBeUndefined();
+		expect((await saved()).map((m) => m?.key).sort()).toEqual([`${S3}/b.png`, `${S3}/c.png`]);
+
+		// A download that fails keeps the copy and its images, and leaves nothing behind.
+		shown = ['b.png', 'c.png', 'd.png'];
+		filesDown = true;
+		expect(await notion.refresh('s1', { force: true })).toMatchObject({ error: 'offline' });
+		expect(files()).toEqual([b, c]);
+		expect(await saved()).toHaveLength(2);
+		filesDown = false;
+
+		// Removing the source deletes its images; disconnecting deletes them all.
+		const other: Source = { id: 's2', label: 'Page', kind: 'page', page: PAGE };
+		notion.saveSources((list) => [...list, other]);
+		await notion.refresh('s2');
+		expect(await saved()).toHaveLength(5);
+		notion.saveSources((list) => list.filter((s) => s.id !== 's1'));
+		await vi.waitFor(async () => expect(await saved()).toHaveLength(3));
+		expect((await saved()).every((m) => m?.source === 's2')).toBe(true);
+		notion.disconnect();
+		await vi.waitFor(async () => expect(await saved()).toEqual([]));
+		await app.close();
+	});
+
+	it('deletes the images it saved when their copy isn’t kept', async () => {
+		const S3 = 'https://prod-files-secure.s3.us-west-2.amazonaws.com/ws';
+		const { fetch } = relay((url) => {
+			if (url.pathname === '/file')
+				return new Response('x', { headers: { 'Content-Type': 'image/png' } });
+			if (url.pathname.endsWith('/children'))
+				return Response.json({
+					results: [
+						{ id: 'i', type: 'image', image: { type: 'file', file: { url: `${S3}/a.png` } } },
+						// Over the cap for one copy.
+						{
+							id: 'p',
+							type: 'paragraph',
+							paragraph: { rich_text: [{ plain_text: 'x'.repeat(1024 * 1024) }] }
+						}
+					],
+					has_more: false,
+					next_cursor: null
+				});
+			return undefined;
+		});
+		const app = await buildTestApp({ plugins: [[setup({ fetch }).plugin, { relay: RELAY }]] });
+		const notion = app.notion!;
+		notion.saveSources(() => [agenda]);
+		await notion.connect(TOKEN);
+		expect(await notion.refresh('s1')).toMatchObject({ error: 'too-large' });
+		const collection = app.blobs.collections().find((c) => c.key === 'app:notion:images')!;
+		expect(await app.blobs.list(collection)).toEqual([]);
+		await app.close();
+	});
+
 	it('keeps the saved copy when a refresh fails, and says why', async () => {
 		let down = false;
 		const { fetch } = relay(() => (down ? new Response('{}', { status: 500 }) : undefined));

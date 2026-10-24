@@ -215,11 +215,15 @@ one plugin that contacts a server, and only when someone connects it and downloa
   device and Notion, through the relay the app names in its options (a stateless worker that
   adds the headers browsers need and keeps nothing). The token goes in a header, never in a URL.
   Settings → Privacy names the relay, and the page's CSP allows it and nothing else.
-- **What stays on the device:** the token, the list of sources and the latest copy of each.
-  Backups carry the list but never the token or the copies, and Disconnect removes both.
+- **What stays on the device:** the token, the list of sources and the latest copy of each,
+  with the images Notion hosts on those pages (in IndexedDB, at most 5 MB each and 20 MB a
+  source). Notion's links to them expire within the hour, so the relay fetches them during the
+  download, without the token. Images from other sites are never loaded: the copy links to them.
+  Backups carry the list but never the token, the copies or the images, and Disconnect removes
+  all three.
 - **The token is saved unencrypted** in browser storage, like everything else saved, unless
-  the app has `@xcwds/plugin-vault` and a passcode is set: the token and the copies are
-  `sensitive`, so the vault encrypts them ([#79](https://github.com/xcwds/xcwds/issues/79)). Use
+  the app has `@xcwds/plugin-vault` and a passcode is set: the token, the copies and the images
+  are `sensitive`, so the vault encrypts them ([#79](https://github.com/xcwds/xcwds/issues/79)). Use
   an integration with "Read content" only, shared with just the pages you want on the device.
 
 ## Plugins are trusted code

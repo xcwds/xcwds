@@ -3,7 +3,8 @@
 The Notion API sends no CORS headers, so a static app can't call it from the browser.
 [`worker.ts`](worker.ts) is the smallest thing that can: a Cloudflare Worker that adds CORS headers
 for your app's origins and forwards a short list of read requests to `https://api.notion.com`
-([#105](https://github.com/xcwds/xcwds/issues/105)). It ships in the package so you deploy the
+([#105](https://github.com/xcwds/xcwds/issues/105)), plus the images Notion hosts
+([#108](https://github.com/xcwds/xcwds/issues/108)). It ships in the package so you deploy the
 version your app installs, and it's never part of an app's bundle.
 
 ## What it does, and doesn't
@@ -25,9 +26,19 @@ version your app installs, and it's never part of an app's bundle.
   | `GET /v1/data_sources/:id`                      | A data source's properties        |
   | `POST /v1/data_sources/:id/query`               | The newest page in a database     |
   | `POST /v1/search`                               | Choosing pages                    |
+  | `GET /file?url=<link>`                          | An image Notion hosts (below)     |
 
   Ids must be Notion ids (UUIDs, dashed or not). The only query parameters are `start_cursor` and
   `page_size` (1 to 100), each once.
+
+- **Images, and only Notion's.** Notion gives an image it hosts as a signed link that expires
+  within the hour, on an origin the app's content security policy doesn't allow. `GET /file`
+  fetches that link for the app, so the app never contacts it itself. The link must be `https:`
+  on `prod-files-secure.s3.us-west-2.amazonaws.com` or a subdomain of `notion-static.com`, and is
+  fetched with no headers at all: the token, cookies and the app's address stay behind. Only
+  PNG, JPEG, GIF, WebP, AVIF and SVG images of at most 5 MB come back (`415` or `413`
+  otherwise), with `Cache-Control: no-store`, `nosniff` and a sandboxing content security policy.
+  An expired link, or one that redirects, is `502`.
 
 - **Only your app's origins.** Requests from an origin not in `ALLOWED_ORIGINS` (or with none)
   are refused, with no CORS headers. That stops other websites using your relay from a browser.

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import worker, { BODY_LIMIT, NOTION, relay, type RelayEnv } from './worker.js';
+import worker, { BODY_LIMIT, FILE_LIMIT, NOTION, relay, type RelayEnv } from './worker.js';
 
 const APP = 'https://app.example';
 const env: RelayEnv = { ALLOWED_ORIGINS: `${APP}, https://other.example` };
@@ -254,6 +254,151 @@ describe('the Notion relay', () => {
 		);
 		expect(down.status).toBe(502);
 		expect(down.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+	});
+
+	describe('GET /file (#108)', () => {
+		const S3 =
+			'https://prod-files-secure.s3.us-west-2.amazonaws.com/ws/abc/photo.png?X-Amz-Signature=f00&X-Amz-Expires=3600';
+		const png = (bytes = 8, headers: Record<string, string> = {}) =>
+			notion(
+				() =>
+					new Response(new Uint8Array(bytes), {
+						headers: { 'Content-Type': 'image/png', 'Content-Length': String(bytes), ...headers }
+					})
+			);
+		const fileCall = (link: string, upstream = png(), init: RequestInit = {}) =>
+			call(`/file?url=${encodeURIComponent(link)}`, init, upstream);
+
+		it('fetches an image Notion hosts with no headers at all, and passes on only the image', async () => {
+			for (const link of [
+				S3,
+				'https://s3.notion-static.com/x/y.png',
+				'https://notion-static.com.x.notion-static.com/a'
+			]) {
+				const upstream = png(8, { 'Set-Cookie': 's=1', 'X-Amz-Request-Id': 'r' });
+				const response = await fileCall(link, upstream, {
+					headers: { Authorization: 'Bearer secret_abc', Cookie: 'session=1' }
+				});
+				expect(response.status, link).toBe(200);
+				expect((await response.arrayBuffer()).byteLength).toBe(8);
+				const { url, init, headers } = sent(upstream);
+				expect(url).toBe(new URL(link).href);
+				expect(init).toMatchObject({ method: 'GET', redirect: 'manual' });
+				expect([...headers.keys()]).toEqual([]);
+				expect(Object.fromEntries(response.headers)).toEqual({
+					'access-control-allow-origin': APP,
+					'access-control-expose-headers': 'Retry-After',
+					'cache-control': 'no-store',
+					'content-length': '8',
+					'content-security-policy': "default-src 'none'; sandbox",
+					'content-type': 'image/png',
+					vary: 'Origin',
+					'x-content-type-options': 'nosniff'
+				});
+			}
+		});
+
+		it('refuses links anywhere else, and other query strings, before anything leaves', async () => {
+			const refused = [
+				'https://example.com/photo.png',
+				'https://notion-static.com/a.png',
+				'https://evil-notion-static.com/a.png',
+				'https://s3.notion-static.com.evil.example/a.png',
+				'https://prod-files-secure.s3.us-west-2.amazonaws.com.evil.example/a',
+				'https://prod-files-secure.s3.us-west-2.amazonaws.com:8443/a',
+				'https://user:pw@prod-files-secure.s3.us-west-2.amazonaws.com/a',
+				'http://prod-files-secure.s3.us-west-2.amazonaws.com/a',
+				'https://api.notion.com/v1/users/me',
+				'not a link',
+				`${S3}&${'x'.repeat(5000)}`
+			];
+			for (const link of refused) {
+				const upstream = png();
+				const response = await fileCall(link, upstream);
+				expect(response.status, link).toBe(403);
+				expect(await response.json()).toMatchObject({ code: 'relay_forbidden' });
+				expect(upstream).not.toHaveBeenCalled();
+			}
+			for (const path of [
+				'/file',
+				`/file?url=${encodeURIComponent(S3)}&url=${encodeURIComponent(S3)}`,
+				`/file?url=${encodeURIComponent(S3)}&page_size=1`,
+				`/file?link=${encodeURIComponent(S3)}`
+			]) {
+				const upstream = png();
+				expect((await call(path, {}, upstream)).status, path).toBe(403);
+				expect(upstream).not.toHaveBeenCalled();
+			}
+			// Only GET, and only from the app's origins.
+			const upstream = png();
+			expect((await fileCall(S3, upstream, { method: 'POST' })).status).toBe(403);
+			const evil = await call(
+				`/file?url=${encodeURIComponent(S3)}`,
+				{ origin: 'https://evil.example' },
+				upstream
+			);
+			expect(evil.status).toBe(403);
+			expect(evil.headers.get('Access-Control-Allow-Origin')).toBeNull();
+			expect(upstream).not.toHaveBeenCalled();
+		});
+
+		it('passes on only images within the limit, and says why not', async () => {
+			const html = await fileCall(
+				S3,
+				notion(() => new Response('<script>', { headers: { 'Content-Type': 'text/html' } }))
+			);
+			expect(html.status).toBe(415);
+			expect(await html.json()).toMatchObject({ code: 'relay_file_type' });
+			const typed = await fileCall(
+				S3,
+				notion(() => new Response('x', { headers: { 'Content-Type': 'IMAGE/JPEG; q=1' } }))
+			);
+			expect(typed.status).toBe(200);
+			expect(typed.headers.get('Content-Type')).toBe('image/jpeg');
+
+			const declared = await fileCall(S3, png(FILE_LIMIT + 1));
+			expect(declared.status).toBe(413);
+			expect(await declared.json()).toMatchObject({ code: 'relay_file_too_large' });
+			// No length given, and longer than the limit: the body errors past it.
+			const streamed = await fileCall(
+				S3,
+				notion(
+					() =>
+						new Response(
+							new ReadableStream({
+								start(controller) {
+									for (let i = 0; i < 5; i++) controller.enqueue(new Uint8Array(FILE_LIMIT / 4));
+									controller.close();
+								}
+							}),
+							{ headers: { 'Content-Type': 'image/png' } }
+						)
+				)
+			);
+			expect(streamed.status).toBe(200);
+			expect(streamed.headers.get('Content-Length')).toBeNull();
+			await expect(streamed.arrayBuffer()).rejects.toThrow();
+			expect((await fileCall(S3, png(FILE_LIMIT))).status).toBe(200);
+
+			// An expired link (S3 answers 403) or a redirect: the relay says it couldn't fetch it.
+			for (const status of [403, 404, 302]) {
+				const failed = await fileCall(
+					S3,
+					notion(() => new Response('<Error/>', { status, headers: { Location: 'https://x' } }))
+				);
+				expect(failed.status, String(status)).toBe(502);
+				expect(await failed.json()).toMatchObject({ code: 'relay_file' });
+				expect(failed.headers.get('Location')).toBeNull();
+			}
+			const down = await fileCall(
+				S3,
+				vi.fn(async () => {
+					throw new TypeError('network');
+				})
+			);
+			expect(down.status).toBe(502);
+			expect(await down.json()).toMatchObject({ code: 'relay_upstream' });
+		});
 	});
 
 	it('is a Worker module that uses the runtime fetch', async () => {

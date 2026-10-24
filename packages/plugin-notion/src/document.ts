@@ -28,6 +28,28 @@ export type RichText = {
 
 type WithChildren = { children?: Block[] };
 
+/**
+ * Why an image isn't on the device: over the size cap for one image, past the cap for a source's
+ * images, not an image the app shows, a failed download (an expired link, say), no room to save
+ * it, or not downloaded at all (`toDocument` without `images`, or a kind Notion gives no link for).
+ */
+export type ImageSkip =
+	'too-large' | 'full' | 'not-image' | 'failed' | 'not-saved' | 'not-downloaded';
+
+/**
+ * An image (#108). One Notion hosts is downloaded with the page and saved on the device: `file`
+ * is its id in the plugin's image collection. One from elsewhere is `external`, a link that's
+ * never loaded. Otherwise `skipped` says why it isn't shown. Notion's signed links expire within
+ * the hour, so they're never kept.
+ */
+export type ImageBlock = {
+	type: 'image';
+	caption: RichText[];
+	file?: string;
+	external?: string;
+	skipped?: ImageSkip;
+};
+
 /** A block of a saved page. */
 export type Block =
 	| ({ type: 'paragraph'; text: RichText[]; color?: Color } & WithChildren)
@@ -54,7 +76,8 @@ export type Block =
 	| { type: 'embed'; url: string; caption: RichText[] }
 	| { type: 'equation'; expression: string }
 	| { type: 'columns'; columns: Block[][] }
-	/** An image, file, PDF, video or audio: a placeholder until #108. */
+	| ImageBlock
+	/** A file, PDF, video or audio: a placeholder (and an image, in copies from before #108). */
 	| { type: 'file'; notionType: string; caption: RichText[] }
 	| { type: 'unsupported'; notionType: string };
 
@@ -127,12 +150,34 @@ const emoji = (icon: unknown): string | undefined => {
 const color = (value: unknown): { color?: Color } =>
 	typeof value === 'string' && value !== 'default' ? { color: value } : {};
 
-const FILES = new Set(['image', 'file', 'pdf', 'video', 'audio']);
+const FILES = new Set(['file', 'pdf', 'video', 'audio']);
 
-/** One of Notion's blocks in the saved format. */
-export function convertBlock(raw: RawBlock): Block {
+/**
+ * The images to download: each image block Notion hosts, and its signed link, in page order.
+ * `download` fills in each block's `file` (or `skipped`) from it.
+ */
+export type ImageLinks = Map<ImageBlock, string>;
+
+/** An image block; one Notion hosts goes into `images`, when given, to be downloaded. */
+function convertImage(data: Loose, images: ImageLinks | undefined): ImageBlock {
+	const caption = richText(data.caption);
+	if (data.type === 'external') {
+		const external = str(obj(data.external).url);
+		if (external) return { type: 'image', caption, external };
+	}
+	const block: ImageBlock = { type: 'image', caption, skipped: 'not-downloaded' };
+	const link = data.type === 'file' ? str(obj(data.file).url) : '';
+	if (link && images) images.set(block, link);
+	return block;
+}
+
+/**
+ * One of Notion's blocks in the saved format. With `images`, the images Notion hosts are listed
+ * there to download; without, they're `skipped: 'not-downloaded'`.
+ */
+export function convertBlock(raw: RawBlock, images?: ImageLinks): Block {
 	const data = obj(raw[raw.type]);
-	const children = raw.children?.map(convertBlock);
+	const children = raw.children?.map((child) => convertBlock(child, images));
 	const nested = children?.length ? { children } : {};
 	const text = richText(data.rich_text);
 	switch (raw.type) {
@@ -220,8 +265,10 @@ export function convertBlock(raw: RawBlock): Block {
 				type: 'columns',
 				columns: (raw.children ?? [])
 					.filter((column) => column.type === 'column')
-					.map((column) => (column.children ?? []).map(convertBlock))
+					.map((column) => (column.children ?? []).map((child) => convertBlock(child, images)))
 			};
+		case 'image':
+			return convertImage(data, images);
 		default:
 			if (FILES.has(raw.type)) {
 				return { type: 'file', notionType: raw.type, caption: richText(data.caption) };
@@ -301,11 +348,18 @@ export function pageTitle(page: RawObject): string {
 	return '';
 }
 
-/** A downloaded page and its blocks (from `client.blocks`) in the saved format. */
+/**
+ * A downloaded page and its blocks (from `client.blocks`) in the saved format. `images` collects
+ * the images to download (`convertBlock`).
+ */
 export function toDocument(
 	page: RawObject,
 	blocks: RawBlock[],
-	{ fetchedAt, truncated = false }: { fetchedAt: number; truncated?: boolean }
+	{
+		fetchedAt,
+		truncated = false,
+		images
+	}: { fetchedAt: number; truncated?: boolean; images?: ImageLinks }
 ): NotionDocument {
 	const properties: Property[] = [];
 	for (const [name, raw] of Object.entries(obj(page.properties))) {
@@ -322,7 +376,7 @@ export function toDocument(
 		url: strOrNull(page.url),
 		createdTime: strOrNull(page.created_time),
 		properties,
-		blocks: blocks.map(convertBlock),
+		blocks: blocks.map((block) => convertBlock(block, images)),
 		fetchedAt,
 		truncated
 	};
