@@ -90,10 +90,35 @@ function byApp(app: App, worker: WorkerContext) {
 		if (missing.length) await cache.addAll(missing.map(request));
 	}
 
-	// An update precaches the apps that were on, so none of them stops working offline; a first
-	// install, the apps that start on.
+	/** Whether an older version of this app is installed (its cache is still there). */
+	async function updating(): Promise<boolean> {
+		const prefix = worker.cacheName.slice(0, -worker.version.length);
+		return (await caches.keys()).some((key) => key.startsWith(prefix) && key !== worker.cacheName);
+	}
+
+	// An update precaches the apps that were on, so none of them stops working offline; an update
+	// from a version without `byApp` (nothing saved yet), every app, as that version kept them; a
+	// first install, the apps that start on.
 	app.addHook('onInstall', async (cache) => {
-		await download(cache as Cache, (await saved()) ?? defaults());
+		const all = () => (tools()?.apps() ?? []).map((a) => a.id);
+		await download(cache as Cache, (await saved()) ?? ((await updating()) ? all() : defaults()));
+	});
+
+	// Apps turned on or off while this version waited reached the old one only: catch up now.
+	app.addHook('onActivate', async () => {
+		const on = await saved();
+		if (!on) return;
+		try {
+			const cache = await caches.open(worker.cacheName);
+			for (const path of await worker.deferred()) {
+				const id = appOf(path);
+				if (id !== undefined && !on.includes(id)) await cache.delete(path);
+			}
+			await download(cache, on);
+		} catch (error) {
+			// Offline, say: the next message from a page downloads what's missing.
+			app.log.warn(`${NAME}: couldn't download the apps that are on:`, error);
+		}
 	});
 
 	app.addHook('onMessage', async (data: unknown) => {

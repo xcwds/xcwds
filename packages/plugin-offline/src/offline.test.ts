@@ -194,7 +194,12 @@ describe('byApp', () => {
 
 	async function boot(
 		net = network(),
-		{ version = '1', seed }: { version?: string; seed?: Response } = {}
+		{
+			version = '1',
+			seed,
+			older = false,
+			activate = true
+		}: { version?: string; seed?: Response; older?: boolean; activate?: boolean } = {}
 	) {
 		const sw = await buildTestWorker(
 			{ plugins: [[tools, {}], offline({ byApp: true })] },
@@ -208,8 +213,10 @@ describe('byApp', () => {
 			}
 		);
 		if (seed) await (await savedCache(sw)).put(savedKey(sw), seed);
+		// What an installed older version leaves: its cache, deleted when this one activates.
+		if (older) await sw.caches.open(sw.app.worker!.cacheName.replace(/[^:]+$/, 'old'));
 		await sw.install();
-		await sw.activate();
+		if (activate) await sw.activate();
 		return { sw, net: net.state };
 	}
 	type Worker = Awaited<ReturnType<typeof boot>>['sw'];
@@ -279,6 +286,37 @@ describe('byApp', () => {
 		net.state.version = 'v2';
 		const { sw } = await boot(net, { version: '2', seed: saved });
 		expect(await cached(sw)).toEqual(['/sub/', '/sub/404.html', '/sub/_app/app.js', '/sub/secret']);
+	});
+
+	it('an update from a version without byApp keeps every app, as that version did', async () => {
+		const { sw } = await boot(network(), { older: true });
+		expect(await cached(sw)).toContain('/sub/secret');
+		expect(await cached(sw)).toContain('/sub/hello');
+	});
+
+	it('catches up on apps turned on or off while it waited, when it takes over', async () => {
+		const { sw } = await boot(network(), {
+			seed: new Response(JSON.stringify(['kitchen', 'hello'])),
+			activate: false
+		});
+		// The old version, still in control, got the message and saved it.
+		await (
+			await savedCache(sw)
+		).put(savedKey(sw), new Response(JSON.stringify(['kitchen', 'secret'])));
+		await sw.activate();
+		expect(await cached(sw)).toContain('/sub/secret');
+		expect(await cached(sw)).not.toContain('/sub/hello');
+	});
+
+	it('takes over even when it cannot catch up, and says why', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const net = network();
+		const { sw } = await boot(net, { seed: new Response('["kitchen"]'), activate: false });
+		await (await savedCache(sw)).put(savedKey(sw), new Response('["secret"]'));
+		net.state.online = false;
+		await sw.activate();
+		expect(await cached(sw)).not.toContain('/sub/secret');
+		expect(warn.mock.calls.flat().join(' ')).toMatch(/couldn't download the apps that are on/);
 	});
 
 	it('an update fails rather than leave out an app that was on', async () => {
