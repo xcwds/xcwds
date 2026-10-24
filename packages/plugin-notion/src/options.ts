@@ -28,7 +28,7 @@ export type ResolvedOptions = { relay: string; page: string; register: boolean }
 
 /** Why the plugin contacts the relay, as Settings → Privacy says it. */
 export const REASON =
-	'Downloads the Notion pages you choose, through a relay that adds the headers browsers need. Your token goes to Notion with each request; nothing is stored on the way.';
+	'Downloads the Notion pages you choose and their images, through a relay that adds the headers browsers need. Your token goes to Notion with each request; nothing is stored on the way.';
 
 const KEYS = ['relay', 'page', 'register'];
 const PAGE = /^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/;

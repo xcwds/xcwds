@@ -2,20 +2,41 @@
 	/**
 	 * A saved page's blocks (#107), drawn from the plugin's own format only. Text is always text
 	 * (never `{@html}`), and blocks that aren't drawn here say so, with a link to the page in Notion.
+	 * Saved images are read with `image` (`app.notion.image`); images from outside Notion are links,
+	 * never loaded.
 	 */
 	import Blocks from './Blocks.svelte';
+	import NotionImage from './NotionImage.svelte';
 	import RichText from './RichText.svelte';
-	import type { Block } from './document.js';
-	import { colorClass, fileLabel, groupBlocks, headingTag } from './render.js';
+	import { plainText, type Block } from './document.js';
+	import {
+		colorClass,
+		externalHost,
+		fileLabel,
+		groupBlocks,
+		headingTag,
+		imageNote,
+		safeHref
+	} from './render.js';
 
-	let { blocks, url }: { blocks: readonly Block[]; url?: string | undefined } = $props();
+	let {
+		blocks,
+		url,
+		image
+	}: {
+		blocks: readonly Block[];
+		url?: string | undefined;
+		image?: ((id: string) => Promise<Blob | undefined>) | undefined;
+	} = $props();
 </script>
 
 <!-- Every link here leaves the app (Notion's own links, checked by `safeHref`), so it isn't a route to resolve. -->
 <!-- eslint-disable svelte/no-navigation-without-resolve -->
 {#snippet children(block: Block)}
 	{#if 'children' in block && block.children?.length}
-		<div class="mt-1 flex flex-col gap-2 ps-6"><Blocks blocks={block.children} {url} /></div>
+		<div class="mt-1 flex flex-col gap-2 ps-6">
+			<Blocks blocks={block.children} {url} {image} />
+		</div>
 	{/if}
 {/snippet}
 
@@ -162,9 +183,45 @@
 		{:else if block.type === 'columns'}
 			<div class="grid gap-4 md:auto-cols-fr md:grid-flow-col">
 				{#each block.columns as column, c (c)}
-					<div class="flex min-w-0 flex-col gap-2"><Blocks blocks={column} {url} /></div>
+					<div class="flex min-w-0 flex-col gap-2"><Blocks blocks={column} {url} {image} /></div>
 				{/each}
 			</div>
+		{:else if block.type === 'image'}
+			{@const external = block.external ? safeHref(block.external) : undefined}
+			<figure class="flex flex-col gap-1">
+				{#if block.file}
+					<NotionImage
+						id={block.file}
+						alt={block.caption.length ? plainText(block.caption) : 'Image'}
+						load={image}
+					/>
+				{:else if external}
+					<p
+						class="rounded-xl border border-dashed border-current/30 p-3 text-sm"
+						data-notion="image-external"
+					>
+						Image from another site, not loaded here:
+						<a
+							href={external}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex min-h-11 items-center underline underline-offset-2"
+							>Open it on {externalHost(external)}</a
+						>
+					</p>
+				{:else}
+					<p
+						class="rounded-xl border border-dashed border-current/30 p-3 text-sm"
+						data-notion="image-skipped"
+					>
+						{imageNote(block.skipped)}
+						{@render notInNotion()}
+					</p>
+				{/if}
+				{#if block.caption.length}<figcaption class="text-sm opacity-70">
+						<RichText runs={block.caption} />
+					</figcaption>{/if}
+			</figure>
 		{:else if block.type === 'file'}
 			<p class="rounded-xl border border-dashed border-current/30 p-3 text-sm" data-notion="file">
 				{fileLabel(block.notionType)} not shown here yet.

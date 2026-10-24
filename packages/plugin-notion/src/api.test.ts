@@ -281,3 +281,85 @@ describe('client.blocks', () => {
 		expect(capped.blocks.map((b) => b.id)).toEqual(['a', 'b']);
 	});
 });
+
+describe('client.file (#108)', () => {
+	const LINK =
+		'https://prod-files-secure.s3.us-west-2.amazonaws.com/ws/f/cat.png?X-Amz-Signature=s';
+	const image = (bytes: number, headers: Record<string, string> = {}) =>
+		new Response(new Uint8Array(bytes), {
+			headers: { 'Content-Type': 'image/png', 'Content-Length': String(bytes), ...headers }
+		});
+
+	it('fetches a file through the relay without the token, as a Blob of its type', async () => {
+		const { notion, fetch } = client(() => image(10, { 'Content-Type': 'image/PNG; x=1' }));
+		const result = await notion.file(LINK, 100);
+		expect(result.ok).toBe(true);
+		const blob = (result as { blob: Blob }).blob;
+		expect([blob.size, blob.type]).toEqual([10, 'image/png']);
+		const [url, init] = fetch.mock.calls[0]!;
+		expect(String(url)).toBe(`${RELAY}/file?url=${encodeURIComponent(LINK)}`);
+		expect(init).toMatchObject({
+			method: 'GET',
+			credentials: 'omit',
+			cache: 'no-store',
+			referrerPolicy: 'no-referrer'
+		});
+		expect(init!.headers).toBeUndefined();
+		expect(JSON.stringify(fetch.mock.calls)).not.toContain(TOKEN);
+	});
+
+	it('says why it kept no file: too large, not an image, or failed', async () => {
+		const cases: [Response, string][] = [
+			[image(101), 'too-large'],
+			// No length given, and longer than allowed.
+			[
+				new Response(new Uint8Array(101), { headers: { 'Content-Type': 'image/png' } }),
+				'too-large'
+			],
+			[new Response('<html>', { headers: { 'Content-Type': 'text/html' } }), 'not-image'],
+			[new Response('x', { headers: {} }), 'not-image'],
+			[Response.json({ code: 'relay_file_too_large' }, { status: 413 }), 'too-large'],
+			[Response.json({ code: 'relay_file_type' }, { status: 415 }), 'not-image'],
+			[Response.json({ code: 'relay_file' }, { status: 502 }), 'failed'],
+			[Response.json({ code: 'relay_upstream' }, { status: 502 }), 'failed'],
+			[Response.json({ code: 'relay_forbidden' }, { status: 403 }), 'failed']
+		];
+		for (const [response, reason] of cases) {
+			const { notion } = client(() => response);
+			expect(await notion.file(LINK, 100), reason).toEqual({ ok: false, reason });
+		}
+		// A body that breaks off (the relay's limit, or a dropped connection).
+		const { notion } = client(
+			() =>
+				new Response(
+					new ReadableStream({
+						start(controller) {
+							controller.enqueue(new Uint8Array(4));
+							controller.error(new Error('cut'));
+						}
+					}),
+					{ headers: { 'Content-Type': 'image/png' } }
+				)
+		);
+		expect(await notion.file(LINK, 100)).toEqual({ ok: false, reason: 'failed' });
+	});
+
+	it('throws only when offline or aborted', async () => {
+		const offline = client(() => {
+			throw new TypeError('network');
+		});
+		await expect(offline.notion.file(LINK, 100)).rejects.toMatchObject({ kind: 'offline' });
+		const controller = new AbortController();
+		const { notion } = client(
+			(_url, init) =>
+				new Promise<Response>((_resolve, reject) => {
+					init.signal?.addEventListener('abort', () => reject(init.signal!.reason));
+				}),
+			{ signal: controller.signal }
+		);
+		const pending = notion.file(LINK, 100);
+		controller.abort();
+		await expect(pending).rejects.toMatchObject({ kind: 'aborted' });
+		await expect(notion.file(LINK, 100)).rejects.toMatchObject({ kind: 'aborted' });
+	});
+});

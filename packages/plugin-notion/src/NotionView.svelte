@@ -98,7 +98,7 @@
 					No newer page yet{copy.createdTime ? `: this one is from ${day(copy.createdTime)}` : ''}.
 				</p>
 			{/if}
-			<NotionDocument document={copy} />
+			<NotionDocument document={copy} image={notion.image} />
 		{/if}
 	</div>
 {/if}

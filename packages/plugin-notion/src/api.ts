@@ -61,6 +61,20 @@ export class NotionError extends Error {
 	}
 }
 
+/** The image types `file` keeps, as the relay passes them on. */
+export const IMAGE_TYPES: ReadonlySet<string> = new Set([
+	'image/png',
+	'image/jpeg',
+	'image/gif',
+	'image/webp',
+	'image/avif',
+	'image/svg+xml'
+]);
+
+/** A file `file` fetched, or why it didn't keep it. */
+export type FileResult =
+	{ ok: true; blob: Blob } | { ok: false; reason: 'too-large' | 'not-image' | 'failed' };
+
 /** A Notion block as the API sends it, with its children once `blocks` fetched them. */
 export type RawBlock = {
 	id: string;
@@ -256,6 +270,60 @@ export function createNotionClient(options: NotionClientOptions) {
 		}
 	}
 
+	/** One file through the relay's `/file`: sent without the token, which a file never needs. */
+	async function file(link: string, maxBytes: number): Promise<FileResult> {
+		const fetcher = options.fetch ?? globalThis.fetch;
+		if (signal?.aborted) throw aborted();
+		let response: Response;
+		try {
+			response = await fetcher(`${relay}/file?url=${encodeURIComponent(link)}`, {
+				method: 'GET',
+				signal,
+				credentials: 'omit',
+				cache: 'no-store',
+				referrerPolicy: 'no-referrer'
+			});
+		} catch {
+			throw signal?.aborted ? aborted() : new NotionError('offline');
+		}
+		const drop = () => void response.body?.cancel().catch(() => {});
+		if (!response.ok) {
+			drop();
+			const reason =
+				response.status === 413 ? 'too-large' : response.status === 415 ? 'not-image' : 'failed';
+			return { ok: false, reason };
+		}
+		const type = (response.headers.get('Content-Type') ?? '').split(';')[0]!.trim().toLowerCase();
+		if (!IMAGE_TYPES.has(type)) {
+			drop();
+			return { ok: false, reason: 'not-image' };
+		}
+		if (Number(response.headers.get('Content-Length')) > maxBytes) {
+			drop();
+			return { ok: false, reason: 'too-large' };
+		}
+		const parts: Uint8Array<ArrayBuffer>[] = [];
+		let size = 0;
+		try {
+			const reader = response.body!.getReader();
+			for (;;) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				size += value.byteLength;
+				if (size > maxBytes) {
+					await reader.cancel().catch(() => {});
+					return { ok: false, reason: 'too-large' };
+				}
+				parts.push(value as Uint8Array<ArrayBuffer>);
+			}
+		} catch {
+			if (signal?.aborted) throw aborted();
+			// The relay cut it off past its limit, or the connection dropped mid-file.
+			return { ok: false, reason: 'failed' };
+		}
+		return { ok: true, blob: new Blob(parts, { type }) };
+	}
+
 	const path = (id: string) => encodeURIComponent(id);
 	const children = (id: string, cursor?: string) =>
 		requestList<RawBlock>(
@@ -279,6 +347,12 @@ export function createNotionClient(options: NotionClientOptions) {
 		children,
 		/** All of a block's direct children. */
 		allChildren: (id: string) => all((cursor) => children(id, cursor)),
+		/**
+		 * An image Notion hosts (#108), from the signed link Notion gave for it (`image.file.url`),
+		 * through the relay: its `Blob`, or why not (over `maxBytes`, not an image, or a failure
+		 * such as an expired link). Throws only when offline or aborted.
+		 */
+		file,
 		/**
 		 * The blocks of a page with their children, depth first in Notion's order, at most
 		 * `maxDepth` levels and `maxBlocks` blocks; `truncated` when it stopped short. Child pages and

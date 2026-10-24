@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { RawBlock, RawObject } from './api.js';
-import { DOCUMENT_VERSION, convertBlock, pageTitle, richText, toDocument } from './document.js';
+import {
+	DOCUMENT_VERSION,
+	convertBlock,
+	pageTitle,
+	richText,
+	toDocument,
+	type Block,
+	type ImageLinks
+} from './document.js';
 
 /** Notion's rich text item. */
 const rt = (
@@ -179,12 +187,46 @@ describe('blocks', () => {
 		});
 	});
 
+	it('lists the images Notion hosts to download, and keeps links to the others (#108)', () => {
+		const hosted = raw('image', {
+			type: 'file',
+			file: { url: 'https://s3.example/x.png?sig=1', expiry_time: '2026-10-22T07:00:00.000Z' },
+			caption: [rt('Cat')]
+		});
+		// Without a list to download into, it isn't downloaded, and the link is never kept.
+		expect(convertBlock(hosted)).toEqual({
+			type: 'image',
+			caption: [{ text: 'Cat' }],
+			skipped: 'not-downloaded'
+		});
+		const images: ImageLinks = new Map();
+		const nested = convertBlock(raw('toggle', { rich_text: [rt('Photos')] }, [hosted]), images);
+		const block = (nested as { children: Block[] }).children[0]!;
+		expect([...images]).toEqual([[block, 'https://s3.example/x.png?sig=1']]);
+		expect(JSON.stringify(nested)).not.toContain('sig=1');
+
+		expect(
+			convertBlock(
+				raw('image', { type: 'external', external: { url: 'https://a.example/i.png' } }),
+				images
+			)
+		).toEqual({ type: 'image', caption: [], external: 'https://a.example/i.png' });
+		// Uploaded through the API, or missing its link: nothing to download.
+		for (const data of [{ type: 'file_upload', file_upload: { id: 'u' } }, { type: 'file' }])
+			expect(convertBlock(raw('image', data), images)).toEqual({
+				type: 'image',
+				caption: [],
+				skipped: 'not-downloaded'
+			});
+		expect(images.size).toBe(1);
+	});
+
 	it('keeps files as placeholders and marks anything else unsupported', () => {
 		expect(
 			convertBlock(
-				raw('image', { type: 'file', file: { url: 'https://s3/x' }, caption: [rt('Cat')] })
+				raw('pdf', { type: 'file', file: { url: 'https://s3/x' }, caption: [rt('Cat')] })
 			)
-		).toEqual({ type: 'file', notionType: 'image', caption: [{ text: 'Cat' }] });
+		).toEqual({ type: 'file', notionType: 'pdf', caption: [{ text: 'Cat' }] });
 		for (const type of ['synced_block', 'table_of_contents', 'breadcrumb', 'made_up']) {
 			expect(convertBlock(raw(type, {}))).toEqual({ type: 'unsupported', notionType: type });
 		}

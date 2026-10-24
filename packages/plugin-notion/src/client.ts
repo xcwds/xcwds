@@ -6,6 +6,11 @@
  *   connection", personal and never in backups), the sources (`app:notion:sources`, in backups)
  *   and the latest copy of each (`app:notion:copies`, personal and out of backups, since it can
  *   be downloaded again). Copies stay within `COPY_LIMIT` and `TOTAL_LIMIT`.
+ * - **Images** (#108): the images Notion hosts are downloaded with their page into a blob
+ *   collection (`app:notion:images`, personal, never in backups), within the caps in `./sources`.
+ *   A copy keeps only their ids. An image already saved for the same file is reused; the ones a
+ *   new copy no longer shows, and those of removed sources, are deleted, and Disconnect deletes
+ *   them all.
  * - **Refreshing:** a page calls `refresh(id)` when it shows a source; the app coming back to the
  *   foreground (`onVisible`) refreshes every source whose copy is older than the
  *   `notionRefreshMinutes` setting (30 by default; 0 = only by hand). Going to the background
@@ -15,7 +20,7 @@
  * The token never goes into a URL, an error message or a status. Imported at prerender too, so
  * it only reaches browser globals once a download runs.
  */
-import { definePlugin, type Entry } from '@xcwds/core';
+import { definePlugin, type BlobInfo, type Entry } from '@xcwds/core';
 import { NotionError, createNotionClient, type NotionErrorKind } from './api.js';
 import type { NotionDocument } from './document.js';
 import { CORE, NAME, REASON, resolveOptions, type NotionPluginOptions } from './options.js';
@@ -23,8 +28,10 @@ import {
 	dataSources,
 	download,
 	fitCopy,
+	imageIds,
 	parseCopies,
 	parseSources,
+	type ImageStore,
 	type Source
 } from './sources.js';
 
@@ -79,6 +86,8 @@ export type AppNotion = {
 	saveSources(change: (sources: Source[]) => Source[]): boolean;
 	/** A source's saved copy. */
 	copy(id: string): NotionDocument | undefined;
+	/** A saved image a copy shows (its block's `file`), or `undefined` if it isn't on the device. */
+	image(id: string): Promise<Blob | undefined>;
 	status(id: string): SourceStatus;
 	/** Whether a source's copy is older than the refresh setting (or missing). */
 	stale(id: string): boolean;
@@ -113,6 +122,15 @@ const MESSAGES: Record<Exclude<SourceError, NotionErrorKind>, string> = {
 /** A token as Notion issues them: no spaces, and not absurdly long. */
 const parseToken = (v: unknown) =>
 	typeof v === 'string' && /^[\x21-\x7e]{10,200}$/.test(v) ? v : undefined;
+
+/** What each saved image records: the source it belongs to, and its file (`imageKey`). */
+type ImageMeta = { source: string; key: string };
+const parseImageMeta = (v: unknown): ImageMeta | undefined => {
+	const meta = (v ?? {}) as Record<string, unknown>;
+	return typeof meta.source === 'string' && typeof meta.key === 'string'
+		? { source: meta.source, key: meta.key }
+		: undefined;
+};
 
 const parseMinutes = (v: unknown) =>
 	typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= MAX_MINUTES ? v : undefined;
@@ -159,6 +177,13 @@ export function notionPlugin(env: NotionPluginEnv = {}) {
 				parse: parseCopies,
 				sensitive: true,
 				backup: false
+			});
+			// In the same group as the copies, so clearing one clears the other.
+			const images = app.blobs.register<ImageMeta>({
+				key: 'images',
+				label: 'Notion images',
+				sensitive: true,
+				validate: parseImageMeta
 			});
 
 			const statuses = new Map<string, SourceStatus>();
@@ -209,29 +234,81 @@ export function notionPlugin(env: NotionPluginEnv = {}) {
 					now
 				});
 				set(source.id, { ...status(source.id), downloading: true });
+				// Real time, as the blob store records it: images saved from here on are this run's
+				// or another tab's, and never pruned below.
+				const startedAt = Date.now();
+				const { store, added } = await imageStore(source.id);
+				/** Deletes the images this run saved, when its copy isn't kept. */
+				const discard = async () => {
+					for (const id of added) await app.blobs.delete(images, id);
+				};
 				let copy: NotionDocument | undefined;
 				try {
-					copy = await download(client, source, now);
+					copy = await download(client, source, now, store);
 				} catch (error) {
+					await discard();
 					// From an earlier connection: its failure says nothing about this one.
 					if (started !== generation) return set(source.id, { downloading: false });
 					const kind = error instanceof NotionError ? error.kind : 'failed';
 					return set(source.id, { downloading: false, ...failed(kind) });
 				}
 				// Disconnected (or connected again) meanwhile, or the source was removed.
-				if (started !== generation || !sources().some((s) => s.id === source.id))
+				if (started !== generation || !sources().some((s) => s.id === source.id)) {
+					await discard();
 					return set(source.id, { downloading: false });
-				if (!copy) return set(source.id, { downloading: false, empty: true });
+				}
+				if (!copy) {
+					await discard();
+					return set(source.id, { downloading: false, empty: true });
+				}
 				const fit = fitCopy(savedCopies(), source.id, copy);
-				if (fit !== 'ok') return set(source.id, { downloading: false, ...failed(fit) });
+				if (fit !== 'ok') {
+					await discard();
+					return set(source.id, { downloading: false, ...failed(fit) });
+				}
 				const { saved: ok } = app.storage.update(copies, savedCopies(), (latest) => ({
 					...(latest ?? {}),
 					[source.id]: copy
 				}));
-				return set(
-					source.id,
-					ok ? { downloading: false } : { downloading: false, ...failed('not-saved') }
+				if (!ok) {
+					await discard();
+					return set(source.id, { downloading: false, ...failed('not-saved') });
+				}
+				// The images the copy it replaced showed and this one doesn't.
+				const kept = imageIds(copy);
+				await deleteImages(
+					(row) => row.meta?.source === source.id && !kept.has(row.id) && row.created < startedAt
 				);
+				return set(source.id, { downloading: false });
+			}
+
+			/**
+			 * Where a download of `source` keeps its images: the ones already saved for it are reused
+			 * by file, and `added` collects the new ones.
+			 */
+			async function imageStore(source: string): Promise<{ store: ImageStore; added: string[] }> {
+				const known = new Map<string, { id: string; size: number }>();
+				for (const row of await app.blobs.list(images))
+					if (row.meta?.source === source) known.set(row.meta.key, { id: row.id, size: row.size });
+				const added: string[] = [];
+				const store: ImageStore = {
+					find: (key) => known.get(key),
+					async save(blob, key) {
+						const id = await app.blobs.put(images, blob, { source, key });
+						if (!id) return false;
+						added.push(id);
+						// The same file twice on a page is saved once.
+						known.set(key, { id, size: blob.size });
+						return id;
+					}
+				};
+				return { store, added };
+			}
+
+			/** Deletes the saved images `drop` picks. */
+			async function deleteImages(drop: (row: BlobInfo<ImageMeta>) => boolean) {
+				for (const row of await app.blobs.list(images))
+					if (drop(row)) await app.blobs.delete(images, row.id);
 			}
 
 			function refresh(id: string, { force = false } = {}): Promise<SourceStatus> {
@@ -301,6 +378,7 @@ export function notionPlugin(env: NotionPluginEnv = {}) {
 					controller = undefined;
 					app.storage.remove(token);
 					app.storage.remove(copies);
+					void app.blobs.clear(images);
 					statuses.clear();
 					notify();
 				},
@@ -323,11 +401,13 @@ export function notionPlugin(env: NotionPluginEnv = {}) {
 							);
 						}
 						for (const id of [...statuses.keys()]) if (!keep.has(id)) statuses.delete(id);
+						void deleteImages((row) => !row.meta || !keep.has(row.meta.source));
 					}
 					notify();
 					return saved;
 				},
 				copy: (id) => savedCopies()[id],
+				image: async (id) => (await app.blobs.get(images, id))?.blob,
 				status,
 				stale,
 				refresh,

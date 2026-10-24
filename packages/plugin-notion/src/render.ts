@@ -3,7 +3,7 @@
  * can be tested on its own: which links may become an `href`, the classes for Notion's colours and
  * text formatting, heading levels, and list items grouped into lists.
  */
-import type { Block, Color, Property, RichText } from './document.js';
+import type { Block, Color, ImageSkip, Property, RichText } from './document.js';
 
 /** Link schemes kept; anything else (`javascript:`, `data:`, relative paths) keeps only its text. */
 const SCHEMES = new Set(['https:', 'http:', 'mailto:']);
@@ -115,6 +115,30 @@ export function propertyHref(property: Property): string | undefined {
 	if (property.type === 'email' && property.value && !/[\s:/?#]/.test(property.value))
 		return safeHref(`mailto:${property.value}`);
 	return undefined;
+}
+
+/** Why an image Notion hosts isn't shown, as the copy says it. */
+export function imageNote(skipped: ImageSkip | undefined): string {
+	switch (skipped) {
+		case 'too-large':
+			return 'Image not saved on this device: it’s over 5 MB.';
+		case 'full':
+			return 'Image not saved on this device: this page’s images are over 20 MB or 50 images.';
+		case 'not-image':
+			return 'Image not saved on this device: it isn’t a kind of image the app shows.';
+		case 'failed':
+			return 'Image not saved on this device: it couldn’t be downloaded. Refresh to try again.';
+		case 'not-saved':
+			return 'Image not saved on this device: there was no room for it.';
+		default:
+			return 'Image not shown here.';
+	}
+}
+
+/** The host of an image from outside Notion, to say where the link goes; `''` if it has none. */
+export function externalHost(url: string): string {
+	const safe = safeHref(url);
+	return safe ? new URL(safe).host : '';
 }
 
 /** What a placeholder calls an image, file, video or other block not drawn here. */

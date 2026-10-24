@@ -20,8 +20,10 @@ So far it holds:
 - **`./document`**: `toDocument(page, blocks, { fetchedAt, truncated })` turns a downloaded page
   into the plugin's own versioned JSON (`v: 1`): title, emoji icon, link, created time, properties
   and blocks, with rich text kept as runs of text and their formatting. Rendering will read only
-  this shape. Blocks it doesn't know become `{ type: 'unsupported', notionType }`; images and
-  files are placeholders until [#108](https://github.com/xcwds/xcwds/issues/108).
+  this shape. Blocks it doesn't know become `{ type: 'unsupported', notionType }`; files, PDFs,
+  video and audio are placeholders. An image is `{ type: 'image', caption }` with `file` (its id
+  among the saved images), `external` (a link to an image on another site) or `skipped` (why it
+  isn't on the device). Notion's signed links to images are never kept.
 
 - **`./sources`**: what to download. A source is one page, the newest page of a database (by
   created time or a date property, optionally only pages whose title contains some text: the daily
@@ -30,7 +32,10 @@ So far it holds:
   or `undefined` when there's none yet. `dataSources(client, database)` lists a database's data
   sources to choose from. `fromToday(createdTime)` says whether a page is from today, so
   yesterday's agenda isn't taken for today's. `fitCopy` enforces the size caps (1 MB a copy, 2 MB
-  for all of them), and `parseSources` and `parseCopies` check the saved entries.
+  for all of them), and `parseSources` and `parseCopies` check the saved entries. Given an image
+  store, `download` also fetches the images Notion hosts (`client.file`, through the relay's
+  `/file`, without the token): at most 5 MB an image, and 20 MB or 50 images a source, reusing
+  an image already saved for the same file.
 
 - **The plugin** (`.` and `./client`): `notion({ relay, page })` in `xcwds.config.ts`. `relay`
   is your relay's `https:` origin, and the build declares it as the plugin's only network use
@@ -42,9 +47,13 @@ So far it holds:
     copy.
   - `copy(id)`, `status(id)` (downloading, or why the last try failed, with a message safe to
     show) and `refresh(id, { force })`.
+  - `image(id)`: a saved image a copy shows, as a `Blob`.
 
   Saved data: the token (`app:notion:token`, its own "Notion connection" group, personal, never
-  in backups), the sources (in backups) and the copies (personal, out of backups). When the app
+  in backups), the sources (in backups), the copies (personal, out of backups) and their images
+  (the blob collection `app:notion:images`, in the copies' group, personal, out of backups). A
+  new copy deletes the images the one before showed and it doesn't, removing a source deletes
+  its images, and Disconnect deletes them all. When the app
   comes back to the foreground, copies older than the `notionRefreshMinutes` setting (30 by
   default; 0 means only by hand) are downloaded again. Going to the background cancels downloads
   in flight, and app updates wait while one runs. The token is saved unencrypted in browser
@@ -58,8 +67,11 @@ So far it holds:
   checkboxes), toggles and toggle headings, quotes, callouts, code, dividers, tables with header
   rows and columns, child pages and links to pages (by title), bookmarks and embeds (as links),
   equations (as their source) and columns (stacked on phones). Bold, italic, strikethrough,
-  underline, code and Notion's colours carry over, in light and dark mode. Images and files
-  show a placeholder until [#108](https://github.com/xcwds/xcwds/issues/108). Anything else says
+  underline, code and Notion's colours carry over, in light and dark mode. Saved images show
+  from the device, with their caption, when you pass `image`
+  (`<NotionDocument document={copy} image={app.notion.image} />`, as `<NotionView>` does). An
+  image from another site is a link that's never loaded, and one that wasn't saved says why.
+  Files, PDFs, video and audio show a placeholder. Anything else says
   "Not shown here" with an Open in Notion link. Text is always text, never HTML. Links keep only
   `https:`, `http:` and `mailto:` addresses (anything else keeps its text without the link), and
   open in a new tab with `rel="noopener noreferrer"`. Import `@xcwds/plugin-notion/styles.css`

@@ -8,7 +8,13 @@
  * copy must fit (`fitCopy`), and `fromToday`, so yesterday's agenda isn't mistaken for today's.
  */
 import { NotionError, parseId, type NotionClient, type RawObject } from './api.js';
-import { DOCUMENT_VERSION, toDocument, type NotionDocument } from './document.js';
+import {
+	DOCUMENT_VERSION,
+	toDocument,
+	type Block,
+	type ImageLinks,
+	type NotionDocument
+} from './document.js';
 
 /** What to download, with the label people gave it. */
 export type Source = { id: string; label: string } & (
@@ -31,11 +37,97 @@ export const TOTAL_LIMIT = 2 * 1024 * 1024;
 /** The longest label and title filter kept. */
 const TEXT_LIMIT = 200;
 
+/**
+ * The image caps (#108): one image at most `IMAGE_LIMIT` bytes, and a source's images together at
+ * most `SOURCE_IMAGES_LIMIT` bytes and `MAX_IMAGES` images. Past them, an image says why it's
+ * missing instead.
+ */
+export const IMAGE_LIMIT = 5 * 1024 * 1024;
+export const SOURCE_IMAGES_LIMIT = 20 * 1024 * 1024;
+export const MAX_IMAGES = 50;
+
 /** What a source needs of the client. */
 export type SourceClient = Pick<
 	NotionClient,
-	'page' | 'database' | 'dataSource' | 'query' | 'allChildren' | 'blocks'
+	'page' | 'database' | 'dataSource' | 'query' | 'allChildren' | 'blocks' | 'file'
 >;
+
+/** Where a download keeps the images it fetches (the plugin's image collection). */
+export type ImageStore = {
+	/**
+	 * An image already saved for this file (`imageKey`), reused instead of downloading it again,
+	 * with its size.
+	 */
+	find(key: string): { id: string; size: number } | undefined;
+	/** Saves one: its id, or false if it couldn't be saved. */
+	save(blob: Blob, key: string): Promise<string | false>;
+};
+
+/**
+ * What stays the same about an image Notion hosts between downloads: its link without the
+ * signature, which changes every time.
+ */
+export function imageKey(link: string): string {
+	if (!URL.canParse(link)) return link;
+	const { origin, pathname } = new URL(link);
+	return origin + pathname;
+}
+
+/** Downloads the images in `links` into `store`, within the caps, filling in each block. */
+async function saveImages(client: SourceClient, links: ImageLinks, store: ImageStore) {
+	let count = 0;
+	let bytes = 0;
+	for (const [block, link] of links) {
+		if (count >= MAX_IMAGES) {
+			block.skipped = 'full';
+			continue;
+		}
+		count++;
+		const key = imageKey(link);
+		const saved = store.find(key);
+		if (saved) {
+			if (bytes + saved.size > SOURCE_IMAGES_LIMIT) {
+				block.skipped = 'full';
+				continue;
+			}
+			bytes += saved.size;
+			delete block.skipped;
+			block.file = saved.id;
+			continue;
+		}
+		const result = await client.file(link, IMAGE_LIMIT);
+		if (!result.ok) {
+			block.skipped = result.reason;
+			continue;
+		}
+		if (bytes + result.blob.size > SOURCE_IMAGES_LIMIT) {
+			block.skipped = 'full';
+			continue;
+		}
+		const id = await store.save(result.blob, key);
+		if (!id) {
+			block.skipped = 'not-saved';
+			continue;
+		}
+		bytes += result.blob.size;
+		delete block.skipped;
+		block.file = id;
+	}
+}
+
+/** The ids of the saved images a copy shows. */
+export function imageIds(copy: NotionDocument): Set<string> {
+	const ids = new Set<string>();
+	const walk = (blocks: readonly Block[]) => {
+		for (const block of blocks) {
+			if (block.type === 'image' && block.file) ids.add(block.file);
+			if ('children' in block && block.children) walk(block.children);
+			if (block.type === 'columns') for (const column of block.columns) walk(column);
+		}
+	};
+	walk(copy.blocks);
+	return ids;
+}
 
 /** A database's data sources, to choose from when it has several. */
 export async function dataSources(
@@ -107,18 +199,28 @@ export async function resolve(client: SourceClient, source: Source): Promise<str
 
 /**
  * Downloads the page `source` points at now, in the saved format, or `undefined` when a
- * "newest" source has no page yet. Failures are `NotionError`s.
+ * "newest" source has no page yet. With `images`, the images Notion hosts are downloaded into it
+ * too (within the caps); without, they're left out. Failures are `NotionError`s; images that fail
+ * on their own only say so in their block.
  */
 export async function download(
 	client: SourceClient,
 	source: Source,
-	now: () => number = Date.now
+	now: () => number = Date.now,
+	images?: ImageStore
 ): Promise<NotionDocument | undefined> {
 	const id = await resolve(client, source);
 	if (!id) return undefined;
 	const page: RawObject = await client.page(id);
 	const { blocks, truncated } = await client.blocks(id);
-	return toDocument(page, blocks, { fetchedAt: now(), truncated });
+	const links: ImageLinks = new Map();
+	const copy = toDocument(page, blocks, {
+		fetchedAt: now(),
+		truncated,
+		...(images ? { images: links } : {})
+	});
+	if (images) await saveImages(client, links, images);
+	return copy;
 }
 
 /**

@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NotionError, createNotionClient, type RawBlock } from './api.js';
-import { DOCUMENT_VERSION, type NotionDocument } from './document.js';
+import { DOCUMENT_VERSION, type Block, type NotionDocument } from './document.js';
 import {
 	COPY_LIMIT,
+	IMAGE_LIMIT,
+	MAX_IMAGES,
+	SOURCE_IMAGES_LIMIT,
 	TOTAL_LIMIT,
 	dataSources,
 	download,
 	fitCopy,
 	fromToday,
+	imageIds,
+	imageKey,
 	newestQuery,
 	parseCopies,
 	parseSources,
@@ -46,6 +51,8 @@ function fake(answers: Partial<Record<keyof SourceClient, (...args: never[]) => 
 		...answers
 	} as unknown as SourceClient & Record<string, ReturnType<typeof vi.fn>>;
 }
+
+const page1: Source = { id: 's0', label: 'Page', kind: 'page', page: PAGE };
 
 const database = (extra: Partial<Extract<Source, { kind: 'database' }>> = {}) =>
 	({
@@ -187,6 +194,165 @@ describe('download', () => {
 		const error = await download(refused, database()).catch((e: unknown) => e);
 		expect(error).toBeInstanceOf(NotionError);
 		expect(error).toMatchObject({ kind: 'not-shared' });
+	});
+});
+
+describe('download with images (#108)', () => {
+	const S3 = 'https://prod-files-secure.s3.us-west-2.amazonaws.com/ws';
+	const img = (id: string, link: string): RawBlock => ({
+		id,
+		type: 'image',
+		image: { type: 'file', file: { url: link }, caption: [] }
+	});
+	const ext: RawBlock = {
+		id: 'e',
+		type: 'image',
+		image: { type: 'external', external: { url: 'https://a.example/i.png' }, caption: [] }
+	};
+
+	/** An image store in memory; `full` makes saving fail. */
+	function memory(saved: Record<string, { id: string; size: number }> = {}, full = false) {
+		const blobs = new Map<string, Blob>();
+		let next = 0;
+		return {
+			blobs,
+			find: vi.fn((key: string) => saved[key]),
+			save: vi.fn(async (blob: Blob, key: string) => {
+				if (full) return false as const;
+				const id = `blob${++next}`;
+				blobs.set(id, blob);
+				saved[key] = { id, size: blob.size };
+				return id;
+			})
+		};
+	}
+	const files = (sizes: Record<string, number | 'not-image' | 'failed'>) =>
+		vi.fn(async (link: string) => {
+			const size = sizes[new URL(link).pathname.split('/').pop()!];
+			if (typeof size === 'number')
+				return size > IMAGE_LIMIT
+					? { ok: false as const, reason: 'too-large' as const }
+					: { ok: true as const, blob: new Blob([new Uint8Array(size)], { type: 'image/png' }) };
+			return { ok: false as const, reason: size ?? ('failed' as const) };
+		});
+
+	it('saves the images Notion hosts, reuses saved ones, and says why others are missing', async () => {
+		const client = fake({
+			blocks: async () => ({
+				blocks: [
+					img('1', `${S3}/a.png?sig=1`),
+					// The same file again, under a fresh signature: saved once.
+					img('2', `${S3}/a.png?sig=2`),
+					img('3', `${S3}/kept.png?sig=3`),
+					{
+						id: 't',
+						type: 'toggle',
+						toggle: { rich_text: [] },
+						children: [img('4', `${S3}/b.gif`)]
+					},
+					img('5', `${S3}/huge.png`),
+					img('6', `${S3}/page.html`),
+					img('7', `${S3}/gone.png`),
+					ext
+				] as RawBlock[],
+				truncated: false
+			}),
+			file: files({
+				'a.png': 10,
+				'b.gif': 20,
+				'huge.png': IMAGE_LIMIT + 1,
+				'page.html': 'not-image'
+			})
+		});
+		const store = memory({ [`${S3}/kept.png`]: { id: 'old', size: 5 } });
+		const copy = (await download(client, page1, () => 1, store))!;
+		const blocks = copy.blocks as Block[];
+		expect(blocks.slice(0, 3)).toEqual([
+			{ type: 'image', caption: [], file: 'blob1' },
+			{ type: 'image', caption: [], file: 'blob1' },
+			{ type: 'image', caption: [], file: 'old' }
+		]);
+		expect(blocks[3]).toMatchObject({ children: [{ type: 'image', file: 'blob2' }] });
+		expect(blocks.slice(4)).toEqual([
+			{ type: 'image', caption: [], skipped: 'too-large' },
+			{ type: 'image', caption: [], skipped: 'not-image' },
+			{ type: 'image', caption: [], skipped: 'failed' },
+			{ type: 'image', caption: [], external: 'https://a.example/i.png' }
+		]);
+		// Saved by file, without the signature; only files Notion hosts were fetched.
+		expect(store.save.mock.calls.map(([, key]) => key)).toEqual([`${S3}/a.png`, `${S3}/b.gif`]);
+		expect((client.file as ReturnType<typeof vi.fn>).mock.calls.map(([link]) => link)).toEqual([
+			`${S3}/a.png?sig=1`,
+			`${S3}/b.gif`,
+			`${S3}/huge.png`,
+			`${S3}/page.html`,
+			`${S3}/gone.png`
+		]);
+		expect(imageIds(copy)).toEqual(new Set(['blob1', 'old', 'blob2']));
+		expect(JSON.stringify(copy)).not.toContain('sig=');
+		expect(imageKey(`${S3}/a.png?sig=1#x`)).toBe(`${S3}/a.png`);
+	});
+
+	it('stops at the caps for a source, and says when an image couldn’t be saved', async () => {
+		const many = Array.from({ length: MAX_IMAGES + 2 }, (_, i) => img(`${i}`, `${S3}/${i}.png`));
+		const sizes = Object.fromEntries(many.map((_, i) => [`${i}.png`, 1]));
+		const client = fake({
+			blocks: async () => ({ blocks: many, truncated: false }),
+			file: files(sizes)
+		});
+		const copy = (await download(client, page1, () => 1, memory()))!;
+		const skipped = copy.blocks.filter((b) => b.type === 'image' && b.skipped === 'full');
+		expect(skipped).toHaveLength(2);
+		expect(client.file).toHaveBeenCalledTimes(MAX_IMAGES);
+
+		// Four images at the cap for one fill a source's allowance exactly; a fifth is past it.
+		const big = IMAGE_LIMIT;
+		expect(SOURCE_IMAGES_LIMIT).toBe(4 * IMAGE_LIMIT);
+		const names = ['1', '2', '3', '4', '5', '6'];
+		const heavy = fake({
+			blocks: async () => ({
+				blocks: names.map((n) => img(n, `${S3}/${n}.png`)),
+				truncated: false
+			}),
+			file: files({
+				'1.png': big,
+				'2.png': big,
+				'3.png': big,
+				'4.png': big,
+				'5.png': big,
+				'6.png': 0
+			})
+		});
+		const capped = (await download(heavy, page1, () => 1, memory()))!;
+		const outcome = (b: Block) => (b.type === 'image' ? (b.file ?? b.skipped) : b.type);
+		expect(capped.blocks.map(outcome)).toEqual([
+			'blob1',
+			'blob2',
+			'blob3',
+			'blob4',
+			'full',
+			'blob5'
+		]);
+
+		const nowhere = (await download(heavy, page1, () => 1, memory({}, true)))!;
+		expect(nowhere.blocks.every((b) => b.type === 'image' && b.skipped === 'not-saved')).toBe(true);
+		// Without a store, nothing is fetched.
+		const plain = fake({ blocks: heavy.blocks, file: vi.fn() });
+		const none = (await download(plain, page1))!;
+		expect(none.blocks[0]).toEqual({ type: 'image', caption: [], skipped: 'not-downloaded' });
+		expect(plain.file).not.toHaveBeenCalled();
+	});
+
+	it('fails the whole download when offline mid-way', async () => {
+		const client = fake({
+			blocks: async () => ({ blocks: [img('1', `${S3}/1.png`)], truncated: false }),
+			file: vi.fn(async () => {
+				throw new NotionError('offline');
+			})
+		});
+		await expect(download(client, page1, () => 1, memory())).rejects.toMatchObject({
+			kind: 'offline'
+		});
 	});
 });
 

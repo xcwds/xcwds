@@ -2,14 +2,18 @@
 	/**
 	 * One saved Notion page (#107): its icon and title (an `<h2>`, since the shell's header holds the
 	 * `<h1>`), its properties, then its blocks. It reads only the plugin's saved format, so other
-	 * plugins and apps can show a copy with it too.
+	 * plugins and apps can show a copy with it too. Saved images need `image` (`app.notion.image`,
+	 * as `<NotionView>` passes it); without it they say they aren't on the device.
 	 */
 	import Blocks from './Blocks.svelte';
 	import RichText from './RichText.svelte';
 	import type { NotionDocument as Doc } from './document.js';
 	import { propertyHref, propertyText, safeHref } from './render.js';
 
-	let { document }: { document: Doc } = $props();
+	let {
+		document,
+		image
+	}: { document: Doc; image?: ((id: string) => Promise<Blob | undefined>) | undefined } = $props();
 	const url = $derived(safeHref(document.url));
 	const properties = $derived(
 		document.properties.filter((p) => p.type === 'checkbox' || propertyText(p) !== '')
@@ -41,7 +45,7 @@
 			{/each}
 		</dl>
 	{/if}
-	<div class="flex flex-col gap-2"><Blocks blocks={document.blocks} {url} /></div>
+	<div class="flex flex-col gap-2"><Blocks blocks={document.blocks} {url} {image} /></div>
 	{#if document.truncated}
 		<p class="text-sm opacity-70" data-notion="truncated">
 			This page is longer than a download takes, so it stops here.

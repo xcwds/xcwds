@@ -1,8 +1,16 @@
 // @xcwds/plugin-notion (#106, #107) in the base-path build, which sets a relay (NOTION_RELAY in
 // `build:base`): /utils/notion is `<NotionSources>`, which connects, adds each kind of source and
 // downloads it through the relay, mocked here with route interception; each copy opens at
-// /utils/notion/view (`<NotionView>`). The token never reaches a URL or a backup.
-import { expect, test, type BrowserContext, type Page, type Route } from '@playwright/test';
+// /utils/notion/view (`<NotionView>`). The token never reaches a URL or a backup. Images Notion
+// hosts come through the relay's `/file` and stay on the device (#108).
+import {
+	expect,
+	test,
+	type BrowserContext,
+	type Locator,
+	type Page,
+	type Route
+} from '@playwright/test';
 import {
 	auditTapTargets,
 	gotoHydrated,
@@ -36,6 +44,15 @@ const OLD_CHILD = '22222222-2222-4333-8444-555555555555';
 const NEW_CHILD = '33333333-2222-4333-8444-555555555555';
 const NEWEST = '44444444-2222-4333-8444-555555555555';
 
+/** A 1×1 PNG, and the signed link Notion gives for it on the "Reading list" page. */
+const PNG = Buffer.from(
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+	'base64'
+);
+const IMAGE =
+	'https://prod-files-secure.s3.us-west-2.amazonaws.com/ws/f/cat.png?X-Amz-Signature=abc';
+const EXTERNAL = 'https://images.example/elsewhere.png';
+
 const TITLES: Record<string, string> = {
 	[PAGE]: 'Reading list',
 	[NEW_CHILD]: 'Thursday notes',
@@ -48,12 +65,20 @@ const CORS = {
 	'access-control-allow-methods': 'GET, POST'
 };
 
-/** `hold`, while set, delays answers about databases until it settles. */
-type Relay = { urls: string[]; down: boolean; hold?: Promise<void> };
+/**
+ * `hold`, while set, delays answers about databases until it settles. `files` records the
+ * headers each `/file` request came with.
+ */
+type Relay = {
+	urls: string[];
+	down: boolean;
+	hold?: Promise<void>;
+	files: Record<string, string>[];
+};
 
 /** A relay that answers like Notion for the pages above, and fails while `down`. */
 async function mockRelay(context: BrowserContext): Promise<Relay> {
-	const relay: Relay = { urls: [], down: false };
+	const relay: Relay = { urls: [], down: false, files: [] };
 	await context.route(`${RELAY}/**`, async (route: Route) => {
 		const request = route.request();
 		if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
@@ -66,6 +91,13 @@ async function mockRelay(context: BrowserContext): Promise<Relay> {
 				contentType: 'application/json',
 				body: JSON.stringify(body)
 			});
+		const target = new URL(request.url());
+		if (target.pathname === '/file') {
+			relay.files.push(request.headers());
+			return target.searchParams.get('url') === IMAGE
+				? route.fulfill({ status: 200, headers: CORS, contentType: 'image/png', body: PNG })
+				: route.fulfill({ status: 403, headers: CORS });
+		}
 		if (request.headers()['authorization'] !== `Bearer ${TOKEN}`)
 			return json({ object: 'error', code: 'unauthorized', message: 'API token is invalid.' }, 401);
 		const path = new URL(request.url()).pathname;
@@ -129,11 +161,41 @@ async function mockRelay(context: BrowserContext): Promise<Relay> {
 					type: 'bookmark',
 					has_children: false,
 					bookmark: { url: 'https://example.org/bookmarked', caption: [] }
-				}
+				},
+				...(blocks === PAGE
+					? [
+							{
+								object: 'block',
+								id: `${blocks.slice(0, -4)}dddd`,
+								type: 'image',
+								has_children: false,
+								image: {
+									type: 'file',
+									file: { url: IMAGE, expiry_time: new Date().toISOString() },
+									caption: [{ plain_text: 'The cat' }]
+								}
+							},
+							{
+								object: 'block',
+								id: `${blocks.slice(0, -4)}eeee`,
+								type: 'image',
+								has_children: false,
+								image: { type: 'external', external: { url: EXTERNAL }, caption: [] }
+							}
+						]
+					: [])
 			]);
 		return json({ object: 'error', code: 'object_not_found' }, 404);
 	});
 	return relay;
+}
+
+/** The cat image shows, read from the device (an object URL) and decoded. */
+async function expectImage(scope: Locator) {
+	const image = scope.getByRole('img', { name: 'The cat' });
+	await expect(image).toBeVisible();
+	await expect(image).toHaveAttribute('src', /^blob:/);
+	await expect.poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1);
 }
 
 const sources = (page: Page) => page.getByRole('list', { name: 'Sources' }).getByTestId('source');
@@ -177,6 +239,10 @@ test('connects, downloads each kind of source, keeps copies when the relay fails
 	context
 }) => {
 	const relay = await mockRelay(context);
+	const elsewhere: string[] = [];
+	page.on('request', (request) => {
+		if (new URL(request.url()).host === new URL(EXTERNAL).host) elsewhere.push(request.url());
+	});
 	await gotoHydrated(page, url('/utils/notion'));
 	await expect(page.getByRole('heading', { level: 1, name: 'Notion' })).toBeVisible();
 
@@ -224,6 +290,16 @@ test('connects, downloads each kind of source, keeps copies when the relay fails
 	await expect(copy.getByRole('link', { name: 'a script' })).toHaveCount(0);
 	await expect(copy.getByRole('checkbox', { name: 'Buy milk' })).toBeChecked();
 	await expect(copy.getByRole('checkbox', { name: 'Buy milk' })).toBeDisabled();
+	// The image Notion hosts came through the relay without the token, and shows from the device;
+	// the one from another site is only a link.
+	await expectImage(copy);
+	expect(relay.files).toHaveLength(1);
+	expect(relay.files[0]!['authorization']).toBeUndefined();
+	await expect(copy.getByRole('link', { name: 'Open it on images.example' })).toHaveAttribute(
+		'href',
+		EXTERNAL
+	);
+	expect(elsewhere).toEqual([]);
 	await backToSources(page);
 	copy = await openCopy(page, 'Journal');
 	await expect(copy).toContainText('Inside Thursday notes');
@@ -370,6 +446,8 @@ test.describe('with the service worker', () => {
 		await expect(page.locator('html')).toHaveAttribute('data-hydrated', '');
 		await expect(page.getByTestId('notion-view')).toContainText('Inside Reading list');
 		await expect(page.getByTestId('notion-view-status')).toHaveText(/^Downloaded /);
+		// Its image too, from the device.
+		await expectImage(page.getByTestId('notion-view'));
 		await context.setOffline(false);
 	});
 });

@@ -15,6 +15,10 @@
  * - Only `Authorization`, `Notion-Version` and `Content-Type` (always JSON) are forwarded, with a
  *   body of at most 64 KB (`BODY_LIMIT`); no cookies or client address headers. Only `Content-Type` and
  *   `Retry-After` come back from Notion's headers.
+ * - `GET /file?url=…` (#108) fetches an image Notion hosts, from the signed link Notion gave the
+ *   app, so the app never contacts the file's origin itself. Only `https:` links on the hosts in
+ *   `FILE_HOSTS`, sent with no headers at all (the token stays behind), and only images
+ *   (`FILE_TYPES`) of at most `FILE_LIMIT` bytes come back.
  *
  * No dependencies beyond the Workers runtime (standard `fetch`, `Request` and `Response`).
  */
@@ -30,6 +34,33 @@ export const NOTION = 'https://api.notion.com';
 
 /** The largest request body forwarded, in bytes. */
 export const BODY_LIMIT = 64 * 1024;
+
+/** The largest file `/file` passes on, in bytes. */
+export const FILE_LIMIT = 5 * 1024 * 1024;
+
+/**
+ * Where the files Notion hosts live: its S3 bucket, and `notion-static.com` with any subdomain.
+ * Nothing else, so the relay can't be used to fetch the wider web.
+ */
+export function fileHost(hostname: string): boolean {
+	const host = hostname.toLowerCase();
+	return (
+		host === 'prod-files-secure.s3.us-west-2.amazonaws.com' || host.endsWith('.notion-static.com')
+	);
+}
+
+/** The image types `/file` passes on. */
+export const FILE_TYPES: ReadonlySet<string> = new Set([
+	'image/png',
+	'image/jpeg',
+	'image/gif',
+	'image/webp',
+	'image/avif',
+	'image/svg+xml'
+]);
+
+/** The longest file link accepted (Notion's signed S3 links run to about 1,500 characters). */
+const FILE_URL_LIMIT = 4096;
 
 /** A Notion id: a UUID, dashed or not. */
 const ID = '(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
@@ -96,9 +127,16 @@ function cors(origin: string): Record<string, string> {
 }
 
 /** An error the relay answers itself, shaped like Notion's errors. */
-function refuse(status: number, message: string, headers: Record<string, string> = {}) {
-	const code =
-		status === 413 ? 'relay_body_too_large' : status === 502 ? 'relay_upstream' : 'relay_forbidden';
+function refuse(
+	status: number,
+	message: string,
+	headers: Record<string, string> = {},
+	code = status === 413
+		? 'relay_body_too_large'
+		: status === 502
+			? 'relay_upstream'
+			: 'relay_forbidden'
+) {
 	return new Response(JSON.stringify({ object: 'error', status, code, message }), {
 		status,
 		headers: {
@@ -139,6 +177,79 @@ async function readBody(request: Request): Promise<Uint8Array<ArrayBuffer> | nul
 }
 
 /**
+ * `GET /file?url=<link>`: one image Notion hosts, fetched from its signed link with no headers
+ * (no token, no cookies), and passed on only if it's an image within `FILE_LIMIT`.
+ */
+async function file(
+	url: URL,
+	allowed: Record<string, string>,
+	upstream: typeof fetch
+): Promise<Response> {
+	const params = [...url.searchParams];
+	const link = params.length === 1 && params[0]![0] === 'url' ? params[0]![1] : '';
+	const target = link.length <= FILE_URL_LIMIT && URL.canParse(link) ? new URL(link) : undefined;
+	if (
+		!target ||
+		target.protocol !== 'https:' ||
+		target.port !== '' ||
+		target.username !== '' ||
+		target.password !== '' ||
+		!fileHost(target.hostname)
+	) {
+		return refuse(403, 'Not a file Notion hosts.', allowed);
+	}
+
+	let response: Response;
+	try {
+		response = await upstream(target.href, { method: 'GET', redirect: 'manual' });
+	} catch {
+		return refuse(502, "The file couldn't be reached.", allowed);
+	}
+	const drop = () => response.body?.cancel().catch(() => {});
+	// An expired or wrong link (S3 answers 403), or a redirect elsewhere.
+	if (response.status !== 200) {
+		void drop();
+		return refuse(502, "The file couldn't be fetched.", allowed, 'relay_file');
+	}
+	const type = (response.headers.get('Content-Type') ?? '').split(';')[0]!.trim().toLowerCase();
+	if (!FILE_TYPES.has(type)) {
+		void drop();
+		return refuse(415, 'Only images are passed on.', allowed, 'relay_file_type');
+	}
+	const declared = response.headers.get('Content-Length');
+	if (Number(declared) > FILE_LIMIT) {
+		void drop();
+		return refuse(
+			413,
+			`Files are limited to ${FILE_LIMIT} bytes.`,
+			allowed,
+			'relay_file_too_large'
+		);
+	}
+	// A file without a length, or longer than it said, is cut off with an error past the limit.
+	let size = 0;
+	const body = response.body?.pipeThrough(
+		new TransformStream<Uint8Array, Uint8Array>({
+			transform(chunk, controller) {
+				size += chunk.byteLength;
+				if (size > FILE_LIMIT) controller.error(new Error('File too large'));
+				else controller.enqueue(chunk);
+			}
+		})
+	);
+	const out = new Headers({
+		...allowed,
+		'Cache-Control': 'no-store',
+		'Content-Type': type,
+		// Opened in a tab, it's an image on the relay's origin and nothing else.
+		'Content-Security-Policy': "default-src 'none'; sandbox",
+		'X-Content-Type-Options': 'nosniff'
+	});
+	if (declared && /^\d+$/.test(declared)) out.set('Content-Length', declared);
+	return new Response(body ?? null, { status: 200, headers: out });
+}
+
+/**
  * Answers one request. `upstream` is the `fetch` that reaches Notion; tests pass their own.
  */
 export async function relay(
@@ -168,6 +279,8 @@ export async function relay(
 			}
 		});
 	}
+
+	if (request.method === 'GET' && url.pathname === '/file') return file(url, allowed, upstream);
 
 	if (!route(request.method, url.pathname) || !queryAllowed(url.searchParams)) {
 		return refuse(403, 'Not a request the relay forwards.', allowed);
