@@ -159,7 +159,8 @@ export type Group = {
 
 export type Backup = {
 	app: string;
-	format: 2;
+	/** 3 when it has `sections`, otherwise 2. */
+	format: 2 | 3;
 	exportedAt: string;
 	/** Schema version per namespace (`''` is the app's own). */
 	versions: Record<string, number>;
@@ -172,6 +173,26 @@ export type Backup = {
 	 * migrations its data hasn't had yet. Older backups don't have it.
 	 */
 	unclaimedVersions?: Record<string, number>;
+	/**
+	 * Format 3: what backup sections added, by section id (`@xcwds/plugin-vault`'s sealed groups,
+	 * say). Their keys are left out of `data`; importing doesn't read them, the section's plugin
+	 * does.
+	 */
+	sections?: Record<string, unknown>;
+};
+
+/**
+ * Part of a backup a plugin makes itself (#79: `@xcwds/plugin-vault` puts the sensitive groups in
+ * one, sealed, instead of in `data`), registered with `storage.backupSection(id, section)`.
+ */
+export type BackupSection = {
+	/** Whether the section carries this storage key, which `data` then leaves out. */
+	covers(key: string): boolean;
+	/**
+	 * The section's JSON-serialisable value for `exportBackup()` (after every namespace's
+	 * migrations have run), or undefined to add none.
+	 */
+	export(): Promise<unknown>;
 };
 
 export type ParsedBackup =
@@ -250,7 +271,19 @@ export type StorageRegistry = {
 	startSync(target?: EventTarget): () => void;
 	stopSync(): void;
 
+	/**
+	 * What a backup holds now, without backup sections (and without the keys they cover). Use
+	 * `exportBackup()` for a backup people download.
+	 */
 	exportData(now?: Date): Backup;
+	/** A backup with every registered section: format 3 when a section added something. */
+	exportBackup(now?: Date): Promise<Backup>;
+	/**
+	 * Adds a section to backups (one per id). Values it covers stay out of `data`, so a plugin that
+	 * keeps them sealed decides how they leave the device.
+	 */
+	backupSection(id: string, section: BackupSection): void;
+	/** `sections` in a parsed backup are the file's own, unread: their plugins open them. */
 	parseBackup(text: string): ParsedBackup;
 	/**
 	 * `replace` clears every entry backups carry first; `merge` keeps what the backup lacks. Returns
@@ -352,6 +385,8 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		for (const l of [...changeListeners]) l(key, value);
 	};
 	const failureListeners = new Set<SaveFailureListener>();
+	const sections = new Map<string, BackupSection>();
+	const covered = (key: string) => [...sections.values()].some((s) => s.covers(key));
 	let stop: (() => void) | null = null;
 
 	const nsPrefix = (ns: string) => (ns ? `${prefix}${ns}:` : prefix);
@@ -668,15 +703,26 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		}
 	}
 
+	/**
+	 * The schema version `ns`'s data is read at: the newest, unless its migration couldn't run yet
+	 * (a layer that's locked), when reads still return the saved data's older version.
+	 */
+	function readVersion(ns: string): number {
+		ensure(ns);
+		const n = namespace(ns);
+		if (n.pending) return n.pending.target;
+		return n.migrated ?? savedVersion(ns);
+	}
+
 	function exportData(now = new Date()): Backup {
 		const data: Record<string, unknown> = {};
 		for (const e of expand(entries.values())) {
-			if (!e.backup) continue;
+			if (!e.backup || covered(e.key)) continue;
 			const value = read(e);
 			if (value !== undefined) data[e.key] = value;
 		}
 		const versions: Record<string, number> = {};
-		for (const ns of namespaces.keys()) versions[ns] = latestVersion(ns);
+		for (const ns of namespaces.keys()) versions[ns] = readVersion(ns);
 		const extra: Record<string, unknown> = {};
 		const extraVersions: Record<string, number> = {};
 		for (const { key, namespace: ns } of unclaimed()) {
@@ -709,6 +755,8 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		// Backups made before namespaces had one `schemaVersion`: the app's own.
 		const versions: Record<string, number> = {};
 		if (raw.format === undefined) versions[''] = raw.schemaVersion as number;
+		else if (raw.format !== 2 && raw.format !== 3)
+			return { ok: false, error: 'This backup has an unknown format.' };
 		else if (isRecord(raw.versions)) {
 			// A namespace's unclaimed data only has a version when nothing claimed it at export.
 			if (isRecord(raw.unclaimedVersions)) Object.assign(versions, raw.unclaimedVersions);
@@ -782,7 +830,7 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 		}
 		const backup: Backup = {
 			app: appName,
-			format: 2,
+			format: isRecord(raw.sections) ? 3 : 2,
 			exportedAt: typeof raw.exportedAt === 'string' ? raw.exportedAt : '',
 			versions: Object.fromEntries([...namespaces.keys()].map((ns) => [ns, latestVersion(ns)])),
 			data,
@@ -793,6 +841,7 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 				)
 			)
 		};
+		if (isRecord(raw.sections)) backup.sections = structuredClone(raw.sections);
 		return { ok: true, backup, found: [...found], skipped };
 	}
 
@@ -1094,6 +1143,30 @@ export function createStorage(options: StorageOptions = {}): StorageRegistry {
 			emit(null, undefined);
 		},
 		exportData,
+		async exportBackup(now = new Date()) {
+			// Migrations first, so a section exports the same data `data` is read from.
+			for (const ns of namespaces.keys()) ensure(ns);
+			const added: Record<string, unknown> = {};
+			for (const [id, section] of sections) {
+				const value = await section.export();
+				if (value !== undefined) added[id] = value;
+			}
+			const backup = exportData(now);
+			return Object.keys(added).length ? { ...backup, format: 3, sections: added } : backup;
+		},
+		backupSection(id, section) {
+			if (!NAME.test(id) || sections.has(id))
+				throw new XcwdsError(
+					codes.STORAGE_KEY,
+					`"${id}" isn't a valid backup section id, or it's already registered.`
+				);
+			if (typeof section?.covers !== 'function' || typeof section.export !== 'function')
+				throw new XcwdsError(
+					codes.STORAGE_KEY,
+					'A backup section needs `covers` and `export` functions.'
+				);
+			sections.set(id, section);
+		},
 		parseBackup,
 		importData(backup, mode) {
 			const ok = importData(backup, mode);

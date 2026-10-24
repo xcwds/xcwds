@@ -242,10 +242,21 @@ import).
 group sealed below as one AES-GCM blob, decrypts it into memory on unlock, serves the group's
 keys from there, and re-seals asynchronously after writes. It takes its key from the lock's
 passcode, which the lock hands over once checked (`app.lock.keep(...)`), so people have one secret. WebCrypto is asynchronous, which is
-why the layer serves a decrypted copy rather than decrypting on read. Backups get `format: 3`
-with the sealed groups in an encrypted section, made with the passcode, so a backup made while
-locked still carries them; format 2 still imports. That format lands with the vault, after this
-extension point.
+why the layer serves a decrypted copy rather than decrypting on read.
+
+Backups are `format: 3` when a plugin adds a **section**: `app.storage.backupSection(id, {
+covers, export })` takes the keys it `covers` out of `data`, and `exportBackup()` (async, after
+every namespace's migrations) puts what `export()` returns under `sections[id]`; format 2 still
+imports, and a section's plugin, not core, reads it. The vault's section holds each sensitive
+group sealed with the vault key, plus its salt, iterations and check value, so the passcode
+derives the key anywhere: while unlocked it seals the groups afresh from memory, leaving out
+entries kept out of backups; while locked it copies the sealed groups as they are, except a group
+that also holds such an entry (it can't tell them apart without the key), so a backup made while
+locked still carries them. Importing asks for the passcode that was set when the backup was made
+(`app.vault.openBackup`), which moves the opened values into `data` before `parseBackup`
+migrates and checks them as usual; without it, the rest imports. A backup is only as strong as
+that passcode against offline guessing, as the device is. "Forgot passcode" offers a backup of
+the section alone, so nothing readable leaves a locked app.
 
 ### 12. Files and images live in a separate, asynchronous blob store
 

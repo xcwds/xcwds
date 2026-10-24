@@ -7,8 +7,9 @@
 	 * <main class="page-narrow pt-2"><UnlockScreen /></main>
 	 * ```
 	 *
-	 * "Forgot passcode" resets the lock and clears what it protects. It offers no backup: a
-	 * backup made while locked would hand over what the lock keeps out.
+	 * "Forgot passcode" resets the lock and clears what it protects. With `@xcwds/plugin-vault`
+	 * it offers a backup of only what's encrypted, still encrypted: nothing readable, since a
+	 * backup made while locked mustn't hand over what the lock keeps out.
 	 */
 	import { useApp } from '@xcwds/sveltekit';
 	import { onMount, tick } from 'svelte';

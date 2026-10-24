@@ -15,7 +15,16 @@
  * Imported at prerender too, so nothing touches browser globals until a function runs.
  */
 import { XcwdsError, codes, type Entry, type StorageAdapter, type StorageScope } from '@xcwds/core';
-import { open, parseSealed, seal } from './seal.js';
+import {
+	ITERATIONS,
+	MAX_ITERATIONS,
+	MIN_ITERATIONS,
+	deriveKey,
+	open,
+	parseSealed,
+	seal,
+	type Sealed
+} from './seal.js';
 
 export type VaultState = {
 	/** A salt is saved: sensitive groups are kept sealed. */
@@ -64,9 +73,34 @@ export type Vault = {
 	 * `unlock`. Undefined while off or locked.
 	 */
 	fileKey(): CryptoKey | undefined;
+	/**
+	 * Opens the vault's section of a backup file (`text`, format 3) with the passcode that was set
+	 * when it was made: the file's text again, with the sealed groups' values moved into `data`, for
+	 * `storage.parseBackup`. A file without the section comes back as it is.
+	 */
+	openBackup(text: string, passcode: string): Promise<OpenedBackup>;
 	/** Stops following other tabs. */
 	stop(): void;
 };
+
+export type OpenedBackup = { ok: true; text: string } | { ok: false; error: string };
+
+/**
+ * The vault's backup section (`sections.vault`): each sealed group as it's kept on the device,
+ * with what derives the key from the passcode (#79, RFC 0001 decision 11).
+ */
+export type BackupSealed = {
+	v: 1;
+	salt: string;
+	iterations: number;
+	/** The check value, so a wrong passcode is told apart from a damaged file. */
+	check: Sealed;
+	/** Group id → its values (storage key → stored text), sealed. */
+	groups: Record<string, Sealed>;
+};
+
+/** The id of the vault's section in a backup. */
+export const BACKUP_SECTION = 'vault';
 
 export type VaultOptions = {
 	/** Where a seal that couldn't be saved is reported (default: `console.error`). */
@@ -82,6 +116,11 @@ export type VaultOptions = {
 	 * should too.
 	 */
 	onLocked?: () => void;
+	/**
+	 * The PBKDF2 iterations the key is derived with (default 600,000, as `deriveKey` and
+	 * `passcodeKeeper`), written into backups so the passcode opens them anywhere.
+	 */
+	iterations?: number;
 };
 
 const SALT_FIELD = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -94,6 +133,41 @@ function json(text: string | null): unknown {
 	} catch {
 		return undefined;
 	}
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+	typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** A stored value as core reads it: JSON, or the raw string some older apps saved. */
+function decode(text: string): unknown {
+	try {
+		return JSON.parse(text);
+	} catch {
+		return text;
+	}
+}
+
+/** `v` as the vault's backup section, or undefined when it isn't one. */
+export function parseBackupSealed(v: unknown): BackupSealed | undefined {
+	if (!isObject(v) || v.v !== 1 || !isObject(v.groups)) return undefined;
+	const { salt, iterations } = v;
+	if (typeof salt !== 'string' || !SALT_FIELD.test(salt)) return undefined;
+	if (
+		typeof iterations !== 'number' ||
+		!Number.isInteger(iterations) ||
+		iterations < MIN_ITERATIONS ||
+		iterations > MAX_ITERATIONS
+	)
+		return undefined;
+	const check = parseSealed(v.check);
+	if (!check) return undefined;
+	const groups: Record<string, Sealed> = {};
+	for (const [group, blob] of Object.entries(v.groups)) {
+		const sealed = parseSealed(blob);
+		if (!sealed) return undefined;
+		groups[group] = sealed;
+	}
+	return { v: 1, salt, iterations, check, groups };
 }
 
 /** Group contents as sealed: storage key → the stored text. */
@@ -455,6 +529,49 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 		})().catch(onError);
 	});
 
+	/** Whether backups carry `storageKey` (an entry kept out of them doesn't). */
+	const backedUp = (storageKey: string) =>
+		storage.entries().find((e) => owns(e, storageKey))?.backup === true;
+
+	// Sensitive groups leave the device only sealed: backups carry them in a section of their own
+	// instead of in `data`, opened on import with the passcode (`openBackup`).
+	async function exportSection(retried = false): Promise<BackupSealed | undefined> {
+		await sealing;
+		const salt = savedSalt();
+		const check = parseSealed(json(inner.get(checkKey)));
+		if (salt === undefined || !check) return undefined;
+		const groups: Record<string, Sealed> = {};
+		if (key && !retried) {
+			// Unlocked: sealed afresh from what's open, leaving out entries kept out of backups.
+			const sealingKey = key;
+			const at = epoch;
+			for (const [group, c] of memory) {
+				const kept = [...c].filter(([k]) => backedUp(k));
+				if (kept.length)
+					groups[group] = await seal(
+						sealingKey,
+						JSON.stringify(Object.fromEntries(kept)),
+						context(group)
+					);
+			}
+			// A new passcode meanwhile (here or in another tab): take what's sealed with it instead.
+			if (!current(at)) return exportSection(true);
+		} else {
+			// Locked (or keyed anew meanwhile): the sealed copies as they are, except a group that
+			// also holds an entry kept out of backups, which can't be told apart without the key.
+			for (const [group, blob] of blobs()) {
+				const sealed = parseSealed(blob);
+				const localOnly = storage.entries().some((e) => e.group === group && !e.backup);
+				if (sealed && !localOnly) groups[group] = sealed;
+			}
+		}
+		return { v: 1, salt, iterations: options.iterations ?? ITERATIONS, check, groups };
+	}
+	storage.backupSection(BACKUP_SECTION, {
+		covers: (k) => enabled() && sensitiveGroup(k) !== undefined,
+		export: exportSection
+	});
+
 	const vault: Vault = {
 		get state() {
 			return { enabled: enabled(), locked: locked() };
@@ -662,6 +779,49 @@ export function createVault(storage: StorageScope, options: VaultOptions = {}): 
 			return ok;
 		},
 		fileKey: () => (key ? fileKey : undefined),
+		async openBackup(text, passcode) {
+			const unreadable = {
+				ok: false,
+				error: "This backup's encrypted data couldn't be read."
+			} as const;
+			let raw: unknown;
+			try {
+				raw = JSON.parse(text);
+			} catch {
+				return unreadable;
+			}
+			if (!isObject(raw) || !isObject(raw.data)) return unreadable;
+			const sections = isObject(raw.sections) ? { ...raw.sections } : {};
+			if (!(BACKUP_SECTION in sections)) return { ok: true, text };
+			const section = parseBackupSealed(sections[BACKUP_SECTION]);
+			if (!section) return unreadable;
+			let backupKey: CryptoKey;
+			try {
+				backupKey = await deriveKey(passcode, section.salt, section.iterations);
+			} catch {
+				// A salt too short to be one of ours.
+				return unreadable;
+			}
+			if ((await open(backupKey, section.check, 'check')) !== CHECK)
+				return {
+					ok: false,
+					error: "That isn't the passcode this backup was made with."
+				};
+			const data = { ...raw.data };
+			for (const [group, sealed] of Object.entries(section.groups)) {
+				const c = await openGroup(backupKey, group, sealed);
+				if (!c) return unreadable;
+				for (const [k, value] of c) data[k] = decode(value);
+			}
+			delete sections[BACKUP_SECTION];
+			const opened: Record<string, unknown> = { ...raw, data };
+			if (Object.keys(sections).length) opened.sections = sections;
+			else {
+				delete opened.sections;
+				opened.format = 2;
+			}
+			return { ok: true, text: JSON.stringify(opened) };
+		},
 		stop: stopListening
 	};
 	return vault;

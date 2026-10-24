@@ -65,8 +65,11 @@ namespace (`app:<namespace>:<name>`, or an exact `key` to keep an existing one).
 throw; writes return whether they saved. Each namespace has its own schema version and
 `migration({ to, run })`s, which also upgrade older backups. When storage is too full to save a
 migration, the migrated data stays in memory (reads and backups see it) and is saved, with the
-version, by the next write to that namespace that fits. `exportData`, `parseBackup` and
+version, by the next write to that namespace that fits. `exportBackup`, `parseBackup` and
 `importData` make backups; a `replace` import that doesn't fit puts the previous data back.
+`backupSection(id, { covers, export })` lets a plugin carry some keys itself, in
+`sections[id]` of a format 3 backup instead of `data` (`@xcwds/plugin-vault` keeps sensitive
+groups sealed there); `exportData` is the backup without sections.
 An entry registered with `backup: false` (secrets, re-downloadable caches) is left out of exports,
 and imports neither write nor clear it; clearing its group still removes it.
 `sensitive: true` marks personal data: its group is `sensitive` in `groups()`, and a passcode

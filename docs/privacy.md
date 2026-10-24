@@ -195,8 +195,15 @@ What it does and doesn't protect against:
   doesn't encrypt. Everything else, and the verifier, stays readable as before.
 - **There's no recovery.** "Forgot passcode" turns the lock off and clears every storage group
   with a `sensitive` entry, after two confirmations that name them. Setting up offers a backup
-  first; it isn't encrypted. The unlock screen offers no backup, since one made while locked
-  would hand over what the lock keeps out.
+  first; it isn't encrypted (nothing is yet). With the vault, "Forgot passcode" first offers a
+  backup of only what the passcode encrypts, still encrypted, in case the passcode comes back to
+  mind; without it, there's no backup while locked, since one would hand over what the lock keeps
+  out.
+- **With the vault, backups carry sensitive groups only encrypted.** Settings' backup holds them
+  sealed with the passcode's key, beside the salt that derives it, so importing one (here or on
+  another device) asks for the passcode that was set when it was made; without it, the rest
+  imports. Anyone with the file can try passcodes against it offline, as with the device's
+  storage, so prefer a passphrase if backups leave the device.
 - **The wait follows the device's clock**, so moving the clock forward shortens it.
 
 ## Notion pages

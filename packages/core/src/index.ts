@@ -61,6 +61,7 @@ export {
 	persisted,
 	requestPersistence,
 	type Backup,
+	type BackupSection,
 	type ChangeListener,
 	type Entry,
 	type EntryOptions,

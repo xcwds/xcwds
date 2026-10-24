@@ -1,12 +1,14 @@
 <script lang="ts">
 	/**
 	 * "Forgot passcode": there's no recovery, so it resets the lock and clears every storage
-	 * group marked `sensitive`, after two confirmations that name those groups.
+	 * group marked `sensitive`, after two confirmations that name those groups. With
+	 * `@xcwds/plugin-vault`, it offers an encrypted backup of them first (#79): only what's sealed,
+	 * nothing readable, so it opens only with the passcode if it comes back to mind.
 	 */
 	import { useApp } from '@xcwds/sveltekit';
-	import type { Group } from '@xcwds/core';
+	import type { Backup, Group } from '@xcwds/core';
 	import type {} from './client.js';
-	import { groupLabel, toast, ui } from './ui.js';
+	import { downloadBackup, groupLabel, sealedBackup, toast, ui } from './ui.js';
 
 	let { onreset }: { onreset?: () => void } = $props();
 	const app = useApp();
@@ -14,11 +16,23 @@
 
 	let step = $state<0 | 1 | 2>(0);
 	let groups = $state.raw<Group[]>([]);
+	/** The encrypted backup on offer, if the vault keeps anything sealed. */
+	let sealed = $state.raw<Backup>();
 	const list = $derived(groups.map(label).join(', '));
 
 	function start() {
 		groups = app.lock?.sensitiveGroups() ?? [];
 		step = 1;
+		sealed = undefined;
+		void sealedBackup(app.storage).then((backup) => {
+			if (step) sealed = backup;
+		});
+	}
+
+	function download() {
+		if (!sealed) return;
+		downloadBackup(app, sealed);
+		toast(app, 'Encrypted backup downloaded.');
 	}
 
 	function reset() {
@@ -50,6 +64,15 @@
 						Resetting turns the lock off; nothing else is cleared.
 					{/if}
 				</p>
+				{#if sealed}
+					<p>
+						Download an encrypted backup first: it holds what the passcode encrypts, still
+						encrypted, and imports only with this passcode, if you remember it later.
+					</p>
+					<button type="button" class="{ui.secondary} self-start" onclick={download}>
+						Download encrypted backup
+					</button>
+				{/if}
 			{:else}
 				<p>
 					This can't be undone.

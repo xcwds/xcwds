@@ -1,8 +1,9 @@
 // @xcwds/plugin-vault (#79, #149) in examples/minimal's base-path build (the only one with the
 // vault): with a passcode set, photos are sealed in IndexedDB, unreadable while the app is
-// locked, and shown again once it's unlocked.
+// locked, and shown again once it's unlocked; backups carry sensitive data only encrypted.
 import { expect, test, type Page } from '@playwright/test';
 import { gotoHydrated, serveStatic, type StaticServer } from '@xcwds/testing/playwright';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 // A per-file `launchOptions` replaces the config's, so this repeats its Chromium and flag.
@@ -123,4 +124,90 @@ test('photos are unreadable in IndexedDB while locked, and show after unlocking 
 		{ type: 'image/jpeg', jpeg: true },
 		{ type: 'image/jpeg', jpeg: true }
 	]);
+});
+
+/** Downloads what `button` saves and reads it as JSON. */
+async function downloaded(page: Page, click: () => Promise<void>) {
+	const download = page.waitForEvent('download');
+	await click();
+	return JSON.parse(await readFile((await (await download).path())!, 'utf8'));
+}
+
+test('backups carry the journal encrypted, and import it with the passcode (#79)', async ({
+	page
+}) => {
+	page.on('dialog', (dialog) => dialog.accept());
+	await gotoHydrated(page, url('/utils/journal'));
+	await page.getByLabel('Entry').fill('dear diary');
+	await expect
+		.poll(() => page.evaluate(() => localStorage.getItem('app:hello:journal')))
+		.toBe('"dear diary"');
+
+	await gotoHydrated(page, url('/settings'));
+	const lock = page.getByTestId('passcode-lock');
+	await lock.getByRole('button', { name: 'Set a passcode' }).click();
+	await lock.getByLabel('Passcode', { exact: true }).fill(CODE);
+	await lock.getByLabel('Same again').fill(CODE);
+	await lock.getByRole('button', { name: 'Save passcode' }).click();
+	await expect(page.getByTestId('lock-status')).toHaveText('The passcode lock is on and unlocked.');
+
+	// Settings' backup: the journal only sealed, the rest as before.
+	const backup = await downloaded(page, () =>
+		page.getByRole('button', { name: 'Download backup' }).click()
+	);
+	expect(backup.format).toBe(3);
+	expect(JSON.stringify(backup)).not.toContain('dear diary');
+	expect(backup.data).not.toHaveProperty('app:hello:journal');
+	expect(Object.keys(backup.sections.vault.groups)).toEqual(['journal']);
+
+	// Locked, "Forgot passcode" offers a backup of only what's encrypted.
+	await lock.getByRole('button', { name: 'Lock now' }).click();
+	await expect(page.getByTestId('lock-status')).toContainText('Locked.');
+	await page.getByRole('button', { name: 'Forgot passcode?' }).click();
+	const sealed = await downloaded(page, () =>
+		page.getByRole('button', { name: 'Download encrypted backup' }).click()
+	);
+	expect(sealed.data).toEqual({});
+	expect(sealed.unclaimed).toEqual({});
+	expect(Object.keys(sealed.sections.vault.groups)).toEqual(['journal']);
+	expect(JSON.stringify(sealed)).not.toContain('dear diary');
+	await page.getByTestId('lock-forgot').getByRole('button', { name: 'Cancel' }).click();
+
+	// Unlocked again, with the journal emptied, the backup brings it back with the passcode.
+	await go(page, /Journal/);
+	await page.getByTestId('unlock').getByLabel('Passcode').fill(CODE);
+	await page.getByTestId('unlock').getByRole('button', { name: 'Unlock' }).click();
+	await expect(page).toHaveURL(/\/utils\/journal$/);
+	await page.getByLabel('Entry').fill('');
+	await page
+		.getByRole('link', { name: /Settings/ })
+		.first()
+		.click();
+	await page.getByLabel('Backup file').setInputFiles({
+		name: 'sealed.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify(sealed))
+	});
+	const preview = page.getByTestId('import-preview');
+	const form = preview.getByTestId('import-sealed');
+	await expect(form).toContainText('Journal');
+	await expect(preview.getByRole('button', { name: 'Merge' })).toBeDisabled();
+	await form.getByLabel(/Enter the passcode/).fill('000000');
+	await form.getByRole('button', { name: 'Open' }).click();
+	await expect(form.getByRole('alert')).toHaveText(
+		"That isn't the passcode this backup was made with."
+	);
+	await form.getByLabel(/Enter the passcode/).fill(CODE);
+	await form.getByRole('button', { name: 'Open' }).click();
+	await expect(preview.getByRole('listitem')).toHaveText(['Journal']);
+	await expect(preview.getByTestId('import-sealed')).toHaveCount(0);
+	await preview.getByRole('button', { name: 'Merge' }).click();
+	await expect(page.getByTestId('toast').filter({ hasText: 'Imported 1 item.' })).toBeVisible();
+
+	await go(page, /Journal/);
+	await expect(page.getByLabel('Entry')).toHaveValue('dear diary');
+	// Still sealed on the device.
+	expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).not.toContain(
+		'dear diary'
+	);
 });

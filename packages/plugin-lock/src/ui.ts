@@ -1,5 +1,5 @@
 /** Shared pieces of the unlock screen and the Settings controls. */
-import type { Group } from '@xcwds/core';
+import type { Backup, Group, StorageRegistry } from '@xcwds/core';
 import type { HTMLInputAttributes } from 'svelte/elements';
 
 /** Shows a confirmation with `app.toast` (from `@xcwds/plugin-shell`), when the app has it. */
@@ -12,6 +12,41 @@ export function groupLabel(app: object): (group: Group) => string {
 	const names = (app as { settingsPage?: { options: { groups: Record<string, string> } } })
 		.settingsPage?.options.groups;
 	return (group) => names?.[group.id] ?? group.label;
+}
+
+/**
+ * Downloads `backup` as Settings names its files (`backupName` from `@xcwds/plugin-settings`,
+ * then the date).
+ */
+export function downloadBackup(app: object, backup: Backup): void {
+	const now = new Date();
+	const date = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+		.map((n) => String(n).padStart(2, '0'))
+		.join('-');
+	const base =
+		(app as { settingsPage?: { options: { backupName: string } } }).settingsPage?.options
+			.backupName ?? 'backup';
+	const file = new File([JSON.stringify(backup, null, '\t')], `${base}-${date}.json`, {
+		type: 'application/json'
+	});
+	const url = URL.createObjectURL(file);
+	Object.assign(document.createElement('a'), { href: url, download: file.name }).click();
+	setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * While locked, with `@xcwds/plugin-vault`: a backup of only what the vault keeps sealed (format 3,
+ * #79), nothing readable, for "Forgot passcode". Undefined when there's nothing sealed to back up.
+ */
+export async function sealedBackup(
+	storage: Pick<StorageRegistry, 'exportBackup'>
+): Promise<Backup | undefined> {
+	// A core before #79 has no backup sections.
+	if (!storage.exportBackup) return undefined;
+	const backup = await storage.exportBackup();
+	const vault = backup.sections?.vault as { groups?: object } | undefined;
+	if (!vault?.groups || !Object.keys(vault.groups).length) return undefined;
+	return { ...backup, data: {}, unclaimed: {}, unclaimedVersions: {}, sections: { vault } };
 }
 
 /** Classes for the components' controls (colours from `@xcwds/plugin-shell/styles.css`). */

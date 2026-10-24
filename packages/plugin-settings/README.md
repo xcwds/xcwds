@@ -97,8 +97,11 @@ Both are usually called on boot, with the component imported dynamically (the co
 
 ## Your data
 
-- **Backups:** the JSON from `app.storage.exportData()`, downloaded (or shared, where the
-  browser can share files). Importing shows what it holds first, then merges or replaces.
+- **Backups:** the JSON from `app.storage.exportBackup()`, downloaded (or shared, where the
+  browser can share files). Importing shows what it holds first, then merges or replaces. With
+  `@xcwds/plugin-vault`, a backup carries the sensitive groups encrypted, and the preview asks for
+  the passcode it was made with to import them too (`app.vault.openBackup`); without it, or in
+  an app without the vault, the rest imports.
 - **Clearing:** one button per storage group, named by `groups` or else after its entries
   (e.g. "Clear Home shortcuts"), the ones `groups` lists first, and Clear all data, each
   confirmed first. Clears and imports reach every component on this tab through

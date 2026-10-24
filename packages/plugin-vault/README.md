@@ -2,7 +2,7 @@
 
 Encryption at rest for the sensitive storage groups of an @xcwds app that uses
 [`@xcwds/plugin-lock`](../plugin-lock). **Work in progress** ([#79](https://github.com/xcwds/xcwds/issues/79)):
-not published yet. Backups of sealed groups (format 3) come next.
+not published yet.
 
 ```ts
 import lock from '@xcwds/plugin-lock';
@@ -28,6 +28,18 @@ key of their own, kept sealed with the passcode's key, so changing the passcode 
 them. `app.vault.progress` says how far sealing the existing files has got while it runs.
 `app.vault.state` says whether the data is encrypted (`enabled`)
 and whether it's open now (`locked`); `app.vault.flush()` resolves once every write is sealed.
+
+Backups carry the sensitive groups only encrypted: Settings' backup (`app.storage.exportBackup()`)
+is format 3, with the groups in a `vault` section, sealed with the passcode's key, beside the salt
+and iteration count that derive it, instead of in `data`. Made while unlocked, the section is
+sealed afresh and leaves out entries kept out of backups (`backup: false`). Made while locked
+(`@xcwds/plugin-lock`'s "Forgot passcode" offers one of the section alone), it copies the groups
+as they're kept, leaving out any group that also holds an entry kept out of backups. Importing
+asks for the passcode that was set when the backup was made: `app.vault.openBackup(text,
+passcode)` returns the file's text with those values moved into `data`, for
+`app.storage.parseBackup`, or says the passcode is wrong. Without it, the rest imports. Files stay
+out of backups. A backup is as strong as the passcode against offline guessing, so a passphrase
+is the better choice for a backup that leaves the device.
 
 The pieces it's built from can also be used on their own:
 
@@ -76,7 +88,7 @@ From `@xcwds/plugin-vault/seal`:
   storage group's name), so a sealed value moved to another group won't open. `open` returns the
   text, or `undefined` for a wrong key, another context or changed data.
 - `sealWithPasscode` and `openWithPasscode` do the same with a fresh salt stored beside the value,
-  for encrypted backups that import on another device with the passcode.
+  so the passcode alone opens it anywhere.
 - `parseSealed` and `parsePasscodeSealed` check a saved value's shape, and refuse iteration counts
   under 100,000 or over 10,000,000 so an edited value can neither make guessing cheap nor freeze
   the page.

@@ -13,7 +13,11 @@ function setup(adapter = memoryStorage(), onLocked?: () => void) {
 	const mood = diary.entry('mood', { label: 'Mood', parse: text });
 	const other = storage.scope('other').entry('n', { label: 'N', parse: text });
 	const onError = vi.fn();
-	const vault = createVault(storage.scope('vault'), { onError, onLocked });
+	const vault = createVault(storage.scope('vault'), {
+		onError,
+		onLocked,
+		iterations: MIN_ITERATIONS
+	});
 	return { adapter, storage, note, mood, other, vault, onError };
 }
 
@@ -470,5 +474,148 @@ describe('prefixed entries (#157)', () => {
 		expect(await vault.unlock(await key(salt))).toBe(true);
 		expect(storage.read(days.at('b'))).toBe('cycle day 13');
 		expect(storage.unclaimed()).toEqual([]);
+	});
+});
+
+describe('backups (#79)', () => {
+	/** A backup file as Settings downloads it. */
+	const file = async (storage: ReturnType<typeof setup>['storage']) =>
+		JSON.stringify(await storage.exportBackup());
+
+	it('are plain format 2 while the vault is off', async () => {
+		const { storage, note } = setup();
+		storage.write(note, SECRET);
+		const backup = await storage.exportBackup();
+		expect(backup.format).toBe(2);
+		expect(backup.data['app:diary:note']).toBe(SECRET);
+	});
+
+	it('carry sensitive groups only sealed, and open with the passcode on another device', async () => {
+		const { storage } = await enabled();
+		const text = await file(storage);
+		expect(text).not.toContain('cycle');
+		expect(text).not.toContain('calm');
+		const backup = JSON.parse(text);
+		expect(backup.format).toBe(3);
+		expect(backup.data).toEqual({ 'app:other:n': 'plain' });
+		expect(Object.keys(backup.sections.vault.groups)).toEqual(['diary']);
+		expect(backup.sections.vault.iterations).toBe(MIN_ITERATIONS);
+
+		const other = setup();
+		const opened = await other.vault.openBackup(text, '123456');
+		expect(opened.ok).toBe(true);
+		if (!opened.ok) return;
+		expect(JSON.parse(opened.text)).not.toHaveProperty('sections');
+		const parsed = other.storage.parseBackup(opened.text);
+		expect(parsed.ok && parsed.found.map((e) => e.key).sort()).toEqual([
+			'app:diary:mood',
+			'app:diary:note',
+			'app:other:n'
+		]);
+		if (!parsed.ok) return;
+		expect(other.storage.importData(parsed.backup, 'replace')).toBe(true);
+		expect(other.storage.read(other.note)).toBe(SECRET);
+		expect(other.storage.read(other.mood)).toBe('calm');
+	});
+
+	it('refuse a wrong passcode and a damaged section', async () => {
+		const { storage } = await enabled();
+		const text = await file(storage);
+		const other = setup();
+		expect(await other.vault.openBackup(text, '654321')).toEqual({
+			ok: false,
+			error: "That isn't the passcode this backup was made with."
+		});
+		const damaged = JSON.parse(text);
+		damaged.sections.vault.groups.diary.data = btoa('x'.repeat(40));
+		expect(await other.vault.openBackup(JSON.stringify(damaged), '123456')).toEqual({
+			ok: false,
+			error: "This backup's encrypted data couldn't be read."
+		});
+		const shortSalt = JSON.parse(text);
+		shortSalt.sections.vault.salt = 'AAAA';
+		expect((await other.vault.openBackup(JSON.stringify(shortSalt), '123456')).ok).toBe(false);
+		damaged.sections.vault.iterations = 1;
+		expect((await other.vault.openBackup(JSON.stringify(damaged), '123456')).ok).toBe(false);
+		expect((await other.vault.openBackup('{nope', '123456')).ok).toBe(false);
+		// Without the passcode, only the rest imports.
+		const parsed = other.storage.parseBackup(text);
+		expect(parsed.ok && parsed.found.map((e) => e.key)).toEqual(['app:other:n']);
+	});
+
+	it('pass a file without the section through unchanged', async () => {
+		const { storage, vault } = setup();
+		const text = await file(storage);
+		expect(await vault.openBackup(text, 'anything')).toEqual({ ok: true, text });
+	});
+
+	it('are made while locked too, from the sealed copies', async () => {
+		const { storage, vault } = await enabled();
+		await vault.flush();
+		vault.lock();
+		const text = await file(storage);
+		expect(text).not.toContain('cycle');
+		const other = setup();
+		const opened = await other.vault.openBackup(text, '123456');
+		const parsed = opened.ok ? other.storage.parseBackup(opened.text) : undefined;
+		expect(parsed?.ok && parsed.backup.data['app:diary:note']).toBe(SECRET);
+	});
+
+	it('include the latest writes, and open with the passcode they were made under', async () => {
+		const { storage, note, vault } = await enabled();
+		storage.write(note, 'cycle day 13');
+		const text = await file(storage);
+		const salt = newSalt();
+		expect(await vault.rekey(await key(salt, '999999'), salt)).toBe(true);
+		const other = setup();
+		const opened = await other.vault.openBackup(text, '123456');
+		const parsed = opened.ok ? other.storage.parseBackup(opened.text) : undefined;
+		expect(parsed?.ok && parsed.backup.data['app:diary:note']).toBe('cycle day 13');
+		// A backup made after the change opens only with the new passcode.
+		const later = await file(storage);
+		expect((await other.vault.openBackup(later, '123456')).ok).toBe(false);
+		expect((await other.vault.openBackup(later, '999999')).ok).toBe(true);
+	});
+
+	it('leave out entries kept out of backups, and a group holding one while locked', async () => {
+		const adapter = memoryStorage();
+		const storage = createStorage({ adapter, onError: vi.fn() });
+		const notes = storage.scope('notes');
+		const page = notes.entry('page', { label: 'Page', parse: text, sensitive: true });
+		const token = notes.entry('token', { label: 'Token', parse: text, backup: false });
+		const diary = storage
+			.scope('diary')
+			.entry('note', { label: 'N', parse: text, sensitive: true });
+		const vault = createVault(storage.scope('vault'), { iterations: MIN_ITERATIONS });
+		storage.write(page, 'agenda');
+		storage.write(token, 'secret_token');
+		storage.write(diary, SECRET);
+		const salt = newSalt();
+		expect(await vault.enable(await key(salt), salt)).toBe(true);
+
+		const unlocked = JSON.stringify(await storage.exportBackup());
+		const opened = await vault.openBackup(unlocked, '123456');
+		expect(opened.ok && JSON.parse(opened.text).data).toEqual({
+			'app:notes:page': 'agenda',
+			'app:diary:note': SECRET
+		});
+
+		vault.lock();
+		const locked = JSON.parse(JSON.stringify(await storage.exportBackup()));
+		expect(Object.keys(locked.sections.vault.groups)).toEqual(['diary']);
+	});
+
+	it('seal what they import again when the vault is on here', async () => {
+		const a = await enabled();
+		const text = await file(a.storage);
+		const b = await enabled();
+		b.storage.clear([b.note, b.mood]);
+		const opened = await b.vault.openBackup(text, '123456');
+		const parsed = opened.ok ? b.storage.parseBackup(opened.text) : undefined;
+		if (!parsed?.ok) throw new Error('not opened');
+		expect(b.storage.importData(parsed.backup, 'merge')).toBe(true);
+		expect(await b.vault.flush()).toBe(true);
+		expect(b.storage.read(b.note)).toBe(SECRET);
+		expect(dump(b.adapter)).not.toContain('cycle');
 	});
 });

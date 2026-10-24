@@ -69,8 +69,10 @@ and offers a backup first (not encrypted). Then:
   hide what they say: `@xcwds/plugin-shell`'s toasts read "Private page" and
   `@xcwds/plugin-timers`' alerts "Timer finished" (they still ring and can be stopped).
 - **Forgot passcode**, on the unlock screen and in Settings, resets the lock and clears every
-  storage group marked `sensitive`, after two confirmations that name them. It offers no backup:
-  one made while locked would hand over what the lock keeps out.
+  storage group marked `sensitive`, after two confirmations that name them. With
+  `@xcwds/plugin-vault`, it first offers an encrypted backup: only what the passcode encrypts,
+  still encrypted, which imports only with this passcode if it comes back to mind. Nothing
+  readable is in it, since a backup made while locked mustn't hand over what the lock keeps out.
 
 The API:
 
