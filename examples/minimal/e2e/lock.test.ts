@@ -119,6 +119,10 @@ async function setUpLock(page: Page, { scope = '', auto = '' } = {}) {
 	await lock.getByLabel('Same again').fill(CODE);
 	await lock.getByRole('button', { name: 'Save passcode' }).click();
 	await expect(page.getByTestId('lock-status')).toHaveText('The passcode lock is on and unlocked.');
+	// This build has no vault, and Settings says so.
+	await expect(page.getByTestId('lock-encryption')).toContainText(
+		"it doesn't encrypt what's saved"
+	);
 	if (scope) await lock.getByRole('radio', { name: scope }).check();
 	if (auto) await lock.getByRole('radio', { name: auto }).check();
 	return lock;

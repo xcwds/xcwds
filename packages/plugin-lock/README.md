@@ -101,7 +101,8 @@ Only a verifier is saved (`app:lock:verifier`: PBKDF2-SHA-256, 600,000 iteration
 16-byte salt), never the passcode, and unlocking lives in memory, so every start is locked. The
 lock's data stays out of backups. Clearing it any other way (Settings → Your data, or another
 tab) clears the sensitive groups too, so it never opens what it locked. The lock keeps people
-out of the pages; it doesn't encrypt what's saved, so someone with a copy of the storage can
+out of the pages; on its own it doesn't encrypt what's saved (`@xcwds/plugin-vault` does, for
+sensitive groups, and Settings → Privacy then names them), so someone with a copy of the storage can
 read it, and can try passcodes against the verifier offline (which is why short PINs aren't
 allowed). The wait follows the device's clock, so moving the clock forward shortens it, and
 when storage can't save, wrong tries aren't counted.

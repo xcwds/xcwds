@@ -69,11 +69,17 @@ test('photos are unreadable in IndexedDB while locked, and show after unlocking 
 	// Setting a passcode seals the photo already saved, in the background.
 	await gotoHydrated(page, url('/settings'));
 	const lock = page.getByTestId('passcode-lock');
+	// Settings → Privacy says what a passcode would encrypt, then that it's encrypted (#79).
+	const wording = page.getByTestId('lock-encryption');
+	await expect(wording).toContainText("Setting a passcode also encrypts what's saved for");
+	await expect(wording.locator('strong')).toContainText('Photos');
 	await lock.getByRole('button', { name: 'Set a passcode' }).click();
 	await lock.getByLabel('Passcode', { exact: true }).fill(CODE);
 	await lock.getByLabel('Same again').fill(CODE);
 	await lock.getByRole('button', { name: 'Save passcode' }).click();
 	await expect(page.getByTestId('lock-status')).toHaveText('The passcode lock is on and unlocked.');
+	await expect(wording).toContainText('is encrypted on this device with the passcode');
+	await expect(wording).not.toContainText("doesn't encrypt");
 	await expect
 		.poll(() => rawPhotos(page))
 		.toEqual([{ type: 'application/octet-stream', jpeg: false }]);
@@ -112,6 +118,7 @@ test('photos are unreadable in IndexedDB while locked, and show after unlocking 
 	await lock.getByLabel('Current passcode').fill(CODE);
 	await page.getByTestId('lock-form').getByRole('button', { name: 'Turn off' }).click();
 	await expect(lock.getByRole('button', { name: 'Set a passcode' })).toBeVisible();
+	await expect(wording).toContainText('Setting a passcode also encrypts');
 	expect(await rawPhotos(page)).toEqual([
 		{ type: 'image/jpeg', jpeg: true },
 		{ type: 'image/jpeg', jpeg: true }

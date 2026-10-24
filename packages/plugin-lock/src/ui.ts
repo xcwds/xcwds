@@ -1,9 +1,17 @@
 /** Shared pieces of the unlock screen and the Settings controls. */
+import type { Group } from '@xcwds/core';
 import type { HTMLInputAttributes } from 'svelte/elements';
 
 /** Shows a confirmation with `app.toast` (from `@xcwds/plugin-shell`), when the app has it. */
 export function toast(app: object, message: string): void {
 	(app as { toast?: (message: string) => void }).toast?.(message);
+}
+
+/** A storage group's name as Settings → Your data shows it (its `groups` option), else its label. */
+export function groupLabel(app: object): (group: Group) => string {
+	const names = (app as { settingsPage?: { options: { groups: Record<string, string> } } })
+		.settingsPage?.options.groups;
+	return (group) => names?.[group.id] ?? group.label;
 }
 
 /** Classes for the components' controls (colours from `@xcwds/plugin-shell/styles.css`). */
