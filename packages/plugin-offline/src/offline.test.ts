@@ -292,6 +292,10 @@ describe('byApp', () => {
 		const { sw } = await boot(network(), { older: true });
 		expect(await cached(sw)).toContain('/sub/secret');
 		expect(await cached(sw)).toContain('/sub/hello');
+		// The page's first message then drops the apps that are off, whatever their default.
+		await on(sw, 'kitchen', 'hello');
+		expect(await cached(sw)).not.toContain('/sub/secret');
+		expect(await cached(sw)).toContain('/sub/hello');
 	});
 
 	it('catches up on apps turned on or off while it waited, when it takes over', async () => {

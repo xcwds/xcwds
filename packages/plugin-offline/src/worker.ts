@@ -64,6 +64,7 @@ function byApp(app: App, worker: WorkerContext) {
 	};
 	const defaults = () =>
 		(tools()?.apps() ?? []).filter((a) => a.default !== false).map((a) => a.id);
+	const all = () => (tools()?.apps() ?? []).map((a) => a.id);
 
 	/** The apps saved as on, or undefined before any page said. */
 	async function saved(): Promise<string[] | undefined> {
@@ -100,7 +101,6 @@ function byApp(app: App, worker: WorkerContext) {
 	// from a version without `byApp` (nothing saved yet), every app, as that version kept them; a
 	// first install, the apps that start on.
 	app.addHook('onInstall', async (cache) => {
-		const all = () => (tools()?.apps() ?? []).map((a) => a.id);
 		await download(cache as Cache, (await saved()) ?? ((await updating()) ? all() : defaults()));
 	});
 
@@ -125,7 +125,9 @@ function byApp(app: App, worker: WorkerContext) {
 		if (!isAppsMessage(data)) return;
 		const known = new Set((tools()?.apps() ?? []).map((a) => a.id));
 		const on = [...new Set(data.on)].filter((id) => known.has(id));
-		const before = (await saved()) ?? defaults();
+		// With nothing saved yet, any app may be cached (an update from a version without `byApp`
+		// keeps them all).
+		const before = (await saved()) ?? all();
 		await save(on);
 		const cache = await caches.open(worker.cacheName);
 		// Only apps that were on and now aren't: a page of an app that's off, cached when visited,
