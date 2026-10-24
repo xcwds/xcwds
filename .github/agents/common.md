@@ -5,6 +5,12 @@ The repositories this run checked out sit side by side in the working directory,
 (`xcwds/`, `xcwds.github.io/`), with full history. Each repo's `CLAUDE.md` and `AGENTS.md` apply
 inside it; where they say something about cloud containers, this section wins.
 
+- **Shell:** Claude Code refuses some commands before they run, so write each one plainly. Don't
+  use shell loops or variables in a command (`for r in …; do …$r…` is refused because the variable
+  can't be checked); write one command per repo instead. Stay inside the working directory: `cd`
+  only into `xcwds/` or `xcwds.github.io/` (or `..` back from one), never above it. Don't cut
+  output you need with `head` or `head -c`, or a list may stop partway through; narrow it with
+  `--json` fields and `jq` instead.
 - **GitHub:** use `gh` (it gets a fresh token on every call) and `git`. There are no GitHub MCP
   tools here. `gh pr merge` is not allowed: merge only with `merge-pr <number> --repo <owner/name>`,
   which refuses Version packages PRs, PRs by anyone but the bot, Renovate or the owner, red or
