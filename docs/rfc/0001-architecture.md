@@ -125,7 +125,10 @@ otherwise serves a baseline offline strategy (precache, then this version's cach
 every app installs and works offline. The strategy reads a cache policy (`app.worker.policy`:
 extra precache paths, exclusions, the offline fallback page, runtime caching) once every worker
 plugin has registered, so `@xcwds/plugin-offline` (#11) changes the policy instead of answering
-fetches itself, and other plugins' `onFetch` hooks still run first.
+fetches itself, and other plugins' `onFetch` hooks still run first. The policy's `defer` leaves
+paths out of the install precache for a plugin to cache in this version's cache itself, after
+which they are served cache-first like the rest: `@xcwds/plugin-offline`'s `byApp` (#163) defers
+the pages of `@xcwds/plugin-tools`' apps and caches only those of the apps that are on.
 
 Since 0.5 the integration supports SvelteKit 3 only (#57). SvelteKit 3 has no `svelte.config.js`:
 its config goes to the `sveltekit()` Vite plugin, so `xcwds(config)` takes that config, adds the

@@ -1,9 +1,10 @@
+import { definePlugin } from '@xcwds/core';
 import { buildTestApp, buildTestWorker, type Importer } from '@xcwds/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import client from './client.js';
 import offline from './index.js';
-import { resolveOptions } from './options.js';
-import worker from './worker.js';
+import { APPS_MESSAGE, resolveOptions } from './options.js';
+import worker, { appsCacheName } from './worker.js';
 
 afterEach(() => void vi.unstubAllGlobals());
 
@@ -25,8 +26,10 @@ describe('options', () => {
 			precache: [],
 			exclude: [],
 			fallback: '/404.html',
-			runtimeCaching: true
+			runtimeCaching: true,
+			byApp: false
 		});
+		expect(() => resolveOptions({ byApp: 'yes' })).toThrow(/`byApp`/);
 		expect(() => resolveOptions({ fallback: '404.html' })).toThrow(/`fallback`/);
 		expect(() => resolveOptions({ precache: ['/a?b'] })).toThrow(/`precache`/);
 		expect(() => resolveOptions({ exclude: 'videos' })).toThrow(/`exclude`/);
@@ -157,6 +160,167 @@ describe('the worker', () => {
 		await sw.install();
 		await sw.activate();
 		expect((await sw.caches.keys()).sort()).toEqual([own, 'another-app'].sort());
+	});
+});
+
+describe('byApp', () => {
+	/** `@xcwds/plugin-tools`' worker entry as far as this plugin reads it: three apps. */
+	const APPS = [
+		{ id: 'kitchen', pages: ['/kitchen', '/kitchen/coffee'] },
+		{ id: 'hello', pages: ['/hello'] },
+		{ id: 'secret', pages: ['/secret'], default: false }
+	];
+	const tools = definePlugin(
+		(app) => {
+			app.decorate('tools', {
+				apps: () => APPS,
+				appOf: (path: string) =>
+					APPS.find((a) => a.pages.some((p) => path === p || path.startsWith(`${p}/`)))
+			});
+		},
+		{ name: 'fake-tools', encapsulate: false }
+	);
+
+	function network() {
+		const state = { online: true, version: 'v1' };
+		return {
+			state,
+			answer: (request: Request) => {
+				if (!state.online) throw new TypeError('Failed to fetch');
+				return new Response(`${state.version} ${new URL(request.url).pathname}`);
+			}
+		};
+	}
+
+	async function boot(
+		net = network(),
+		{ version = '1', seed }: { version?: string; seed?: Response } = {}
+	) {
+		const sw = await buildTestWorker(
+			{ plugins: [[tools, {}], offline({ byApp: true })] },
+			{
+				import: importer,
+				base: '/sub',
+				prerendered: ['/sub/', '/sub/kitchen', '/sub/kitchen/coffee', '/sub/hello', '/sub/secret'],
+				build: ['/sub/_app/app.js'],
+				version,
+				network: net.answer
+			}
+		);
+		if (seed) await (await savedCache(sw)).put(savedKey(sw), seed);
+		await sw.install();
+		await sw.activate();
+		return { sw, net: net.state };
+	}
+	type Worker = Awaited<ReturnType<typeof boot>>['sw'];
+	const savedCache = (sw: Worker) => sw.caches.open(appsCacheName(sw.app.worker!.scope));
+	const savedKey = (sw: Worker) => new URL('.xcwds-offline/apps.json', sw.app.worker!.scope).href;
+	const cached = async (sw: Worker) =>
+		(await sw.cache.keys()).map((r) => new URL(r.url).pathname).sort();
+	const on = (sw: Worker, ...ids: string[]) => sw.message({ type: APPS_MESSAGE, on: ids });
+
+	afterEach(() => void vi.restoreAllMocks());
+
+	it('a first install keeps the shared pages and the apps that start on, not the others', async () => {
+		const { sw } = await boot();
+		expect(await cached(sw)).toEqual([
+			'/sub/',
+			'/sub/404.html',
+			'/sub/_app/app.js',
+			'/sub/hello',
+			'/sub/kitchen',
+			'/sub/kitchen/coffee'
+		]);
+		expect(await sw.app.worker!.deferred()).toEqual([
+			'/sub/kitchen',
+			'/sub/kitchen/coffee',
+			'/sub/hello',
+			'/sub/secret'
+		]);
+	});
+
+	it('downloads an app turned on, deletes one turned off, and serves its pages offline', async () => {
+		const { sw, net } = await boot();
+		await on(sw, 'kitchen', 'secret');
+		expect(await cached(sw)).toContain('/sub/secret');
+		expect(await cached(sw)).not.toContain('/sub/hello');
+		net.version = 'v2';
+		// From this version's cache, not the network, like the precached pages.
+		expect(await (await sw.fetch('/secret'))?.text()).toBe('v1 /sub/secret');
+		net.online = false;
+		expect(await (await sw.fetch('/kitchen/coffee'))?.text()).toBe('v1 /sub/kitchen/coffee');
+		// Turned off: gone, so offline it gets the fallback page.
+		await expect(sw.fetch('/hello')).rejects.toThrow('Failed to fetch');
+		expect(await (await sw.fetch('/hello', { mode: 'navigate' }))?.text()).toBe('v1 /sub/404.html');
+	});
+
+	it('keeps a page of an app that is off once it was visited, until the app goes on and off', async () => {
+		const { sw, net } = await boot();
+		await on(sw, 'kitchen', 'hello');
+		expect(await (await sw.fetch('/secret'))?.text()).toBe('v1 /sub/secret');
+		// The page says the same again (another tab, a reload): nothing visited is dropped.
+		await on(sw, 'kitchen', 'hello');
+		expect(await cached(sw)).toContain('/sub/secret');
+		await on(sw, 'kitchen', 'hello', 'secret');
+		await on(sw, 'kitchen', 'hello');
+		expect(await cached(sw)).not.toContain('/sub/secret');
+		net.online = false;
+		await expect(sw.fetch('/secret')).rejects.toThrow('Failed to fetch');
+	});
+
+	it('an update precaches the apps that were on, so they keep working offline', async () => {
+		const first = await boot();
+		await on(first.sw, 'secret');
+		const saved = await (await savedCache(first.sw)).match(savedKey(first.sw));
+		expect(await saved!.clone().json()).toEqual(['secret']);
+		await first.sw.close();
+
+		const net = network();
+		net.state.version = 'v2';
+		const { sw } = await boot(net, { version: '2', seed: saved });
+		expect(await cached(sw)).toEqual(['/sub/', '/sub/404.html', '/sub/_app/app.js', '/sub/secret']);
+	});
+
+	it('an update fails rather than leave out an app that was on', async () => {
+		const net = network();
+		net.state.online = false;
+		await expect(boot(net, { seed: new Response(JSON.stringify(['hello'])) })).rejects.toThrow(
+			'Failed to fetch'
+		);
+	});
+
+	it('ignores other messages and apps it does not know', async () => {
+		const { sw } = await boot();
+		await sw.message({ type: APPS_MESSAGE, on: 'kitchen' });
+		await sw.message({ type: 'other', on: [] });
+		expect(await cached(sw)).toContain('/sub/hello');
+		await on(sw, 'nope', 'kitchen');
+		expect(await (await (await savedCache(sw)).match(savedKey(sw)))!.json()).toEqual(['kitchen']);
+		expect(await cached(sw)).not.toContain('/sub/hello');
+	});
+
+	it('a page that failed to download is fetched again with the next message', async () => {
+		const { sw, net } = await boot();
+		net.online = false;
+		await expect(on(sw, 'secret')).rejects.toThrow('Failed to fetch');
+		net.online = true;
+		await on(sw, 'secret');
+		expect(await cached(sw)).toContain('/sub/secret');
+	});
+
+	it('without @xcwds/plugin-tools, warns and precaches every page', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const sw = await buildTestWorker(
+			{ plugins: [offline({ byApp: true })] },
+			{ import: importer, prerendered: ['/', '/hello'], network: network().answer }
+		);
+		await sw.install();
+		expect((await sw.cache.keys()).map((r) => new URL(r.url).pathname).sort()).toEqual([
+			'/',
+			'/404.html',
+			'/hello'
+		]);
+		expect(warn.mock.calls.flat().join(' ')).toMatch(/`byApp` needs @xcwds\/plugin-tools/);
 	});
 });
 

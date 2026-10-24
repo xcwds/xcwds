@@ -24,11 +24,17 @@ export type OfflineOptions = {
 	 * drops them until they load again online. Defaults to `true`.
 	 */
 	runtimeCaching?: boolean;
+	/**
+	 * Keep only the apps people turned on offline (`@xcwds/plugin-tools`' `apps`, #163): their
+	 * pages are left out of the install precache and downloaded when an app is turned on, and
+	 * deleted when it's turned off. An update precaches the apps that were on. Defaults to `false`.
+	 */
+	byApp?: boolean;
 };
 
 export type ResolvedOfflineOptions = Required<OfflineOptions>;
 
-const KEYS = ['precache', 'exclude', 'fallback', 'runtimeCaching', 'prefix'];
+const KEYS = ['precache', 'exclude', 'fallback', 'runtimeCaching', 'byApp', 'prefix'];
 const isPath = (v: unknown): v is string =>
 	typeof v === 'string' && v.startsWith('/') && !/[?#]/.test(v);
 
@@ -54,10 +60,24 @@ export function resolveOptions(input: unknown = {}): ResolvedOfflineOptions {
 	if (!isPath(fallback)) fail('`fallback` must be an app path starting with "/".');
 	const runtimeCaching = options.runtimeCaching ?? true;
 	if (typeof runtimeCaching !== 'boolean') fail('`runtimeCaching` must be true or false.');
+	const byApp = options.byApp ?? false;
+	if (typeof byApp !== 'boolean') fail('`byApp` must be true or false.');
 	return {
 		precache: paths(options.precache, 'precache'),
 		exclude: paths(options.exclude, 'exclude'),
 		fallback,
-		runtimeCaching
+		runtimeCaching,
+		byApp
 	};
 }
+
+/** The message a page sends its worker with the apps that are on (`byApp`). */
+export const APPS_MESSAGE = `${NAME}:apps`;
+export type AppsMessage = { type: typeof APPS_MESSAGE; on: string[] };
+
+export const isAppsMessage = (data: unknown): data is AppsMessage =>
+	typeof data === 'object' &&
+	data !== null &&
+	(data as AppsMessage).type === APPS_MESSAGE &&
+	Array.isArray((data as AppsMessage).on) &&
+	(data as AppsMessage).on.every((id) => typeof id === 'string');

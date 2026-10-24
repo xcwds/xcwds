@@ -1,9 +1,24 @@
 /**
- * The page entry: tracks whether the browser is online, for `<OfflineNotice>`. Imported at
- * prerender too, so it only touches browser globals once the app boots.
+ * The page entry: tracks whether the browser is online, for `<OfflineNotice>`, and with `byApp`
+ * tells the service worker which apps are on. Imported at prerender too, so it only touches
+ * browser globals once the app boots.
  */
 import { definePlugin } from '@xcwds/core';
-import { CORE, NAME, type OfflineOptions } from './options.js';
+import {
+	APPS_MESSAGE,
+	CORE,
+	NAME,
+	resolveOptions,
+	type AppsMessage,
+	type OfflineOptions
+} from './options.js';
+
+/** The part of `@xcwds/plugin-tools`' `app.tools` this entry reads. */
+type Apps = {
+	apps(): readonly { id: string }[];
+	isOn(id: string): boolean;
+	subscribe(listener: () => void): () => void;
+};
 
 /** Whether the browser is online, as `app.network`. */
 export type NetworkStatus = {
@@ -21,7 +36,8 @@ declare module '@xcwds/core' {
 }
 
 export default definePlugin(
-	(app, _options: OfflineOptions) => {
+	(app, input: OfflineOptions) => {
+		const options = resolveOptions(input);
 		let online = true;
 		const listeners = new Set<(online: boolean) => void>();
 		const set = (value: boolean) => {
@@ -53,7 +69,34 @@ export default definePlugin(
 				win.removeEventListener('offline', goOffline);
 			};
 			set(navigator.onLine);
+			if (options.byApp) stop = both(stop, sendApps());
 		});
+		/**
+		 * Sends the apps that are on to the worker now (settings have loaded by boot), whenever one
+		 * is turned on or off, and to each new worker that takes over.
+		 */
+		function sendApps(): () => void {
+			const tools = (app as { tools?: Apps }).tools;
+			const sw = typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined;
+			if (!tools || !sw) return () => {};
+			const send = () => {
+				const message: AppsMessage = {
+					type: APPS_MESSAGE,
+					on: tools
+						.apps()
+						.filter((a) => tools.isOn(a.id))
+						.map((a) => a.id)
+				};
+				sw.controller?.postMessage(message);
+			};
+			const unsubscribe = tools.subscribe(send);
+			sw.addEventListener('controllerchange', send);
+			return () => {
+				unsubscribe();
+				sw.removeEventListener('controllerchange', send);
+			};
+		}
+
 		app.addHook('onClose', () => {
 			stop?.();
 			stop = undefined;
@@ -61,3 +104,10 @@ export default definePlugin(
 	},
 	{ name: NAME, core: CORE, encapsulate: false, network: false }
 );
+
+const both =
+	(a: (() => void) | undefined, b: () => void): (() => void) =>
+	() => {
+		a?.();
+		b();
+	};

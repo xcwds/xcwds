@@ -44,6 +44,12 @@ export type CachePolicy = {
 	 * version's cache, for when the network is gone.
 	 */
 	runtimeCaching: boolean;
+	/**
+	 * Leaves the app paths it matches out of the install precache, for a plugin that caches them
+	 * itself in `cacheName` (`@xcwds/plugin-offline`'s `byApp`). Once there, they're served from this
+	 * version's cache first like the rest; until then, like any page that wasn't precached.
+	 */
+	defer?: (path: string) => boolean;
 };
 
 /** What worker plugins get as `app.worker`. */
@@ -54,10 +60,17 @@ export type WorkerContext = {
 	readonly base: string;
 	/** This version's cache. */
 	readonly cacheName: string;
+	/** The registration's scope, an absolute URL ending in "/". */
+	readonly scope: string;
 	/** The default strategy's settings: change them while your plugin loads. */
 	readonly policy: CachePolicy;
 	/** Lets this (waiting) version take over now instead of when the old one's tabs close. */
 	skipWaiting(): Promise<void>;
+	/**
+	 * The paths (with the base path) `policy.defer` left out of the install precache. Settles once
+	 * every plugin has loaded, so await it in hooks, never while your plugin loads.
+	 */
+	deferred(): Promise<readonly string[]>;
 };
 
 declare module '@xcwds/core' {
@@ -144,8 +157,10 @@ export function startWorker(
 		version: options.version,
 		base,
 		cacheName,
+		scope: sw.registration.scope,
 		policy,
-		skipWaiting: () => sw.skipWaiting()
+		skipWaiting: () => sw.skipWaiting(),
+		deferred: () => strategy.then((s) => s.deferred)
 	} satisfies WorkerContext);
 
 	/** The strategy, settled once the plugins have loaded (and changed the policy). */
@@ -159,12 +174,26 @@ export function startWorker(
 	);
 	const strategy = ready.then((ok) => {
 		const exclude = [...policy.exclude];
-		const assets = precacheList(options, { extra: policy.precache, exclude });
+		// Without every plugin loaded, nothing would cache deferred paths: precache them all.
+		const defer = ok ? policy.defer : undefined;
+		const fallback = base + normalizePath(policy.fallback);
+		const all = precacheList(options, { extra: policy.precache, exclude });
+		// Never the fallback page: offline navigations need it whatever is turned on.
+		const deferred = defer
+			? all.filter((path) => {
+					const appPath = stripBase(path, base);
+					return path !== fallback && appPath !== null && defer(appPath);
+				})
+			: [];
+		const skipped = new Set(deferred);
+		const assets = all.filter((path) => !skipped.has(path));
 		return {
 			ok,
 			assets,
 			precached: new Set(assets),
-			fallback: base + normalizePath(policy.fallback),
+			deferred,
+			skipped,
+			fallback,
 			runtimeCaching: policy.runtimeCaching,
 			excluded: (path: string) => exclude.some((glob) => matchesGlob(glob, path))
 		};
@@ -222,8 +251,9 @@ export function startWorker(
 				if (answer) return answer;
 				const cache = await caches.open(cacheName);
 				// This version's files come from its own cache, never the network, so the running
-				// version stays consistent until the new one takes over.
-				if (s.precached.has(url.pathname)) {
+				// version stays consistent until the new one takes over. Deferred ones are there once
+				// the plugin that deferred them has cached them.
+				if (s.precached.has(url.pathname) || s.skipped.has(url.pathname)) {
 					const cached = await cache.match(url.pathname);
 					if (cached) return cached;
 				}

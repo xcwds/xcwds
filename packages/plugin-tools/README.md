@@ -123,6 +123,10 @@ tools({
   of the apps that are off) before first paint, and the page keeps it up to date.
 - The manifest's `shortcuts` are written at build time for everyone, so only tools of apps that
   start on (`default` not false) become shortcuts.
+- The service worker gets `app.tools` too (the `./worker` entry): every tool and app from the
+  options, each app as it starts, so a worker plugin can tell which app a page belongs to
+  (`appOf`). Whether an app is on lives in the page's settings, which a worker can't read:
+  `@xcwds/plugin-offline`'s `byApp` has the page send it.
 
 ## Home and the page entry
 
