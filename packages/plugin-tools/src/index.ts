@@ -20,18 +20,16 @@
  * prerendered and the shell knows their titles) and the manifest's `shortcuts`.
  */
 import { XcwdsError, codes, definePlugin, descriptor } from '@xcwds/core';
-import { appOf } from './apps.js';
 import {
 	CORE,
 	NAME,
 	ToolList,
-	checkTool,
 	resolveOptions,
 	splitToolPath,
 	type Tool,
 	type ToolsOptions
 } from './options.js';
-import type { AppTools } from './types.js';
+import { staticTools } from './static.js';
 
 export type { AppGroup, ResolvedToolsOptions, Tool, ToolsOptions } from './options.js';
 export { isToolPath, splitToolPath } from './options.js';
@@ -104,24 +102,7 @@ export const build = definePlugin(
 		};
 		for (const tool of options.items) add(tool);
 		const startsOn = (id: string) => apps.some((a) => a.id === id && a.default !== false);
-		app.decorate('tools', {
-			index: options.path,
-			catalog: apps.length ? options.catalog : undefined,
-			get: (path) => list.all().find((t) => t.path === path),
-			add: (tool) => add(checkTool(tool)),
-			remove: () => false,
-			update: () => false,
-			list: () => list.all(),
-			all: () => list.all(),
-			apps: () => apps,
-			appOf: (path) => appOf(apps, list.all(), path),
-			isOn: startsOn,
-			setOn: () => false,
-			subscribe(listener) {
-				listener();
-				return () => {};
-			}
-		} satisfies AppTools);
+		app.decorate('tools', staticTools(options, list, add));
 
 		app.addHook('onManifest', (manifest) => {
 			// Written once for everyone, so only tools of apps that start on (or in no app).

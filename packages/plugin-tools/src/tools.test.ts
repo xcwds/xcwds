@@ -1,7 +1,7 @@
 import { createApp, definePlugin, memoryStorage, type StorageAdapter } from '@xcwds/core';
 import shellClient from '@xcwds/plugin-shell/client';
 import { decorateRoutes } from '@xcwds/sveltekit/routes';
-import { buildTestApp, type Importer } from '@xcwds/testing';
+import { buildTestApp, buildTestWorker, type Importer } from '@xcwds/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import client from './client.js';
 import {
@@ -31,7 +31,8 @@ vi.mock('./HomeShortcuts.svelte', () => ({ default: function HomeShortcuts() {} 
 const importer: Importer = async (id) => {
 	const entries: Record<string, () => Promise<Record<string, unknown>>> = {
 		'@xcwds/plugin-tools': () => import('./index.js'),
-		'@xcwds/plugin-tools/client': () => import('./client.js')
+		'@xcwds/plugin-tools/client': () => import('./client.js'),
+		'@xcwds/plugin-tools/worker': () => import('./worker.js')
 	};
 	const load = entries[id];
 	if (!load) throw Object.assign(new Error(id), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
@@ -658,6 +659,50 @@ describe('the page', () => {
 		// Without the shell there is no Home to add to.
 		const bare = await buildTestApp({ plugins: [[client, options]] });
 		expect(bare.shell).toBeUndefined();
+	});
+});
+
+describe('the worker', () => {
+	it('knows every tool and app, each as it starts, so worker plugins can tell pages apart', async () => {
+		const sw = await buildTestWorker(
+			{
+				plugins: [
+					toolsFactory({
+						path: '/utils',
+						apps: [
+							{
+								id: 'kitchen',
+								name: 'Kitchen',
+								emoji: '🍳',
+								blurb: 'Cooking.',
+								routes: ['/recipes']
+							},
+							{ id: 'secret', name: 'Secret', emoji: '🔒', blurb: 'Hidden.', default: false }
+						],
+						items: [
+							{
+								path: '/utils/coffee',
+								name: 'Coffee',
+								emoji: '☕',
+								blurb: 'Brew.',
+								app: 'kitchen'
+							},
+							{ path: '/utils/diary', name: 'Diary', emoji: '📓', blurb: 'Notes.', app: 'secret' },
+							{ path: '/utils/dice', name: 'Dice', emoji: '🎲', blurb: 'Roll.' }
+						]
+					})
+				]
+			},
+			{ import: importer }
+		);
+		const tools = sw.app.tools!;
+		expect(tools.apps().map((a) => a.id)).toEqual(['kitchen', 'secret']);
+		expect(tools.appOf('/utils/coffee')?.id).toBe('kitchen');
+		expect(tools.appOf('/recipes/bread')?.id).toBe('kitchen');
+		expect(tools.appOf('/utils/diary')?.id).toBe('secret');
+		expect(tools.appOf('/utils/dice')).toBeUndefined();
+		expect([tools.isOn('kitchen'), tools.isOn('secret')]).toEqual([true, false]);
+		expect(tools.setOn('secret', true)).toBe(false);
 	});
 });
 

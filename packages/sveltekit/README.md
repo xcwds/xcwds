@@ -90,8 +90,9 @@ which `withXcwds()` used to add for you), `$app/environment` is `$app/env`, and 
   hooks answer first; the build, static files, prerendered pages, manifest and icons are
   precached on install and served from this version's cache first; anything else goes to the
   network, with `404.html` for offline navigations. The strategy reads `app.worker.policy`
-  (extra precache paths, exclusions, the fallback page, runtime caching) once every worker
-  plugin has registered; `@xcwds/plugin-offline` sets it. Nothing is cached at runtime unless a
+  (extra precache paths, exclusions, the fallback page, runtime caching, and `defer`: paths
+  left out of the install precache for a plugin to cache itself, listed by
+  `app.worker.deferred()`) once every worker plugin has registered; `@xcwds/plugin-offline` sets it. Nothing is cached at runtime unless a
   plugin turns it on. A new version waits until the old one's tabs have closed or a plugin calls
   `app.worker.skipWaiting()` (`@xcwds/plugin-update` does when the user taps Update).
   A static file with the same path as a generated one (`manifest.webmanifest`, `icons/*`,

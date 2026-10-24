@@ -121,7 +121,8 @@ export default defineConfig({
 			sections: { notion: 'Notion' }
 		}),
 		timers({ page: '/utils/timer' }),
-		offline(),
+		// Only the apps that are on are kept offline (#163).
+		offline({ byApp: true }),
 		update(),
 		changelog({ entries: notes }),
 		theme(),
