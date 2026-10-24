@@ -260,7 +260,10 @@ and never throws: missing or blocked IndexedDB reads as empty, and writes (inclu
 disk) return false. One database per app (`<prefix>blobs`) holds one object store keyed by
 `[collection, id]`, opened on the first call (decision 6). Other tabs hear about changes
 through a `BroadcastChannel`. A plugin wraps the backend with `app.blobs.layer((inner) =>
-backend)`, the async counterpart of decision 11, so sensitive collections can be encrypted. Blobs
+backend)`, the async counterpart of decision 11, so sensitive collections can be encrypted:
+`@xcwds/plugin-vault` seals every collection of a sensitive group in chunks (#149), with a random
+files' key that the passcode's key seals beside the vault's check value, so a new passcode
+re-seals that one record rather than every photo. Blobs
 stay out of backups (format unchanged): backing up collections is a later decision.
 `persist()` asks the browser not to evict the site's data but is never called automatically,
 since Firefox asks the user. "Clear data", a lock's reset and Settings' usage list count

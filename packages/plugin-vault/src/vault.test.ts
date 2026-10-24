@@ -360,6 +360,96 @@ describe('the vault', () => {
 	});
 });
 
+/** Seals `text` with a files' key, and opens it with another, to tell whether they're the same. */
+async function sameKey(a: CryptoKey, b: CryptoKey) {
+	const iv = new Uint8Array(12);
+	const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, a, new Uint8Array([1, 2, 3]));
+	try {
+		await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, b, data);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+const FILES = 'app:vault:files';
+
+describe("the files' key (#149)", () => {
+	it('is made when the vault is turned on, kept sealed, and only handed out while unlocked', async () => {
+		const s = setup();
+		expect(s.vault.fileKey()).toBeUndefined();
+		const salt = newSalt();
+		const k = await key(salt);
+		expect(await s.vault.enable(k, salt)).toBe(true);
+		const files = s.vault.fileKey()!;
+		expect(files.extractable).toBe(false);
+		expect(s.adapter.get(FILES)).toContain('"iv"');
+		s.vault.lock();
+		expect(s.vault.fileKey()).toBeUndefined();
+
+		const next = setup(s.adapter);
+		expect(await next.vault.unlock(k)).toBe(true);
+		expect(await sameKey(files, next.vault.fileKey()!)).toBe(true);
+	});
+
+	it('stays the same across a new passcode', async () => {
+		const { adapter, vault, salt } = await enabled();
+		const before = vault.fileKey()!;
+		const salt2 = newSalt();
+		const key2 = await key(salt2, '654321');
+		expect(await vault.rekey(key2, salt2)).toBe(true);
+		expect(await sameKey(before, vault.fileKey()!)).toBe(true);
+		const next = setup(adapter);
+		expect(await next.vault.unlock(await key(salt))).toBe(false);
+		expect(await next.vault.unlock(key2)).toBe(true);
+		expect(await sameKey(before, next.vault.fileKey()!)).toBe(true);
+	});
+
+	it("won't unlock or rekey when its record was changed", async () => {
+		const { adapter, vault, salt } = await enabled();
+		const k = await key(salt);
+		vault.lock();
+		const saved = adapter.get(FILES)!;
+		const changed = JSON.parse(saved) as { data: string };
+		changed.data = changed.data.replace(/^./, (c) => (c === 'A' ? 'B' : 'A'));
+		adapter.set(FILES, JSON.stringify(changed));
+		const next = setup(adapter);
+		expect(await next.vault.unlock(k)).toBe(false);
+		expect(next.vault.state.locked).toBe(true);
+
+		adapter.set(FILES, saved);
+		expect(await next.vault.unlock(k)).toBe(true);
+		adapter.set(FILES, JSON.stringify(changed));
+		const salt2 = newSalt();
+		expect(await next.vault.rekey(await key(salt2, '654321'), salt2)).toBe(false);
+		expect(next.vault.salt()).toBe(salt);
+	});
+
+	it('gets one at unlock when the vault was turned on without', async () => {
+		const { adapter, vault, salt } = await enabled();
+		vault.lock();
+		adapter.remove(FILES);
+		const next = setup(adapter);
+		expect(await next.vault.unlock(await key(salt))).toBe(true);
+		const made = next.vault.fileKey()!;
+		expect(adapter.get(FILES)).not.toBeNull();
+		const third = setup(adapter);
+		expect(await third.vault.unlock(await key(salt))).toBe(true);
+		expect(await sameKey(made, third.vault.fileKey()!)).toBe(true);
+	});
+
+	it('goes when the vault is turned off or dropped', async () => {
+		const a = await enabled();
+		expect(await a.vault.disable()).toBe(true);
+		expect(a.vault.fileKey()).toBeUndefined();
+		expect(a.adapter.get(FILES)).toBeNull();
+		const b = await enabled();
+		b.vault.drop();
+		expect(b.vault.fileKey()).toBeUndefined();
+		expect(b.adapter.get(FILES)).toBeNull();
+	});
+});
+
 describe('prefixed entries (#157)', () => {
 	it('seals every id of a sensitive prefixed entry, and lists them only while unlocked', async () => {
 		const adapter = memoryStorage();

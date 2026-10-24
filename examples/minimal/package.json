@@ -30,6 +30,7 @@
 		"@xcwds/plugin-timers": "workspace:*",
 		"@xcwds/plugin-tools": "workspace:*",
 		"@xcwds/plugin-update": "workspace:*",
+		"@xcwds/plugin-vault": "workspace:*",
 		"@xcwds/sveltekit": "workspace:*"
 	},
 	"devDependencies": {

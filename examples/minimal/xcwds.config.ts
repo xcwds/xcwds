@@ -16,6 +16,7 @@ import theme from '@xcwds/plugin-theme';
 import timers from '@xcwds/plugin-timers';
 import tools from '@xcwds/plugin-tools';
 import update from '@xcwds/plugin-update';
+import vault from '@xcwds/plugin-vault';
 import { changelog as notes } from './src/lib/changelog.js';
 
 export default defineConfig({
@@ -128,6 +129,8 @@ export default defineConfig({
 		// A passcode lock for private pages (the Journal), with its unlock screen at /unlock; a cover
 		// in the app switcher and no spellcheck in their fields.
 		lock(),
+		// Sensitive data (the Journal, photos, recordings) encrypted with the lock's passcode (#79).
+		vault(),
 		// The camera as `app.camera`, off while hidden or locked; /utils/camera shows `<Camera>`.
 		camera({ maxSide: 2048 }),
 		// QR codes made and read on the device; /utils/qr shows `<QrScanner>` and `<QrCode>`.
