@@ -80,6 +80,7 @@
 	async function add(event: SubmitEvent) {
 		event.preventDefault();
 		if (!notion || adding) return;
+		sourceNote = '';
 		const id = parseId(link);
 		if (!label.trim()) return void (sourceNote = 'Give the source a label.');
 		if (!id) return void (sourceNote = 'That isn’t a Notion link or id.');
@@ -93,8 +94,11 @@
 			let dataSource = chosen;
 			if (!dataSource) {
 				adding = true;
+				const asked = link;
 				const found = await notion.dataSources(id);
 				adding = false;
+				// The link or kind changed while Notion answered: this answer is for another database.
+				if (link !== asked || kind !== 'database') return;
 				if (!found.ok) return void (sourceNote = found.message);
 				if (found.dataSources.length === 0)
 					return void (sourceNote = 'That database has no data sources to read.');

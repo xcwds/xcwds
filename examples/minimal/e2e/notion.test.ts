@@ -48,7 +48,8 @@ const CORS = {
 	'access-control-allow-methods': 'GET, POST'
 };
 
-type Relay = { urls: string[]; down: boolean };
+/** `hold`, while set, delays answers about databases until it settles. */
+type Relay = { urls: string[]; down: boolean; hold?: Promise<void> };
 
 /** A relay that answers like Notion for the pages above, and fails while `down`. */
 async function mockRelay(context: BrowserContext): Promise<Relay> {
@@ -68,6 +69,7 @@ async function mockRelay(context: BrowserContext): Promise<Relay> {
 		if (request.headers()['authorization'] !== `Bearer ${TOKEN}`)
 			return json({ object: 'error', code: 'unauthorized', message: 'API token is invalid.' }, 401);
 		const path = new URL(request.url()).pathname;
+		if (path.startsWith('/v1/databases/')) await relay.hold;
 		const list = (results: unknown[]) => json({ results, has_more: false, next_cursor: null });
 		if (path === '/v1/users/me') return json({ object: 'user', id: 'bot', name: 'Agenda reader' });
 		if (path === `/v1/databases/${DB}`)
@@ -284,7 +286,21 @@ test('a database with several data sources asks which one to read', async ({ pag
 	await expect(page.getByTestId('source-note')).toHaveText('Give the source a label.');
 	expect(relay.urls.filter((u) => u.includes('/v1/databases/'))).toEqual([]);
 
+	// An answer that arrives after the link changed is dropped, not offered for the new link.
+	let release!: () => void;
+	relay.hold = new Promise((resolve) => (release = resolve));
 	await addSource(page, 'database', 'Agenda', DB_TWO);
+	await expect(page.getByRole('button', { name: 'Checking…' })).toBeVisible();
+	await page.getByLabel(/ link or id/).fill(DB);
+	release();
+	await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeEnabled();
+	await expect(page.getByLabel('Data source')).toHaveCount(0);
+	await expect(page.getByTestId('source-note')).toBeEmpty();
+	await expect(page.getByTestId('no-sources')).toBeVisible();
+	relay.hold = undefined;
+
+	await page.getByLabel(/ link or id/).fill(DB_TWO);
+	await page.getByRole('button', { name: 'Add', exact: true }).click();
 	await expect(page.getByTestId('source-note')).toHaveText(
 		'This database has several data sources. Choose one, then Add again.'
 	);
