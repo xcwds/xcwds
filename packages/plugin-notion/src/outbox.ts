@@ -15,7 +15,7 @@
  *   reached Notion before the connection dropped is looked for at the end of the page before it's
  *   sent again, so it isn't added twice. Ticks are checked against Notion's value anyway.
  *
- * No browser globals; `flush` takes the client and a `save` to call before each send.
+ * No browser globals; `flush` takes the client and an `update` that changes the saved outbox.
  */
 import { NotionError, type NotionClient, type NotionErrorKind, type RawBlock } from './api.js';
 import { plainText, richText, type Block, type NotionDocument } from './document.js';
@@ -225,7 +225,8 @@ export async function send(client: OutboxClient, item: OutboxItem): Promise<Send
 		if (item.kind === 'check') {
 			const block = await client.block(item.block);
 			if (block.type !== 'to_do' || block.archived === true || block.in_trash === true) {
-				return { status: 'failed', failure: { kind: 'not-shared', code: 'not_a_to_do' } };
+				// It was read fine, so it's gone from the page rather than not shared.
+				return { status: 'failed', failure: { kind: 'failed', code: 'not_a_to_do' } };
 			}
 			const current = checkedOf(block);
 			if (current === item.checked) return { status: 'sent' };
@@ -275,32 +276,51 @@ export type FlushResult = {
 };
 
 /**
- * Sends the queued changes in order, skipping failed ones, until one has to wait. `save` is called
- * with the outbox before each send (marked `attempted`) and after each answer, so a page closed
- * mid-send knows what may have gone.
+ * Applies `change` to the latest saved outbox, saves the result and returns it. Changes queued by
+ * the page while a flush runs are in the latest one, so they're kept (and sent on this flush).
  */
-export async function flush(
-	client: OutboxClient,
-	start: Outbox,
-	save: (outbox: Outbox) => void | Promise<void>
-): Promise<FlushResult> {
-	let outbox = start;
+export type OutboxUpdate = (change: (latest: Outbox) => Outbox) => Outbox | Promise<Outbox>;
+
+/** `outbox` with the item `id` replaced by `next(item)`, or removed when `next` returns nothing. */
+function replace(
+	outbox: Outbox,
+	id: string,
+	next: (item: OutboxItem) => OutboxItem | undefined
+): Outbox {
+	const items: OutboxItem[] = [];
+	for (const item of outbox.items) {
+		const kept = item.id === id ? next(item) : item;
+		if (kept) items.push(kept);
+	}
+	return { ...outbox, items };
+}
+
+/**
+ * Sends the queued changes in order, skipping failed ones, until one has to wait. Every step goes
+ * through `update`: marking a change `attempted` before it's sent (so a page closed mid-send knows
+ * what may have gone, and `enqueue` no longer cancels it) and recording each answer. A change
+ * discarded while it was being sent stays discarded.
+ */
+export async function flush(client: OutboxClient, update: OutboxUpdate): Promise<FlushResult> {
 	const result: Omit<FlushResult, 'outbox'> = { sent: [], conflicts: [], failed: [] };
-	const replace = (id: string, next?: OutboxItem) => {
-		outbox = {
-			...outbox,
-			items: next
-				? outbox.items.map((item) => (item.id === id ? next : item))
-				: outbox.items.filter((item) => item.id !== id)
-		};
-	};
-	for (const { id } of start.items) {
-		const queued = outbox.items.find((item) => item.id === id);
+	const tried = new Set<string>();
+	let outbox = await update((latest) => latest);
+	for (;;) {
+		const next = outbox.items.find((item) => !item.failed && !tried.has(item.id));
+		if (!next) break;
+		const id = next.id;
+		tried.add(id);
+		// As it was before this send: whether it may already be in Notion.
+		const before: { item?: OutboxItem } = {};
+		outbox = await update((latest) =>
+			replace(latest, id, (item) => {
+				before.item = item;
+				return { ...item, attempted: true };
+			})
+		);
+		const queued = before.item;
 		if (!queued || queued.failed) continue;
 		const item: OutboxItem = { ...queued, attempted: true };
-		replace(id, item);
-		await save(outbox);
-		// Whether it may already be in Notion is from before this send.
 		const answer = await send(client, queued);
 		if (answer.status === 'later') {
 			result.stopped = answer.error;
@@ -312,28 +332,26 @@ export async function flush(
 			const landed = !(status >= 400 && status < 500);
 			const { attempted: _attempted, ...rest } = item;
 			const failed = { ...(landed ? item : rest), failed: answer.failure } as OutboxItem;
-			replace(id, failed);
+			outbox = await update((latest) => replace(latest, id, () => failed));
 			result.failed.push(failed);
-		} else {
-			replace(id);
-			if (answer.status === 'conflict') result.conflicts.push({ item, checked: answer.checked });
-			else {
-				result.sent.push(item);
-				if (item.kind === 'check' && answer.edited !== undefined) {
-					const at = answer.edited;
-					outbox = {
-						written: { ...outbox.written, [item.block]: at },
-						// Later ticks of the same block come after this device's own edit.
-						items: outbox.items.map((later) =>
-							later.kind === 'check' && later.block === item.block && later.since < at
-								? { ...later, since: at }
-								: later
-						)
-					};
-				}
-			}
+			continue;
 		}
-		await save(outbox);
+		if (answer.status === 'conflict') result.conflicts.push({ item, checked: answer.checked });
+		else result.sent.push(item);
+		const at = answer.status === 'sent' && item.kind === 'check' ? answer.edited : undefined;
+		outbox = await update((latest) => {
+			const done = replace(latest, id, () => undefined);
+			if (at === undefined || item.kind !== 'check') return done;
+			return {
+				written: { ...done.written, [item.block]: at },
+				// Later ticks of the same block come after this device's own edit.
+				items: done.items.map((later) =>
+					later.kind === 'check' && later.block === item.block && later.since < at
+						? { ...later, since: at }
+						: later
+				)
+			};
+		});
 	}
 	return { outbox, ...result };
 }

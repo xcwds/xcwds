@@ -32,8 +32,10 @@ version your app installs, and it's never part of an app's bundle.
   `page_size` (1 to 100), each once.
 
 - **Two writes, only if you turn them on.** With `ALLOW_WRITES = "true"` in `[vars]`, it also
-  forwards ticking a to-do and adding a note to a page
-  ([#109](https://github.com/xcwds/xcwds/issues/109)), and nothing else that changes Notion:
+  forwards ticking a to-do and adding a note at the end of a page
+  ([#109](https://github.com/xcwds/xcwds/issues/109)), and nothing else that changes Notion. The
+  relay can't tell a page's id from a block's, so the second also adds paragraphs under any block
+  the token can edit (inside a toggle, say); that's still only what the token itself allows:
 
   | Request                         | Body, exactly                                                                                   |
   | ------------------------------- | ----------------------------------------------------------------------------------------------- |

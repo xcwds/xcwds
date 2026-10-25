@@ -30,7 +30,8 @@ So far it holds:
 - **`./outbox`** ([#109](https://github.com/xcwds/xcwds/issues/109), not wired into the plugin
   yet): changes waiting to be sent to Notion, ticking a to-do and adding a short note at the end
   of a page. `enqueue` adds one (a tick that undoes a waiting one cancels both), `applyOutbox`
-  shows the waiting changes on a copy, and `flush(client, outbox, save)` sends them in order. A
+  shows the waiting changes on a copy, and `flush(client, update)` sends them in order, each
+  step applied to the latest saved outbox so changes made meanwhile aren't lost. A
   tick Notion has the other way, edited there since the copy was downloaded, keeps Notion's and
   comes back as a conflict. No connection, rate limits and Notion's own errors keep the rest queued
   for later; a refusal (`4xx`) stays queued with its reason until `retry`. A note that may have

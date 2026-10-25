@@ -259,7 +259,7 @@ describe('send', () => {
 			const { client } = fakeNotion({ b1: block });
 			expect(await send(client, check(true))).toEqual({
 				status: 'failed',
-				failure: { kind: 'not-shared', code: 'not_a_to_do' }
+				failure: { kind: 'failed', code: 'not_a_to_do' }
 			});
 		}
 	});
@@ -315,14 +315,25 @@ describe('send', () => {
 	});
 });
 
+/** A saved outbox, as `update` sees it, and every outbox saved. */
+function store(start: Outbox) {
+	const state = { outbox: start, saved: [] as Outbox[] };
+	const update = (change: (latest: Outbox) => Outbox) => {
+		state.outbox = change(state.outbox);
+		state.saved.push(structuredClone(state.outbox));
+		return state.outbox;
+	};
+	return Object.assign(state, { update });
+}
+
 describe('flush', () => {
 	it('sends in order, saving before each send and after each answer', async () => {
 		const { client, children } = fakeNotion({ b1: todo('b1', false), b2: todo('b2', true) });
 		let outbox = add(emptyOutbox(), { kind: 'check', block: 'b1', checked: true });
 		outbox = add(outbox, { kind: 'note', text: 'Done' });
 		outbox = add(outbox, { kind: 'check', block: 'b2', checked: false });
-		const saved: Outbox[] = [];
-		const result = await flush(client, outbox, (next) => void saved.push(structuredClone(next)));
+		const saved = store(outbox);
+		const result = await flush(client, saved.update);
 		expect(result.sent.map((item) => item.id)).toEqual(outbox.items.map((item) => item.id));
 		expect(result).toMatchObject({ conflicts: [], failed: [], outbox: { items: [] } });
 		expect(result.stopped).toBeUndefined();
@@ -331,18 +342,57 @@ describe('flush', () => {
 			b1: Date.parse('2026-10-25T10:07:00.000Z'),
 			b2: Date.parse('2026-10-25T10:07:00.000Z')
 		});
-		// Before the first send, it's marked as attempted.
-		expect(saved[0]!.items[0]).toMatchObject({ attempted: true });
-		expect(saved).toHaveLength(6);
+		expect(saved.outbox).toEqual(result.outbox);
+		// Before the first send, it's marked as attempted; then once before and once after each.
+		expect(saved.saved[1]!.items[0]).toMatchObject({ attempted: true });
+		expect(saved.saved).toHaveLength(7);
+	});
+
+	it('keeps and sends changes made while it runs, and leaves discarded ones out', async () => {
+		const { client, children } = fakeNotion({ b1: todo('b1', false) });
+		const saved = store(add(emptyOutbox(), { kind: 'note', text: 'First' }));
+		// While the first note is on its way, a to-do is ticked and another note added.
+		client.appendParagraphs.mockImplementationOnce(async (_id, paragraphs) => {
+			saved.update((latest) => add(latest, { kind: 'check', block: 'b1', checked: true }));
+			saved.update((latest) => add(latest, { kind: 'note', text: 'Second' }));
+			children.push(...paragraphs.map(para));
+			return { results: [], has_more: false, next_cursor: null };
+		});
+		const result = await flush(client, saved.update);
+		expect(result.sent.map((item) => item.kind)).toEqual(['note', 'check', 'note']);
+		expect(children.map((block) => block.id)).toEqual(['p-First', 'p-Second']);
+		expect(saved.outbox.items).toEqual([]);
+
+		// One discarded while it was being sent stays discarded, whatever the answer.
+		const other = store(add(emptyOutbox(), { kind: 'note', text: 'Oops' }));
+		const id = other.outbox.items[0]!.id;
+		client.appendParagraphs.mockImplementationOnce(async () => {
+			other.update((latest) => discard(latest, id));
+			throw new NotionError('unauthorized', 401);
+		});
+		const refused = await flush(client, other.update);
+		expect(refused.failed).toHaveLength(1);
+		expect(other.outbox.items).toEqual([]);
+		// And a tick waiting to be sent can't be cancelled by an undo once it's on its way.
+		const tick = store(add(emptyOutbox(), { kind: 'check', block: 'b1', checked: false }));
+		client.block.mockImplementationOnce(async (blockId) => {
+			tick.update((latest) => add(latest, { kind: 'check', block: 'b1', checked: true }));
+			return todo(blockId, true);
+		});
+		const undone = await flush(client, tick.update);
+		expect(undone.sent.map((item) => (item.kind === 'check' ? item.checked : null))).toEqual([
+			false,
+			true
+		]);
 	});
 
 	it("takes a tick right after this device's own for the same block as no conflict", async () => {
 		const { client, blocks } = fakeNotion({ b1: todo('b1', false) });
 		let outbox = add(emptyOutbox(), { kind: 'check', block: 'b1', checked: true });
-		outbox = (await flush(client, outbox, () => {})).outbox;
+		outbox = (await flush(client, store(outbox).update)).outbox;
 		// Unticked again before the copy was downloaded again.
 		outbox = add(outbox, { kind: 'check', block: 'b1', checked: false }, FETCHED + 2 * MINUTE);
-		const result = await flush(client, outbox, () => {});
+		const result = await flush(client, store(outbox).update);
 		expect(result.conflicts).toEqual([]);
 		expect(blocks.b1).toMatchObject({ to_do: { checked: false } });
 	});
@@ -353,7 +403,7 @@ describe('flush', () => {
 		let outbox = add(emptyOutbox(), { kind: 'check', block: 'b1', checked: true });
 		outbox = add(outbox, { kind: 'note', text: 'Done' });
 		outbox = add(outbox, { kind: 'note', text: 'Later' });
-		const result = await flush(client, outbox, () => {});
+		const result = await flush(client, store(outbox).update);
 		expect(result.sent).toHaveLength(1);
 		expect(result.stopped).toMatchObject({ kind: 'offline' });
 		expect(result.outbox.items).toMatchObject([
@@ -362,7 +412,7 @@ describe('flush', () => {
 		]);
 		expect(result.outbox.items[1]).not.toHaveProperty('attempted');
 		// Next time, the note that may have gone is looked for before it's sent.
-		const again = await flush(client, result.outbox, () => {});
+		const again = await flush(client, store(result.outbox).update);
 		expect(client.allChildren).toHaveBeenCalledOnce();
 		expect(again.sent).toHaveLength(2);
 	});
@@ -373,7 +423,7 @@ describe('flush', () => {
 		let outbox = add(emptyOutbox(), { kind: 'check', block: 'b1', checked: true });
 		outbox = add(outbox, { kind: 'note', text: 'Refused' });
 		outbox = add(outbox, { kind: 'note', text: 'Fine' });
-		const result = await flush(client, outbox, () => {});
+		const result = await flush(client, store(outbox).update);
 		expect(result.conflicts).toMatchObject([{ item: { block: 'b1' }, checked: false }]);
 		expect(result.failed).toMatchObject([{ text: 'Refused', failed: { kind: 'unauthorized' } }]);
 		expect(result.sent).toMatchObject([{ text: 'Fine' }]);
@@ -381,11 +431,14 @@ describe('flush', () => {
 		expect(result.outbox.items).toHaveLength(1);
 		expect(result.outbox.items[0]).not.toHaveProperty('attempted');
 		const calls = client.appendParagraphs.mock.calls.length;
-		const again = await flush(client, result.outbox, () => {});
+		const again = await flush(client, store(result.outbox).update);
 		expect(client.appendParagraphs).toHaveBeenCalledTimes(calls);
 		expect(again.outbox).toEqual(result.outbox);
 		// Until the person retries it.
-		const retried = await flush(client, retry(again.outbox, again.outbox.items[0]!.id), () => {});
+		const retried = await flush(
+			client,
+			store(retry(again.outbox, again.outbox.items[0]!.id)).update
+		);
 		expect(retried.sent).toHaveLength(1);
 	});
 });
