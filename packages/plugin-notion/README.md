@@ -70,8 +70,8 @@ So far it holds:
     afterwards. `outbox()` lists what's waiting (a change Notion refused has `failed`, kept until
     `retry(id)` or `discard(id)`), `send()` sends now and says what happened, `sending()` says
     whether a send runs, and `conflicts()` lists the ticks Notion had the other way, edited there
-    since, whose Notion value stays (`clearConflicts()` once shown). The pages don't offer these
-    yet.
+    since, whose Notion value stays (`clearConflicts()` once shown). `<NotionView>` offers them
+    (below).
 
   Saved data: the token (`app:notion:token`, its own "Notion connection" group, personal, never
   in backups), the sources (in backups), the copies (personal, out of backups) and their images
@@ -90,13 +90,16 @@ So far it holds:
 - **`<NotionDocument document={copy} />`** (`./NotionDocument.svelte`): draws one saved copy.
   The icon and title come first, as an `<h2>`, since the shell's header holds the page's `<h1>`.
   Then come the properties as a short list, then the blocks. Notion's headings 1–3 become
-  `<h3>`–`<h5>`. It draws paragraphs, nested bulleted and numbered lists, to-dos (read-only
-  checkboxes), toggles and toggle headings, quotes, callouts, code, dividers, tables with header
+  `<h3>`–`<h5>`. It draws paragraphs, nested bulleted and numbered lists, to-dos
+  (checkboxes), toggles and toggle headings, quotes, callouts, code, dividers, tables with header
   rows and columns, child pages and links to pages (by title), bookmarks and embeds (as links),
   equations (as their source) and columns (stacked on phones). Bold, italic, strikethrough,
   underline, code and Notion's colours carry over, in light and dark mode. Saved images show
   from the device, with their caption, when you pass `image`
-  (`<NotionDocument document={copy} image={app.notion.image} />`, as `<NotionView>` does). An
+  (`<NotionDocument document={copy} image={app.notion.image} />`, as `<NotionView>` does). To-dos
+  are read-only unless you pass `check(block, checked)`, which answers whether the tick was kept
+  (`<NotionView>` passes one with `writes`; a to-do saved before to-dos kept their id stays
+  read-only). An
   image from another site is a link that's never loaded, and one that wasn't saved says why.
   Files, PDFs, video and audio show a placeholder. Anything else says
   "Not shown here" with an Open in Notion link. Text is always text, never HTML. Links keep only
@@ -112,7 +115,11 @@ So far it holds:
   the refresh setting, and the saved copy stays in view offline or when a download fails. A
   "newest" source whose page isn't from today says "No newer page yet", so yesterday's agenda
   isn't taken for today's. The build entry registers `<page>/view` (title "Notion page", private,
-  `wide`).
+  `wide`). With `writes` ([#109](https://github.com/xcwds/xcwds/issues/109)), its to-dos can be
+  ticked and "Add a note" adds plain text at the end of the page; both show on the copy at once.
+  Under it, "Waiting to send" lists the changes not in Notion yet (offline ones are sent when the
+  connection is back), with why Notion refused one and Retry and Discard, and a tick Notion had
+  the other way, edited there since the download, says that Notion's stays.
 
 - **`<NotionSources />`** (`./NotionSources.svelte`): the sources page, at `page`. Render it
   from that route's file inside `<main class="page-narrow">`. It connects (setup steps, a token
@@ -121,12 +128,15 @@ So far it holds:
   first), and adds a source: one page, the newest page in a database (newest by creation or by a
   date property, optionally only titles containing some text) or the newest child page of a
   page, from a Notion link or id. A database with several data sources asks which one to read.
-  Each source's label links to its copy at `<page>/view`. `page` is the app's to list (as a
+  Each source's label links to its copy at `<page>/view`. With `writes`, the setup steps and the
+  connection name the capabilities the integration needs ("Update content" to tick, "Insert
+  content" to add notes), each source says how many of its changes are waiting to be sent, and
+  Disconnect warns that unsent changes go too. `page` is the app's to list (as a
   tool, say), or pass `register: true` and the plugin registers it (title "Notion", private,
   `narrow`).
 
 The example app's base-path build runs the plugin at `/utils/notion` (`<NotionSources>`), with
-`/utils/notion/view` for one copy, and e2e tests against a mocked relay.
+`/utils/notion/view` for one copy and `writes` on, and e2e tests against a mocked relay.
 
 `xcwds add notion` (from [`@xcwds/create`](../create)) writes both pages, `/notion` with
 `<NotionSources>` and `/notion/view` with `<NotionView>`, a Notion tab, the styles and

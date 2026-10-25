@@ -225,6 +225,13 @@ one plugin that contacts a server, and only when someone connects it and downloa
   the app has `@xcwds/plugin-vault` and a passcode is set: the token, the copies and the images
   are `sensitive`, so the vault encrypts them ([#79](https://github.com/xcwds/xcwds/issues/79)). Use
   an integration with "Read content" only, shared with just the pages you want on the device.
+- **Changes, only when the app turns them on** (`writes`,
+  [#109](https://github.com/xcwds/xcwds/issues/109)): ticking a to-do on a saved page, or adding a
+  note at its end, sends that tick or that text to Notion, and nothing else. It needs the relay's
+  deployer to allow those two writes, and an integration with "Update content" and "Insert
+  content" as well, so only give it those if you want to make changes from the app. Changes made
+  offline wait on the device (personal, never in backups, so a restored one can't reach Notion
+  twice), and Disconnect drops the ones not sent yet.
 
 ## Plugins are trusted code
 

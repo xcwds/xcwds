@@ -3,7 +3,8 @@
 	 * A saved page's blocks (#107), drawn from the plugin's own format only. Text is always text
 	 * (never `{@html}`), and blocks that aren't drawn here say so, with a link to the page in Notion.
 	 * Saved images are read with `image` (`app.notion.image`); images from outside Notion are links,
-	 * never loaded.
+	 * never loaded. To-dos are read-only unless `check` is given (#109): ticking one calls it with the
+	 * block's id, and a `false` answer puts the box back.
 	 */
 	import Blocks from './Blocks.svelte';
 	import NotionImage from './NotionImage.svelte';
@@ -22,12 +23,19 @@
 	let {
 		blocks,
 		url,
-		image
+		image,
+		check
 	}: {
 		blocks: readonly Block[];
 		url?: string | undefined;
 		image?: ((id: string) => Promise<Blob | undefined>) | undefined;
+		check?: ((block: string, checked: boolean) => boolean) | undefined;
 	} = $props();
+
+	function ticked(id: string, event: Event) {
+		const box = event.currentTarget as HTMLInputElement;
+		if (check && !check(id, box.checked)) box.checked = !box.checked;
+	}
 </script>
 
 <!-- Every link here leaves the app (Notion's own links, checked by `safeHref`), so it isn't a route to resolve. -->
@@ -35,7 +43,7 @@
 {#snippet children(block: Block)}
 	{#if 'children' in block && block.children?.length}
 		<div class="mt-1 flex flex-col gap-2 ps-6">
-			<Blocks blocks={block.children} {url} {image} />
+			<Blocks blocks={block.children} {url} {image} {check} />
 		</div>
 	{/if}
 {/snippet}
@@ -91,7 +99,17 @@
 		{:else if block.type === 'todo'}
 			<div>
 				<label class="flex min-h-11 items-start gap-2 py-2.5 {colorClass(block.color)}">
-					<input type="checkbox" class="mt-1 size-4 shrink-0" checked={block.checked} disabled />
+					{#if check && block.id}
+						{@const id = block.id}
+						<input
+							type="checkbox"
+							class="mt-1 size-4 shrink-0"
+							checked={block.checked}
+							onchange={(event) => ticked(id, event)}
+						/>
+					{:else}
+						<input type="checkbox" class="mt-1 size-4 shrink-0" checked={block.checked} disabled />
+					{/if}
 					<span class={block.checked ? 'line-through opacity-70' : ''}
 						><RichText runs={block.text} /></span
 					>
@@ -183,7 +201,9 @@
 		{:else if block.type === 'columns'}
 			<div class="grid gap-4 md:auto-cols-fr md:grid-flow-col">
 				{#each block.columns as column, c (c)}
-					<div class="flex min-w-0 flex-col gap-2"><Blocks blocks={column} {url} {image} /></div>
+					<div class="flex min-w-0 flex-col gap-2">
+						<Blocks blocks={column} {url} {image} {check} />
+					</div>
 				{/each}
 			</div>
 		{:else if block.type === 'image'}

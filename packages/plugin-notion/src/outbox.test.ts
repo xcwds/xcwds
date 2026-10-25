@@ -1,18 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NotionError, type RawBlock } from './api.js';
-import { DOCUMENT_VERSION, type NotionDocument } from './document.js';
+import { DOCUMENT_VERSION, type Block, type NotionDocument } from './document.js';
 import {
 	NOTE_PARAGRAPHS,
 	PARAGRAPH_LENGTH,
 	applyOutbox,
+	conflictMessage,
+	describeChange,
 	discard,
 	emptyOutbox,
 	enqueue,
+	failureMessage,
 	flush,
 	noteParagraphs,
 	parseOutbox,
 	retry,
 	send,
+	todoName,
+	todoText,
 	type Outbox,
 	type OutboxClient,
 	type OutboxItem
@@ -476,5 +481,80 @@ describe('parseOutbox', () => {
 		]) {
 			expect(parseOutbox(bad), JSON.stringify(bad)).toBeUndefined();
 		}
+	});
+});
+
+describe('describing changes for a page', () => {
+	const blocks: Block[] = [
+		{ type: 'paragraph', text: [{ text: 'Intro' }] },
+		{
+			type: 'bulleted',
+			text: [{ text: 'List' }],
+			children: [{ type: 'todo', id: 'deep', text: [{ text: 'Feed the dog' }], checked: false }]
+		},
+		{
+			type: 'columns',
+			columns: [[], [{ type: 'todo', id: 'col', text: [{ text: 'Water plants' }], checked: true }]]
+		},
+		{ type: 'todo', id: 'long', text: [{ text: 'x'.repeat(80) }], checked: false }
+	];
+	const check = (block: string, checked: boolean): OutboxItem => ({
+		id: 'i',
+		source: 's1',
+		page: PAGE,
+		queuedAt: 0,
+		kind: 'check',
+		block,
+		checked,
+		since: 0
+	});
+
+	it('finds a to-do’s text at any depth', () => {
+		expect(todoText(blocks, 'deep')).toBe('Feed the dog');
+		expect(todoText(blocks, 'col')).toBe('Water plants');
+		expect(todoText(blocks, 'gone')).toBeUndefined();
+		expect(todoName(blocks, 'gone')).toBe('a to-do');
+	});
+
+	it('names ticks, unticks and notes, cut short', () => {
+		expect(describeChange(check('deep', true), blocks)).toBe('Tick “Feed the dog”');
+		expect(describeChange(check('col', false), blocks)).toBe('Untick “Water plants”');
+		expect(describeChange(check('long', true), blocks)).toBe(`Tick “${'x'.repeat(60)}…”`);
+		expect(describeChange(check('gone', true), blocks)).toBe('Tick a to-do');
+		const note = (text: string): OutboxItem => ({
+			id: 'n',
+			source: 's1',
+			page: PAGE,
+			queuedAt: 0,
+			kind: 'note',
+			text
+		});
+		expect(describeChange(note('Call the vet'))).toBe('Note: “Call the vet”');
+		expect(describeChange(note('Call the vet\nAt 5'))).toBe('Note: “Call the vet…”');
+	});
+
+	it('says a tick Notion had the other way keeps Notion’s, naming the to-do if it can', () => {
+		expect(conflictMessage(check('deep', true), false, blocks)).toBe(
+			'The to-do “Feed the dog” was changed in Notion since this copy was downloaded, so Notion’s stays: not ticked.'
+		);
+		// Gone from the copy downloaded since: no name, and no "The to-do a to-do".
+		expect(conflictMessage(check('gone', false), true, blocks)).toBe(
+			'A to-do was changed in Notion since this copy was downloaded, so Notion’s stays: ticked.'
+		);
+	});
+
+	it('says why a change was refused, without Notion’s own text', () => {
+		expect(failureMessage({ kind: 'failed', code: 'not_a_to_do' })).toBe(
+			'This to-do isn’t on the page in Notion any more.'
+		);
+		expect(failureMessage({ kind: 'failed', status: 403, code: 'relay_forbidden' })).toContain(
+			'ALLOW_WRITES'
+		);
+		expect(
+			failureMessage({ kind: 'not-shared', status: 403, code: 'restricted_resource' })
+		).toContain('“Update content” and “Insert content”');
+		expect(failureMessage({ kind: 'unauthorized', status: 401 })).toBe(
+			new NotionError('unauthorized').message
+		);
 	});
 });

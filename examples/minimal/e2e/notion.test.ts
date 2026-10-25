@@ -2,7 +2,8 @@
 // `build:base`): /utils/notion is `<NotionSources>`, which connects, adds each kind of source and
 // downloads it through the relay, mocked here with route interception; each copy opens at
 // /utils/notion/view (`<NotionView>`). The token never reaches a URL or a backup. Images Notion
-// hosts come through the relay's `/file` and stay on the device (#108).
+// hosts come through the relay's `/file` and stay on the device (#108). With `writes` (#109), to-dos
+// can be ticked and notes added, offline too, and they reach Notion once.
 import {
 	expect,
 	test,
@@ -62,23 +63,58 @@ const TITLES: Record<string, string> = {
 const CORS = {
 	'access-control-allow-origin': '*',
 	'access-control-allow-headers': 'authorization, notion-version, content-type',
-	'access-control-allow-methods': 'GET, POST'
+	'access-control-allow-methods': 'GET, POST, PATCH'
 };
+
+/** The "Buy milk" to-do on a page. */
+const todoOf = (page: string) => `${page.slice(0, -4)}bbbb`;
 
 /**
  * `hold`, while set, delays answers about databases until it settles. `files` records the
- * headers each `/file` request came with.
+ * headers each `/file` request came with. `todos` is each to-do as Notion has it (ticked, and
+ * when it was last edited), `notes` the paragraphs added to each page, and `writes` every write
+ * that reached Notion; while `refuseWrites` is set the relay refuses them, as it does without
+ * `ALLOW_WRITES`.
  */
 type Relay = {
 	urls: string[];
 	down: boolean;
 	hold?: Promise<void>;
 	files: Record<string, string>[];
+	todos: Record<string, { checked: boolean; edited: string }>;
+	notes: Record<string, string[]>;
+	writes: { method: string; path: string; body: unknown }[];
+	refuseWrites: boolean;
 };
 
 /** A relay that answers like Notion for the pages above, and fails while `down`. */
 async function mockRelay(context: BrowserContext): Promise<Relay> {
-	const relay: Relay = { urls: [], down: false, files: [] };
+	const relay: Relay = {
+		urls: [],
+		down: false,
+		files: [],
+		todos: {},
+		notes: {},
+		writes: [],
+		refuseWrites: false
+	};
+	const todo = (id: string) =>
+		relay.todos[id] ?? { checked: true, edited: '2026-10-01T08:00:00.000Z' };
+	const todoBlock = (id: string) => ({
+		object: 'block',
+		id,
+		type: 'to_do',
+		has_children: false,
+		last_edited_time: todo(id).edited,
+		to_do: { rich_text: [{ plain_text: 'Buy milk' }], checked: todo(id).checked }
+	});
+	const noteBlock = (page: string, text: string, i: number) => ({
+		object: 'block',
+		id: `${page.slice(0, -4)}${String(i).padStart(4, '0')}`,
+		type: 'paragraph',
+		has_children: false,
+		paragraph: { rich_text: [{ plain_text: text }] }
+	});
 	await context.route(`${RELAY}/**`, async (route: Route) => {
 		const request = route.request();
 		if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
@@ -104,6 +140,29 @@ async function mockRelay(context: BrowserContext): Promise<Relay> {
 		if (path.startsWith('/v1/databases/')) await relay.hold;
 		const list = (results: unknown[]) => json({ results, has_more: false, next_cursor: null });
 		if (path === '/v1/users/me') return json({ object: 'user', id: 'bot', name: 'Agenda reader' });
+		if (request.method() === 'PATCH') {
+			if (relay.refuseWrites)
+				return json(
+					{ object: 'error', code: 'relay_forbidden', message: 'Not a write the relay forwards.' },
+					403
+				);
+			const body = request.postDataJSON();
+			relay.writes.push({ method: 'PATCH', path, body });
+			const appendTo = /^\/v1\/blocks\/(.+)\/children$/.exec(path)?.[1];
+			if (appendTo) {
+				const texts = (
+					body.children as { paragraph: { rich_text: { text: { content: string } }[] } }[]
+				).map((child) => child.paragraph.rich_text[0]!.text.content);
+				const before = relay.notes[appendTo] ?? [];
+				relay.notes[appendTo] = [...before, ...texts];
+				return list(texts.map((text, i) => noteBlock(appendTo, text, before.length + i)));
+			}
+			const id = /^\/v1\/blocks\/([^/]+)$/.exec(path)![1]!;
+			relay.todos[id] = { checked: body.to_do.checked, edited: new Date().toISOString() };
+			return json(todoBlock(id));
+		}
+		const one = /^\/v1\/blocks\/([^/]+)$/.exec(path)?.[1];
+		if (one && one.endsWith('bbbb')) return json(todoBlock(one));
 		if (path === `/v1/databases/${DB}`)
 			return json({ object: 'database', id: DB, data_sources: [{ id: DS, name: 'Agenda' }] });
 		if (path === `/v1/databases/${DB_TWO}`)
@@ -148,13 +207,7 @@ async function mockRelay(context: BrowserContext): Promise<Relay> {
 						]
 					}
 				},
-				{
-					object: 'block',
-					id: `${blocks.slice(0, -4)}bbbb`,
-					type: 'to_do',
-					has_children: false,
-					to_do: { rich_text: [{ plain_text: 'Buy milk' }], checked: true }
-				},
+				todoBlock(todoOf(blocks)),
 				{
 					object: 'block',
 					id: `${blocks.slice(0, -4)}cccc`,
@@ -183,7 +236,8 @@ async function mockRelay(context: BrowserContext): Promise<Relay> {
 								image: { type: 'external', external: { url: EXTERNAL }, caption: [] }
 							}
 						]
-					: [])
+					: []),
+				...(relay.notes[blocks] ?? []).map((text, i) => noteBlock(blocks, text, i))
 			]);
 		return json({ object: 'error', code: 'object_not_found' }, 404);
 	});
@@ -289,7 +343,8 @@ test('connects, downloads each kind of source, keeps copies when the relay fails
 	await expect(copy.getByText('a script')).toBeVisible();
 	await expect(copy.getByRole('link', { name: 'a script' })).toHaveCount(0);
 	await expect(copy.getByRole('checkbox', { name: 'Buy milk' })).toBeChecked();
-	await expect(copy.getByRole('checkbox', { name: 'Buy milk' })).toBeDisabled();
+	// The example app has `writes` on, so it can be ticked.
+	await expect(copy.getByRole('checkbox', { name: 'Buy milk' })).toBeEnabled();
 	// The image Notion hosts came through the relay without the token, and shows from the device;
 	// the one from another site is only a link.
 	await expectImage(copy);
@@ -417,6 +472,106 @@ test('a backup carries the sources but never the token or the copies', async ({
 	await expect(page.getByRole('heading', { name: 'Notion' })).toBeVisible();
 	const more = page.getByRole('button', { name: 'More Download Notion pages again after' });
 	await expect(more.locator('xpath=preceding-sibling::output')).toHaveText('30 min');
+});
+
+test('ticks and notes made offline wait on the device, then reach Notion once (#109)', async ({
+	page,
+	context
+}) => {
+	const relay = await mockRelay(context);
+	const TODO = todoOf(PAGE);
+	await gotoHydrated(page, url('/utils/notion'));
+	// The setup names the capabilities writes need.
+	await expect(page.getByText('“Update content” to tick to-dos')).toBeVisible();
+	await connect(page, TOKEN);
+	await expect(page.getByTestId('notion-capabilities')).toContainText('“Insert content”');
+	await addSource(page, 'page', 'Reading', PAGE);
+	await expect(source(page, 'Reading').getByTestId('source-status')).toHaveText(/^Downloaded /);
+	const view = await openCopy(page, 'Reading');
+	const milk = view.getByRole('checkbox', { name: 'Buy milk' });
+	await expect(milk).toBeChecked();
+	const items = page.getByTestId('notion-outbox-item');
+
+	// Offline: the tick and the note show at once and wait on the device.
+	relay.down = true;
+	await context.setOffline(true);
+	await milk.uncheck();
+	await expect(milk).not.toBeChecked();
+	await page.getByLabel('Add a note').fill('Call the vet\n\nAt 5');
+	await page.getByRole('button', { name: 'Add note' }).click();
+	await expect(page.getByLabel('Add a note')).toHaveValue('');
+	await expect(page.getByTestId('notion-document')).toContainText('Call the vet');
+	await expect(items).toHaveText([/Untick “Buy milk”/, /Note: “Call the vet…”/]);
+	await expect(page.getByTestId('notion-outbox-status')).toHaveText(
+		'Sent when the connection is back, or with Refresh.'
+	);
+	expect(relay.writes).toEqual([]);
+	expect(await auditTapTargets(page)).toEqual([]);
+
+	// The sources page counts them, and Disconnect warns they'd be dropped.
+	await backToSources(page);
+	await expect(source(page, 'Reading').getByTestId('source-waiting')).toHaveText(
+		'2 changes waiting to send.'
+	);
+	await page.getByRole('button', { name: 'Disconnect…' }).click();
+	await expect(page.getByText('drops the changes not sent to Notion yet')).toBeVisible();
+	await page.getByRole('button', { name: 'Cancel' }).click();
+
+	// Back online, both are sent, in order, once.
+	relay.down = false;
+	await context.setOffline(false);
+	await expect(source(page, 'Reading').getByTestId('source-waiting')).toHaveCount(0);
+	expect(relay.writes).toEqual([
+		{ method: 'PATCH', path: `/v1/blocks/${TODO}`, body: { to_do: { checked: false } } },
+		{
+			method: 'PATCH',
+			path: `/v1/blocks/${PAGE}/children`,
+			body: {
+				children: ['Call the vet', 'At 5'].map((content) => ({
+					object: 'block',
+					type: 'paragraph',
+					paragraph: { rich_text: [{ type: 'text', text: { content } }] }
+				}))
+			}
+		}
+	]);
+	// The copy downloaded again afterwards has them from Notion; a refresh sends nothing more.
+	await openCopy(page, 'Reading');
+	await expect(milk).not.toBeChecked();
+	await expect(page.getByTestId('notion-document')).toContainText('At 5');
+	await expect(items).toHaveCount(0);
+	await page.getByRole('button', { name: 'Refresh' }).click();
+	await expect(page.getByTestId('notion-view-status')).toHaveText(/^Downloaded /);
+	expect(relay.writes).toHaveLength(2);
+
+	// Someone edited it in Notion since: Notion's stays, and the page says so.
+	relay.todos[TODO] = { checked: false, edited: new Date(Date.now() + 2 * 60_000).toISOString() };
+	await milk.check();
+	await expect(page.getByTestId('notion-conflict')).toHaveText(
+		'The to-do “Buy milk” was changed in Notion since this copy was downloaded, so Notion’s stays: not ticked.'
+	);
+	await expect(milk).not.toBeChecked();
+	expect(relay.writes).toHaveLength(2);
+	await page.getByRole('button', { name: 'Dismiss' }).click();
+	await expect(page.getByTestId('notion-conflict')).toHaveCount(0);
+
+	// A write the relay refuses stays with why, until Retry or Discard.
+	relay.refuseWrites = true;
+	await page.getByLabel('Add a note').fill('Bring snacks');
+	await page.getByRole('button', { name: 'Add note' }).click();
+	await expect(page.getByTestId('notion-outbox-failed')).toContainText('ALLOW_WRITES');
+	relay.refuseWrites = false;
+	await items.getByRole('button', { name: 'Retry' }).click();
+	await expect(items).toHaveCount(0);
+	expect(relay.notes[PAGE]).toEqual(['Call the vet', 'At 5', 'Bring snacks']);
+	relay.refuseWrites = true;
+	await page.getByLabel('Add a note').fill('Never mind');
+	await page.getByRole('button', { name: 'Add note' }).click();
+	await expect(page.getByTestId('notion-outbox-failed')).toBeVisible();
+	await items.getByRole('button', { name: 'Discard' }).click();
+	await expect(items).toHaveCount(0);
+	await expect(page.getByTestId('notion-document')).not.toContainText('Never mind');
+	expect(relay.notes[PAGE]).toHaveLength(3);
 });
 
 test.describe('with the service worker', () => {
