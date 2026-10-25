@@ -298,6 +298,63 @@ describe('app.notion changes', () => {
 		await app.close();
 	});
 
+	it('sends a change made while a send was finishing', async () => {
+		const { api, app, state, fetch } = await setup();
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		const real = fetch.getMockImplementation()!;
+		// Holds the download a send starts afterwards, when the send is past its last change.
+		fetch.mockImplementation(async (input, init) => {
+			if (String(input).includes(`/v1/pages/${PAGE}`)) await gate;
+			return real(input, init);
+		});
+		api.change('s1', { kind: 'note', text: 'First' });
+		await vi.waitFor(() => expect(state.notes).toEqual(['First']));
+		api.change('s1', { kind: 'note', text: 'Second' });
+		release();
+		await vi.waitFor(() => expect(state.notes).toEqual(['First', 'Second']));
+		await vi.waitFor(() => expect(api.sending()).toBe(false));
+		expect(api.outbox()).toEqual([]);
+		await app.close();
+	});
+
+	it('shows a sent change from a download started after it, not one already running', async () => {
+		const { api, app, state, fetch, todo } = await setup();
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		const real = fetch.getMockImplementation()!;
+		let hold = true;
+		let held = false;
+		fetch.mockImplementation(async (input, init) => {
+			// Notion answers with the page as it is now, and the answer arrives later.
+			const answer = real(input, init);
+			const read = !init?.method || init.method === 'GET';
+			if (hold && read && String(input).includes(`/v1/blocks/${PAGE}/children`)) {
+				held = true;
+				await gate;
+			}
+			return answer;
+		});
+		// A download has read the page before the tick, and is still running when it's sent.
+		const before = api.refresh('s1', { force: true });
+		await vi.waitFor(() => expect(held).toBe(true));
+		api.change('s1', { kind: 'check', block: TODO, checked: true });
+		await vi.waitFor(() => expect(state.checked).toBe(true));
+		hold = false;
+		release();
+		await before;
+		await vi.waitFor(() => expect(api.sending()).toBe(false));
+		expect(api.outbox()).toEqual([]);
+		expect(todo()).toBe(true);
+		await app.close();
+	});
+
+	it('without writes, sending has nothing to do', async () => {
+		const { api, app } = await setup({}, { writes: false });
+		expect(await api.send()).toEqual({ sent: 0, conflicts: 0, failed: 0, waiting: 0 });
+		await app.close();
+	});
+
 	it('disconnecting clears the outbox; backups never carry it', async () => {
 		const { api, app, state } = await setup();
 		state.down = true;

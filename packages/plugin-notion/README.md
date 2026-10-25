@@ -27,8 +27,8 @@ So far it holds:
   among the saved images), `external` (a link to an image on another site) or `skipped` (why it
   isn't on the device). Notion's signed links to images are never kept. A to-do keeps its Notion
   block `id`, so it can be ticked.
-- **`./outbox`** ([#109](https://github.com/xcwds/xcwds/issues/109)): changes waiting to be sent to Notion, ticking a to-do and adding a short note at the end
-  of a page. `enqueue` adds one (a tick that undoes a waiting one cancels both), `applyOutbox`
+- **`./outbox`** ([#109](https://github.com/xcwds/xcwds/issues/109)): changes waiting to be
+  sent to Notion, ticking a to-do and adding a short note at the end of a page. `enqueue` adds one (a tick that undoes a waiting one cancels both), `applyOutbox`
   shows the waiting changes on a copy, and `flush(client, update)` sends them in order, each
   step applied to the latest saved outbox so changes made meanwhile aren't lost. A
   tick Notion has the other way, edited there since the copy was downloaded, keeps Notion's and

@@ -467,23 +467,34 @@ export function notionPlugin(env: NotionPluginEnv = {}) {
 				...(error ? failed(error) : {})
 			});
 
-			/** `send()`, and the sources it downloaded again. One at a time in this tab. */
-			function sendAll() {
-				if (!sendJob) {
-					sendJob = sendLocked().finally(() => {
-						sendJob = undefined;
-						notify();
-					});
-					notify();
+			/** A change was queued while a send ran, which may have been past it: send again after. */
+			let again = false;
+			/**
+			 * `send()`, and the sources it downloaded again. One at a time in this tab; `queued` says a
+			 * change was just queued, so a send already running is followed by another.
+			 */
+			function sendAll({ queued = false } = {}) {
+				if (sendJob) {
+					again ||= queued;
+					return sendJob;
 				}
+				sendJob = sendLocked().finally(() => {
+					sendJob = undefined;
+					if (again) {
+						again = false;
+						if (read(token) && waiting().length) void sendAll();
+					}
+					notify();
+				});
+				notify();
 				return sendJob;
 			}
 
 			async function sendLocked(): Promise<{ summary: SendSummary; refreshed: Set<string> }> {
 				const refreshed = new Set<string>();
+				if (!outboxEntry) return { summary: summarise(emptyOutbox()), refreshed };
 				const saved = read(token);
-				if (!outboxEntry || !saved)
-					return { summary: summarise(savedOutbox(), {}, 'not-connected'), refreshed };
+				if (!saved) return { summary: summarise(savedOutbox(), {}, 'not-connected'), refreshed };
 				if (!waiting().length) return { summary: summarise(savedOutbox()), refreshed };
 				const started = generation;
 				const job = async () => {
@@ -510,7 +521,13 @@ export function notionPlugin(env: NotionPluginEnv = {}) {
 				// What they changed is in Notion now (or Notion's stays): download those copies again.
 				for (const item of [...result.sent, ...result.conflicts.map((c) => c.item)])
 					refreshed.add(item.source);
-				await Promise.all([...refreshed].map((id) => fetchSource(id, true)));
+				// A download already running may have started before the write: wait, then start anew.
+				await Promise.all(
+					[...refreshed].map(async (id) => {
+						await running.get(id);
+						return fetchSource(id, true);
+					})
+				);
 				return {
 					summary: summarise(
 						result.outbox,
@@ -628,13 +645,13 @@ export function notionPlugin(env: NotionPluginEnv = {}) {
 						})
 					);
 					if (!app.storage.saveResult(outboxEntry, saved, { explicit: true })) return false;
-					if (read(token)) void sendAll();
+					if (read(token)) void sendAll({ queued: true });
 					return true;
 				},
 				retry(id) {
 					if (!outboxEntry) return false;
 					const { saved } = updateOutbox((latest) => retryItem(latest, id));
-					if (saved && read(token)) void sendAll();
+					if (saved && read(token)) void sendAll({ queued: true });
 					return saved;
 				},
 				discard(id) {
