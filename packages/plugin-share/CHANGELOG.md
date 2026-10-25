@@ -1,5 +1,19 @@
 # @xcwds/plugin-share
 
+## 0.7.0
+
+### Minor Changes
+
+- Needs `@xcwds/plugin-shell` 0.7 (peer range `^0.7.0`).
+- Needs `@xcwds/sveltekit` 0.7 (peer range `^0.7.0`).
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies [b3d3376]
+  - @xcwds/plugin-shell@0.7.0
+  - @xcwds/sveltekit@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes
