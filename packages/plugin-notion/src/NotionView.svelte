@@ -26,6 +26,8 @@
 	/** Undefined until the page has read the fragment, so the prerendered page matches. */
 	let id = $state<string>();
 	let version = $state(0);
+	/** Why the last tick wasn't kept; it belongs to the copy on show. */
+	let checkError = $state('');
 
 	$effect(() => {
 		const read = () => {
@@ -34,6 +36,7 @@
 			} catch {
 				id = '';
 			}
+			checkError = '';
 		};
 		read();
 		addEventListener('hashchange', read);
@@ -57,7 +60,6 @@
 		};
 	});
 
-	let checkError = $state('');
 	/** Ticks or unticks a to-do of the copy on show; false puts the box back. */
 	function check(block: string, checked: boolean) {
 		const ok = !!id && !!notion?.change(id, { kind: 'check', block, checked });
@@ -127,6 +129,7 @@
 				{notion}
 				source={source.id}
 				blocks={copy?.blocks ?? []}
+				hasCopy={!!copy}
 				{outbox}
 				{conflicts}
 				{sending}

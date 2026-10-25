@@ -2,7 +2,8 @@
 	/**
 	 * What `<NotionView>` shows under a copy with the `writes` option (#109): "Add a note", the
 	 * changes to this source still waiting to be sent (with why Notion refused one, Retry and
-	 * Discard), and the ticks Notion had the other way. `blocks` is the copy's, to name the to-dos.
+	 * Discard), and the ticks Notion had the other way. `blocks` is the copy's, to name the to-dos;
+	 * without a copy (`hasCopy` false) there's nothing to add a note to, so only the list shows.
 	 */
 	import type { AppNotion, NotionConflict, OutboxItem } from './client.js';
 	import type { Block } from './document.js';
@@ -11,13 +12,14 @@
 		describeChange,
 		failureMessage,
 		noteParagraphs,
-		todoName
+		conflictMessage
 	} from './outbox.js';
 
 	let {
 		notion,
 		source,
 		blocks,
+		hasCopy,
 		outbox,
 		conflicts,
 		sending,
@@ -26,6 +28,7 @@
 		notion: AppNotion;
 		source: string;
 		blocks: readonly Block[];
+		hasCopy: boolean;
 		outbox: OutboxItem[];
 		conflicts: NotionConflict[];
 		sending: boolean;
@@ -47,18 +50,14 @@
 		note = '';
 		noteError = '';
 	}
-
-	const ticked = (checked: boolean) => (checked ? 'ticked' : 'not ticked');
 </script>
 
 <div class="flex flex-col gap-4" data-testid="notion-changes">
 	{#if conflicts.length}
 		<div class="flex flex-col gap-2 rounded-xl border border-current/20 p-3" role="status">
 			{#each conflicts as conflict (conflict.item.id)}
-				{@const item = conflict.item}
 				<p data-testid="notion-conflict">
-					The to-do {item.kind === 'check' ? todoName(blocks, item.block) : ''} was changed in Notion
-					since this copy was downloaded, so Notion’s stays: {ticked(conflict.checked)}.
+					{conflictMessage(conflict.item, conflict.checked, blocks)}
 				</p>
 			{/each}
 			<button type="button" class="{button} self-start" onclick={() => notion.clearConflicts()}
@@ -67,19 +66,21 @@
 		</div>
 	{/if}
 
-	<form class="flex flex-col gap-2" onsubmit={addNote}>
-		<label class="flex flex-col gap-1">
-			Add a note
-			<textarea
-				class="min-h-11 rounded-xl border border-current/20 bg-transparent p-2"
-				rows="3"
-				bind:value={note}
-				oninput={() => (noteError = '')}></textarea>
-		</label>
-		<p class="text-sm opacity-70">Added at the end of the page in Notion, as plain text.</p>
-		<button class="{button} self-start" disabled={!note.trim()}>Add note</button>
-		<p data-testid="notion-note-error" role="status" class="empty:hidden">{noteError}</p>
-	</form>
+	{#if hasCopy}
+		<form class="flex flex-col gap-2" onsubmit={addNote}>
+			<label class="flex flex-col gap-1">
+				Add a note
+				<textarea
+					class="min-h-11 rounded-xl border border-current/20 bg-transparent p-2"
+					rows="3"
+					bind:value={note}
+					oninput={() => (noteError = '')}></textarea>
+			</label>
+			<p class="text-sm opacity-70">Added at the end of the page in Notion, as plain text.</p>
+			<button class="{button} self-start" disabled={!note.trim()}>Add note</button>
+			<p data-testid="notion-note-error" role="status" class="empty:hidden">{noteError}</p>
+		</form>
+	{/if}
 
 	{#if outbox.length}
 		<section class="flex flex-col gap-2" aria-labelledby="notion-outbox">

@@ -5,6 +5,7 @@ import {
 	NOTE_PARAGRAPHS,
 	PARAGRAPH_LENGTH,
 	applyOutbox,
+	conflictMessage,
 	describeChange,
 	discard,
 	emptyOutbox,
@@ -530,6 +531,16 @@ describe('describing changes for a page', () => {
 		});
 		expect(describeChange(note('Call the vet'))).toBe('Note: “Call the vet”');
 		expect(describeChange(note('Call the vet\nAt 5'))).toBe('Note: “Call the vet…”');
+	});
+
+	it('says a tick Notion had the other way keeps Notion’s, naming the to-do if it can', () => {
+		expect(conflictMessage(check('deep', true), false, blocks)).toBe(
+			'The to-do “Feed the dog” was changed in Notion since this copy was downloaded, so Notion’s stays: not ticked.'
+		);
+		// Gone from the copy downloaded since: no name, and no "The to-do a to-do".
+		expect(conflictMessage(check('gone', false), true, blocks)).toBe(
+			'A to-do was changed in Notion since this copy was downloaded, so Notion’s stays: ticked.'
+		);
 	});
 
 	it('says why a change was refused, without Notion’s own text', () => {

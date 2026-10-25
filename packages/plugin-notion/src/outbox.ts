@@ -391,6 +391,17 @@ export function describeChange(item: OutboxItem, blocks: readonly Block[] = []):
 	return `${item.checked ? 'Tick' : 'Untick'} ${todoName(blocks, item.block)}`;
 }
 
+/** What a page says about a tick Notion had the other way (`checked`, which stays). */
+export function conflictMessage(
+	item: OutboxItem,
+	checked: boolean,
+	blocks: readonly Block[] = []
+): string {
+	const text = item.kind === 'check' ? todoText(blocks, item.block) : undefined;
+	const what = text?.trim() ? `The to-do “${short(text)}”` : 'A to-do';
+	return `${what} was changed in Notion since this copy was downloaded, so Notion’s stays: ${checked ? 'ticked' : 'not ticked'}.`;
+}
+
 /** Why Notion (or the relay) refused a change, safe to show. */
 export function failureMessage(failure: OutboxFailure): string {
 	if (failure.code === 'not_a_to_do') return 'This to-do isn’t on the page in Notion any more.';
