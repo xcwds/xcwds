@@ -178,57 +178,60 @@ for (const { name, dir, base } of targets) {
 				expect(page.url()).toBe(url('/inbox'));
 			});
 
-			test('shared images stay on the device and are handed to the page once', async ({ page }) => {
-				test.skip(!base, 'Only the base-path build takes shared images.');
-				await gotoHydrated(page, url('/inbox'));
-				await waitForServiceWorker(page);
-				// The form Android's share sheet sends: a multipart POST to the target.
-				await page.evaluate((action) => {
-					const form = Object.assign(document.createElement('form'), {
-						id: 'share-sheet',
-						method: 'post',
-						enctype: 'multipart/form-data',
-						action
-					});
-					form.innerHTML =
-						'<input type="file" name="files" multiple><input name="text" value="secret note">';
-					document.body.append(form);
-				}, url('/inbox'));
-				await page.setInputFiles('#share-sheet input[type=file]', [
-					{ name: 'cat.png', mimeType: 'image/png', buffer: Buffer.from('not really a png') },
-					{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') }
-				]);
-				const before = server.requests.length;
-				const redirected = page.waitForResponse(
-					(r) => r.url() === url('/inbox') && r.status() === 303 && r.fromServiceWorker()
-				);
-				await page.evaluate(() =>
-					(document.getElementById('share-sheet') as HTMLFormElement).submit()
-				);
-				await redirected;
-				await expect(page.getByTestId('shared-file')).toHaveText('cat.png (image/png, 16 bytes)');
-				await expect(page.getByTestId('shared-skipped')).toHaveText('1 not kept');
-				await expect(page.getByTestId('shared')).toHaveText('secret note');
-				// Nothing reached the server: not the POST, nor the page it redirected to (precached).
-				expect(server.requests.slice(before)).not.toContain(`${base}/inbox`);
-				expect(page.url()).toBe(url('/inbox'));
-				// The inbox is empty once the page has the files.
-				const left = await page.evaluate(
-					() =>
-						new Promise<number>((resolve, reject) => {
-							const open = indexedDB.open('app:blobs');
-							open.onerror = () => reject(open.error);
-							open.onsuccess = () => {
-								const count = open.result
-									.transaction('blobs')
-									.objectStore('blobs')
-									.count(IDBKeyRange.bound(['app:share:inbox', ''], ['app:share:inbox', []]));
-								count.onsuccess = () => resolve(count.result);
-							};
-						})
-				);
-				expect(left).toBe(0);
-			});
+			// Only the base-path build takes shared images.
+			if (base)
+				test('shared images stay on the device and are handed to the page once', async ({
+					page
+				}) => {
+					await gotoHydrated(page, url('/inbox'));
+					await waitForServiceWorker(page);
+					// The form Android's share sheet sends: a multipart POST to the target.
+					await page.evaluate((action) => {
+						const form = Object.assign(document.createElement('form'), {
+							id: 'share-sheet',
+							method: 'post',
+							enctype: 'multipart/form-data',
+							action
+						});
+						form.innerHTML =
+							'<input type="file" name="files" multiple><input name="text" value="secret note">';
+						document.body.append(form);
+					}, url('/inbox'));
+					await page.setInputFiles('#share-sheet input[type=file]', [
+						{ name: 'cat.png', mimeType: 'image/png', buffer: Buffer.from('not really a png') },
+						{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') }
+					]);
+					const before = server.requests.length;
+					const redirected = page.waitForResponse(
+						(r) => r.url() === url('/inbox') && r.status() === 303 && r.fromServiceWorker()
+					);
+					await page.evaluate(() =>
+						(document.getElementById('share-sheet') as HTMLFormElement).submit()
+					);
+					await redirected;
+					await expect(page.getByTestId('shared-file')).toHaveText('cat.png (image/png, 16 bytes)');
+					await expect(page.getByTestId('shared-skipped')).toHaveText('1 not kept');
+					await expect(page.getByTestId('shared')).toHaveText('secret note');
+					// Nothing reached the server: not the POST, nor the page it redirected to (precached).
+					expect(server.requests.slice(before)).not.toContain(`${base}/inbox`);
+					expect(page.url()).toBe(url('/inbox'));
+					// The inbox is empty once the page has the files.
+					const left = await page.evaluate(
+						() =>
+							new Promise<number>((resolve, reject) => {
+								const open = indexedDB.open('app:blobs');
+								open.onerror = () => reject(open.error);
+								open.onsuccess = () => {
+									const count = open.result
+										.transaction('blobs')
+										.objectStore('blobs')
+										.count(IDBKeyRange.bound(['app:share:inbox', ''], ['app:share:inbox', []]));
+									count.onsuccess = () => resolve(count.result);
+								};
+							})
+					);
+					expect(left).toBe(0);
+				});
 
 			test('the iPhone Shortcut opens #url= directly, also in a reused tab', async ({ page }) => {
 				await gotoHydrated(page, url('/inbox#url=https%3A%2F%2Fx.example%2F%3Fa%3D1'));
