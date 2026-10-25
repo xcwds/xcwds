@@ -1,5 +1,19 @@
 # @xcwds/plugin-timers
 
+## 0.8.0
+
+### Minor Changes
+
+- Needs `@xcwds/plugin-shell` 0.8 (peer range `^0.8.0`).
+- Needs `@xcwds/sveltekit` 0.8 (peer range `^0.8.0`).
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies [3eccb4f]
+  - @xcwds/plugin-shell@0.8.0
+  - @xcwds/sveltekit@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes

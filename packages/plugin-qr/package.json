@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-qr",
-	"version": "0.4.0",
+	"version": "0.5.0",
 	"description": "QR codes made and scanned on the device in an @xcwds app, with nothing sent anywhere.",
 	"license": "MIT",
 	"type": "module",

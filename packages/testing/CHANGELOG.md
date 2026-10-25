@@ -1,5 +1,12 @@
 # @xcwds/testing
 
+## 0.5.2
+
+### Patch Changes
+
+- Updated dependencies [3eccb4f]
+  - @xcwds/sveltekit@0.8.0
+
 ## 0.5.1
 
 ### Patch Changes
