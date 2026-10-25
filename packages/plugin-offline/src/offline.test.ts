@@ -3,7 +3,7 @@ import { buildTestApp, buildTestWorker, type Importer } from '@xcwds/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import client from './client.js';
 import offline from './index.js';
-import { APPS_MESSAGE, resolveOptions } from './options.js';
+import { APPS_MESSAGE, USAGE_MESSAGE, resolveOptions, type AppUsage } from './options.js';
 import worker, { appsCacheName } from './worker.js';
 
 afterEach(() => void vi.unstubAllGlobals());
@@ -350,6 +350,49 @@ describe('byApp', () => {
 		expect(await cached(sw)).toContain('/sub/secret');
 	});
 
+	/** Asks the worker what each app keeps offline, as the page does. */
+	async function usage(sw: Worker): Promise<AppUsage[] | undefined> {
+		let answer: AppUsage[] | undefined;
+		await sw.message({
+			type: USAGE_MESSAGE,
+			port: { postMessage: (u: AppUsage[]) => (answer = u) }
+		});
+		return answer;
+	}
+
+	it('answers what each app keeps offline, pages of apps that are off included', async () => {
+		const { sw } = await boot();
+		// "v1 /sub/kitchen" is 15 bytes, "v1 /sub/kitchen/coffee" 22.
+		expect(await usage(sw)).toEqual([
+			{ id: 'kitchen', pages: 2, bytes: 37 },
+			{ id: 'hello', pages: 1, bytes: 13 },
+			{ id: 'secret', pages: 0, bytes: 0 }
+		]);
+		await on(sw, 'hello');
+		await sw.fetch('/secret');
+		expect(await usage(sw)).toEqual([
+			{ id: 'kitchen', pages: 0, bytes: 0 },
+			{ id: 'hello', pages: 1, bytes: 13 },
+			{ id: 'secret', pages: 1, bytes: 14 }
+		]);
+	});
+
+	it('answers after the apps messages sent before, and after one that failed', async () => {
+		const { sw, net } = await boot();
+		// Not awaited, as a page posts them: the question waits for the download.
+		const turnedOn = on(sw, 'kitchen', 'hello', 'secret');
+		const answer = usage(sw);
+		await turnedOn;
+		expect((await answer)?.find((u) => u.id === 'secret')?.pages).toBe(1);
+
+		await on(sw, 'kitchen', 'hello');
+		net.online = false;
+		const failed = on(sw, 'kitchen', 'hello', 'secret');
+		const after = usage(sw);
+		await expect(failed).rejects.toThrow('Failed to fetch');
+		expect((await after)?.find((u) => u.id === 'secret')?.pages).toBe(0);
+	});
+
 	it('without @xcwds/plugin-tools, warns and precaches every page', async () => {
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const sw = await buildTestWorker(
@@ -380,6 +423,39 @@ describe('the network status', () => {
 		await app.close();
 		events.dispatchEvent(new Event('online'));
 		expect(seen).toEqual([false, true, false]);
+	});
+
+	it('asks the worker what each app keeps offline, and the browser how much is stored', async () => {
+		const answer: AppUsage[] = [{ id: 'kitchen', pages: 2, bytes: 37 }];
+		const posted: unknown[] = [];
+		const controller = {
+			postMessage(message: { type: string; port: MessagePort }) {
+				posted.push(message.type);
+				message.port.postMessage(answer);
+			}
+		};
+		vi.stubGlobal('window', new EventTarget());
+		vi.stubGlobal('navigator', {
+			onLine: true,
+			serviceWorker: Object.assign(new EventTarget(), { controller }),
+			storage: { estimate: async () => ({ usage: 5000, quota: 10_000 }) }
+		});
+		const app = await buildTestApp({ plugins: [[client, { byApp: true }]] });
+		expect(await app.offline!.usage()).toEqual({
+			apps: answer,
+			storage: { usage: 5000, quota: 10_000 }
+		});
+		expect(posted).toEqual([USAGE_MESSAGE]);
+		await app.close();
+
+		// No worker in control, and no estimate: nothing to say, rather than a guess.
+		vi.stubGlobal('navigator', { onLine: true, serviceWorker: new EventTarget() });
+		const bare = await buildTestApp({ plugins: [[client, { byApp: true }]] });
+		expect(await bare.offline!.usage()).toEqual({ apps: undefined, storage: undefined });
+		await bare.close();
+		// Without byApp there's nothing per app to ask.
+		const off = await buildTestApp({ plugins: [[client, {}]] });
+		expect(off.offline).toBeUndefined();
 	});
 
 	it('loads from the config with its build entry', async () => {

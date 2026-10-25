@@ -58,6 +58,9 @@ styles included, is precached as before.
   that wasn't precached.
 - A page downloaded when an app is turned on comes from the server as it is then: if a newer
   version is already deployed, that copy belongs to it until the update is applied.
+- The Apps page (`@xcwds/plugin-tools`' `AppCatalog.svelte`) says on each app's card what it
+  keeps offline (pages and size), and above the list about how much the app stores on the
+  device in all, from `app.offline.usage()` (see below).
 
 ## In the page
 
@@ -65,6 +68,17 @@ styles included, is precached as before.
 the listener now and on every change and returns a function that stops it. `<OfflineNotice>`
 renders it as a `role="status"` notice; restyle it with `--xcwds-offline-bg` and
 `--xcwds-offline-fg`, or render your own from `app.network`.
+
+With `byApp`, `app.offline.usage()` resolves to `{ apps, storage }`:
+
+- `apps`: one `{ id, pages, bytes }` per app, in the apps' order: the pages of that app in the
+  current version's cache (pages of an app that's off kept after a visit included) and the
+  size of their bodies. The worker answers after any apps message sent before, so asking right
+  after an app is turned on counts its pages. `undefined` when no worker controls the page or it
+  doesn't answer within 5 seconds.
+- `storage`: `{ usage, quota }` from `navigator.storage.estimate()`, everything the origin
+  stores (offline copies, saved data and files alike). It's the browser's estimate, often
+  padded, and `undefined` where the browser has none.
 
 ## Testing
 

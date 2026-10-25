@@ -111,7 +111,11 @@ tools({
 - The Apps page (`catalog`) is a thin route file rendering `AppCatalog.svelte` in
   `<main class="page-wide">`. Each card has the app's tools and an On/Off switch. Once an app
   is off and has saved data in its `groups`, the card offers Remove data, which asks first and
-  clears those groups (not while a passcode lock is locked). The index page links to it.
+  clears those groups (not while a passcode lock is locked). The index page links to it. With
+  [`@xcwds/plugin-offline`](../plugin-offline)'s `byApp`, each card also says what the app keeps
+  offline ("Kept offline: 2 pages, 14 KB", that it isn't, or, for an app that's off, the pages
+  kept from a visit), and the page says about how much the app stores on the device in all. When
+  the worker doesn't answer, the last answer stays.
 - Turning an app off only hides it: its tools leave the index page and Home (pins and recents
   are kept and come back with it), and its pages still open. Put `AppOffNotice.svelte` in the
   shell's `notices` to say so on those pages, with a Turn on button.

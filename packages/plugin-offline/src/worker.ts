@@ -7,12 +7,21 @@
  *
  * With `byApp`, the pages of `@xcwds/plugin-tools`' apps are deferred (`policy.defer`): install
  * caches those of the apps that are on, which the page sends (`APPS_MESSAGE`) and this entry
- * saves in a cache of its own, since a worker can't read the page's storage.
+ * saves in a cache of its own, since a worker can't read the page's storage. It also answers
+ * what each app keeps offline (`USAGE_MESSAGE`), for the Apps page.
  */
 import { definePlugin, XcwdsError, codes, type App } from '@xcwds/core';
 import { stripBase } from '@xcwds/sveltekit/routes';
 import type { WorkerContext } from '@xcwds/sveltekit/worker';
-import { CORE, NAME, isAppsMessage, resolveOptions, type OfflineOptions } from './options.js';
+import {
+	CORE,
+	NAME,
+	isAppsMessage,
+	isUsageMessage,
+	resolveOptions,
+	type AppUsage,
+	type OfflineOptions
+} from './options.js';
 
 /** The part of `@xcwds/plugin-tools`' `app.tools` this entry reads. */
 type Apps = {
@@ -121,10 +130,41 @@ function byApp(app: App, worker: WorkerContext) {
 		}
 	});
 
-	app.addHook('onMessage', async (data: unknown) => {
-		if (!isAppsMessage(data)) return;
+	// One message at a time, in the order they came: a usage question asked right after an app
+	// was turned on is answered once its pages are downloaded.
+	let queue: Promise<unknown> = Promise.resolve();
+	app.addHook('onMessage', (data: unknown) => {
+		const task = isAppsMessage(data)
+			? () => setApps(data.on)
+			: isUsageMessage(data)
+				? async () => data.port.postMessage(await usage())
+				: undefined;
+		if (!task) return;
+		const run = queue.then(task);
+		queue = run.catch(() => {});
+		return run.then(() => {});
+	});
+
+	/** What each app keeps in this version's cache, visited pages of apps that are off included. */
+	async function usage(): Promise<AppUsage[]> {
+		const found = new Map((tools()?.apps() ?? []).map((a) => [a.id, { pages: 0, bytes: 0 }]));
+		const cache = await caches.open(worker.cacheName);
+		for (const request of await cache.keys()) {
+			const id = appOf(new URL(request.url).pathname);
+			const counts = id === undefined ? undefined : found.get(id);
+			if (!counts) continue;
+			const response = await cache.match(request);
+			if (!response) continue;
+			counts.pages++;
+			counts.bytes += (await response.blob()).size;
+		}
+		return [...found].map(([id, counts]) => ({ id, ...counts }));
+	}
+
+	/** Saves the apps that are on, deletes the pages of those turned off, downloads the rest. */
+	async function setApps(ids: readonly string[]) {
 		const known = new Set((tools()?.apps() ?? []).map((a) => a.id));
-		const on = [...new Set(data.on)].filter((id) => known.has(id));
+		const on = [...new Set(ids)].filter((id) => known.has(id));
 		// With nothing saved yet, any app may be cached (an update from a version without `byApp`
 		// keeps them all).
 		const before = (await saved()) ?? all();
@@ -139,5 +179,5 @@ function byApp(app: App, worker: WorkerContext) {
 				if (id !== undefined && dropped.includes(id)) await cache.delete(path);
 			}
 		await download(cache, on);
-	});
+	}
 }

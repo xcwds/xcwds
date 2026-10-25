@@ -2,7 +2,8 @@
 	/**
 	 * The Apps page (#158): one card per app with the tools in it and an On/Off switch. Turning an
 	 * app off only hides it from Home and the index page; its pages still open and its data stays.
-	 * An app that's off and has saved data offers Remove data. Render it from the Apps page's
+	 * An app that's off and has saved data offers Remove data. With `@xcwds/plugin-offline`'s
+	 * `byApp`, each card also says what the app keeps offline (#163). Render it from the Apps page's
 	 * route file, inside `<main class="page-wide">`.
 	 */
 	import type { Group, PrefixEntry } from '@xcwds/core';
@@ -43,6 +44,66 @@
 		}
 		return () => stops.forEach((stop) => stop());
 	});
+
+	/** What this page uses of `app.offline` (from `@xcwds/plugin-offline` with `byApp`, if present). */
+	type OfflineLike = {
+		usage(): Promise<{
+			apps: { id: string; pages: number; bytes: number }[] | undefined;
+			storage: { usage: number } | undefined;
+		}>;
+	};
+	const offline = (app as { offline?: OfflineLike }).offline;
+	/**
+	 * What each app kept offline at the last answer, with whether it was on when asked (the
+	 * worker answers for that state), and everything stored on the device.
+	 */
+	let kept = $state.raw<Map<string, { pages: number; bytes: number; on: boolean }> | undefined>(
+		undefined
+	);
+	let stored = $state<number | undefined>(undefined);
+	let asking = 0;
+	async function askUsage() {
+		if (!offline) return;
+		const run = ++asking;
+		const asked = new Set(apps.filter((a) => tools?.isOn(a.id)).map((a) => a.id));
+		const found = await offline.usage();
+		if (run !== asking) return;
+		// No answer (a worker busy downloading, say) keeps the last one rather than none.
+		if (found.apps) kept = new Map(found.apps.map((u) => [u.id, { ...u, on: asked.has(u.id) }]));
+		if (found.storage) stored = found.storage.usage;
+	}
+	$effect(() => {
+		if (!offline) return;
+		const sw = navigator.serviceWorker;
+		// Again when an app is turned on or off (the worker answers once it has downloaded or
+		// deleted its pages), and when a worker first takes over the page.
+		const stop = tools?.subscribe(() => void askUsage());
+		const ask = () => void askUsage();
+		sw?.addEventListener('controllerchange', ask);
+		return () => {
+			stop?.();
+			sw?.removeEventListener('controllerchange', ask);
+		};
+	});
+	/** A size for people: "512 bytes", "4.2 KB", "1.5 MB" (1 KB = 1000, as phones count). */
+	function sizeText(size: number): string {
+		if (size < 1000) return `${size} ${size === 1 ? 'byte' : 'bytes'}`;
+		const mb = size >= 999_500;
+		const value = size / (mb ? 1_000_000 : 1000);
+		const shown = value < 10 ? Math.round(value * 10) / 10 : Math.round(value);
+		return `${shown} ${mb ? 'MB' : 'KB'}`;
+	}
+	function offlineText(id: string): string | undefined {
+		const found = kept?.get(id);
+		if (!found) return undefined;
+		if (found.pages === 0)
+			return found.on ? 'Not downloaded for offline use yet' : 'Not kept offline';
+		const pages = `${found.pages} ${found.pages === 1 ? 'page' : 'pages'}`;
+		// An app that's off keeps only pages someone opened (runtime caching).
+		return found.on
+			? `Kept offline: ${pages}, ${sizeText(found.bytes)}`
+			: `Off, but ${pages} from a visit ${found.pages === 1 ? 'is' : 'are'} kept offline (${sizeText(found.bytes)})`;
+	}
 
 	const groupsOf = (a: AppGroup): Group[] => {
 		const ids = new Set(a.groups ?? []);
@@ -87,11 +148,18 @@
 
 <p class="text-sm text-(--xcwds-shell-muted)">
 	Turn on the apps you use. Turning one off hides it from Home and the list of tools; its pages
-	still open and nothing saved is lost.
+	still open and nothing saved is lost.{#if offline}
+		Only the apps that are on are kept for offline use.{/if}
 </p>
+{#if stored !== undefined}
+	<p class="text-sm text-(--xcwds-shell-muted)" data-testid="offline-storage">
+		Stored on this device: about {sizeText(stored)}, offline copies and saved data included.
+	</p>
+{/if}
 <ul class="grid gap-2 md:grid-cols-2 lg:grid-cols-3" data-testid="apps">
 	{#each apps as a (a.id)}
 		{@const names = tools?.all().filter((t) => t.app === a.id) ?? []}
+		{@const offlineNote = offlineText(a.id)}
 		<li
 			class="flex flex-col gap-2 rounded-xl bg-(--xcwds-shell-card) px-4 py-3"
 			data-testid="app-card"
@@ -104,6 +172,11 @@
 					{#if names.length}
 						<span class="text-sm text-(--xcwds-shell-muted)">
 							{names.map((t) => `${t.emoji} ${t.name}`).join(' · ')}
+						</span>
+					{/if}
+					{#if offlineNote}
+						<span class="text-sm text-(--xcwds-shell-muted)" data-testid="app-offline">
+							{offlineNote}
 						</span>
 					{/if}
 				</span>
