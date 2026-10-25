@@ -74,7 +74,8 @@ describe('options', () => {
 		expect(resolveOptions({ relay: RELAY })).toEqual({
 			relay: RELAY,
 			page: '/notion',
-			register: false
+			register: false,
+			writes: false
 		});
 		expect(resolveOptions({ relay: RELAY, page: '/utils/notion' })).toMatchObject({
 			page: '/utils/notion'

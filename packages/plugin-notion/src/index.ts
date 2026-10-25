@@ -14,7 +14,7 @@
  */
 import { definePlugin, descriptor } from '@xcwds/core';
 import type {} from '@xcwds/sveltekit/routes';
-import { CORE, NAME, REASON, resolveOptions, type NotionPluginOptions } from './options.js';
+import { CORE, NAME, reason, resolveOptions, type NotionPluginOptions } from './options.js';
 
 export type { NotionPluginOptions } from './options.js';
 
@@ -42,9 +42,9 @@ export const build = definePlugin(
 	{
 		name: NAME,
 		core: CORE,
-		network: (options) => ({
-			origins: [resolveOptions(options).relay],
-			reason: REASON
-		})
+		network: (options) => {
+			const resolved = resolveOptions(options);
+			return { origins: [resolved.relay], reason: reason(resolved) };
+		}
 	}
 );
