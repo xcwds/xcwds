@@ -91,9 +91,12 @@ describe('warp', () => {
 			{ width: NaN, height: 4 }
 		])
 			expect(() => warp(source, quad, size)).toThrow(RangeError);
-		expect(() =>
-			warp({ width: 5, height: 4, data: source.data }, quad, { width: 4, height: 4 })
-		).toThrow(RangeError);
+		for (const bad of [
+			{ width: 5, height: 4, data: source.data },
+			{ width: 0, height: 0, data: new Uint8ClampedArray(0) },
+			{ width: 0.5, height: 8, data: new Uint8ClampedArray(16) }
+		])
+			expect(() => warp(bad, quad, { width: 4, height: 4 })).toThrow(RangeError);
 		const flat: Quad = [
 			{ x: 0, y: 0 },
 			{ x: 2, y: 0 },

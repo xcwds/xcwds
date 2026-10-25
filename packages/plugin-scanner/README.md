@@ -17,7 +17,8 @@ components come next.
   `rectangle(width, height)` is the quad of a straight one. `pageSize(quad)` sizes the
   straightened page from its longer edges, so no detail is lost, and snaps it to the exact shape
   of A4 or Letter (`PAPER`) when it's within 3% of one, since a photographed page rarely measures
-  true.
+  true. A page longer than `MAX_SIDE` (8192 px, the most phone canvases allow) is scaled down to
+  fit.
 - **`@xcwds/plugin-scanner/warp`.** `warp(pixels, quad, size)` straightens the part of an image
   inside `quad` onto a rectangle, with bilinear sampling. It takes and returns RGBA pixels shaped
   like `ImageData`, in plain JavaScript, so it runs in a Worker or without WebGL.
@@ -28,8 +29,9 @@ components come next.
   (the default) or Letter, landscape when the image is, each image fitted and centred. JPEGs go
   in as they are, with no re-encoding and no library. The file has no producer, author, title,
   dates or document ID, and `stripJpeg` takes the EXIF (GPS, camera, dates), XMP, ICC profiles
-  and comments out of each image first, so pass images that are already upright, as a canvas
-  encodes them.
+  and comments out of each image first (between a progressive JPEG's scans too), along with
+  anything after the end of the image, such as a Motion Photo's video. Pass images that are
+  already upright, as a canvas encodes them, since EXIF's orientation goes too.
 
 Everything is pure functions that use no browser APIs and make no network requests, safe to
 import anywhere.

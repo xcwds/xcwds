@@ -60,9 +60,11 @@ describe('threshold', () => {
 		expect(new Set(mixed.data)).toEqual(new Set([0, 255]));
 	});
 
-	it('refuses an offset outside 0 to 1', () => {
+	it('refuses an offset outside 0 to 1 and a radius that isn’t above 0', () => {
 		for (const offset of [-0.1, 1, NaN])
 			expect(() => threshold(red, { offset })).toThrow(RangeError);
+		for (const radius of [0, -3, NaN, Infinity])
+			expect(() => threshold(red, { radius })).toThrow(RangeError);
 	});
 });
 

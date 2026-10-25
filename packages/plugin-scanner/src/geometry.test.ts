@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	MAX_SIDE,
 	PAPER,
 	homography,
 	isConvex,
@@ -115,6 +116,17 @@ describe('pageSize', () => {
 	it('picks the closer paper when both are within the tolerance', () => {
 		const between = rectangle(1000, Math.round(1000 * ((PAPER.a4 + PAPER.letter) / 2 + 0.01)));
 		expect(pageSize(between, { tolerance: 0.1 }).paper).toBe('a4');
+	});
+
+	it('scales a page longer than MAX_SIDE down to fit, keeping its shape', () => {
+		expect(pageSize(rectangle(12000, 16970))).toEqual({ width: 5793, height: 8192, paper: 'a4' });
+		expect(pageSize(rectangle(9000, 3000))).toEqual({ width: 8192, height: 2731, paper: null });
+		expect(pageSize(rectangle(400, 200), { max: 100 })).toEqual({
+			width: 100,
+			height: 50,
+			paper: null
+		});
+		expect(pageSize(rectangle(MAX_SIDE, 100))).toMatchObject({ width: MAX_SIDE, height: 100 });
 	});
 
 	it('is at least 1 × 1', () => {

@@ -46,6 +46,8 @@ export function greyscale(pixels: Pixels): Pixels {
  */
 export function threshold(pixels: Pixels, options: ThresholdOptions = {}): Pixels {
 	const { width, height, data } = pixels;
+	if (options.radius !== undefined && !(options.radius > 0 && Number.isFinite(options.radius)))
+		throw new RangeError('The radius must be a number of pixels above 0.');
 	const radius = Math.max(
 		1,
 		Math.round(options.radius ?? Math.max(4, Math.min(width, height) / 16))

@@ -15,7 +15,7 @@ const segment = (marker: number, body: number[]) => [
 function jpeg(
 	width: number,
 	height: number,
-	{ components = 3, sof = 0xc0, metadata = false } = {}
+	{ components = 3, sof = 0xc0, metadata = false, progressive = false, trailer = false } = {}
 ): Uint8Array {
 	return new Uint8Array([
 		0xff,
@@ -48,8 +48,22 @@ function jpeg(
 		0xff,
 		0xd0,
 		0x56,
+		// A progressive JPEG's next scan, with metadata between the two.
+		...(progressive
+			? [
+					...(metadata ? segment(0xe1, [...ascii('Exif'), 0, 0, ...ascii('GPS 48.8N')]) : []),
+					...segment(0xc4, [0x10, ...Array(16).fill(0)]),
+					...segment(0xda, [1, 1, 0, 1, 63, 0x11]),
+					0x78,
+					0xff,
+					0x00,
+					0x9a
+				]
+			: []),
 		0xff,
-		0xd9
+		0xd9,
+		// What phones append after the image: a Motion Photo's video, Samsung's trailer.
+		...(trailer ? [0, 0, 0, 0x18, ...ascii('ftypmp42 MotionPhoto_Data SEFT')] : [])
 	]);
 }
 
@@ -145,9 +159,24 @@ describe('stripJpeg', () => {
 		expect(text).toContain('Adobe');
 	});
 
+	it('drops metadata between a progressive JPEG’s scans and keeps the scans whole', () => {
+		const clean = stripJpeg(jpeg(10, 10, { progressive: true, metadata: true }))!;
+		expect(clean).toEqual(jpeg(10, 10, { progressive: true }));
+		expect(latin1(clean)).not.toContain('GPS');
+	});
+
+	it('ends at the end of the image, dropping a Motion Photo’s video or a trailer after it', () => {
+		const clean = stripJpeg(jpeg(10, 10, { trailer: true, metadata: true }))!;
+		expect(clean).toEqual(jpeg(10, 10));
+		for (const word of ['ftyp', 'MotionPhoto', 'SEFT']) expect(latin1(clean)).not.toContain(word);
+	});
+
 	it('refuses broken files', () => {
 		expect(stripJpeg(new Uint8Array([1, 2, 3]))).toBeNull();
 		expect(stripJpeg(jpeg(10, 10).subarray(0, 40))).toBeNull();
+		const whole = jpeg(10, 10);
+		expect(stripJpeg(whole.subarray(0, whole.length - 2))).toBeNull(); // no end of image
+		expect(stripJpeg(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]))).toBeNull(); // no scan
 	});
 });
 
@@ -177,7 +206,7 @@ describe('writePdf', () => {
 	});
 
 	it('carries no metadata: no info dictionary, producer, author, dates or ID, and no EXIF', () => {
-		const bytes = writePdf([jpeg(100, 100, { metadata: true })]);
+		const bytes = writePdf([jpeg(100, 100, { metadata: true, progressive: true, trailer: true })]);
 		const { text } = parse(bytes);
 		for (const key of [
 			'/Info',
@@ -191,7 +220,8 @@ describe('writePdf', () => {
 			'D:20'
 		])
 			expect(text).not.toContain(key);
-		for (const word of ['Exif', 'GPS', 'ICC', 'Sam']) expect(text).not.toContain(word);
+		for (const word of ['Exif', 'GPS', 'ICC', 'Sam', 'ftyp', 'SEFT'])
+			expect(text).not.toContain(word);
 	});
 
 	it('gives the same bytes for the same pages (nothing time- or device-dependent)', () => {
@@ -202,7 +232,8 @@ describe('writePdf', () => {
 	it('refuses no pages, a page that isn’t a JPEG, and an unknown paper', () => {
 		expect(() => writePdf([])).toThrow(RangeError);
 		expect(() => writePdf([jpeg(10, 10), new Uint8Array([1, 2])])).toThrow(/Page 2/);
-		expect(() => writePdf([jpeg(10, 10)], { paper: 'a3' as 'a4' })).toThrow(RangeError);
+		for (const paper of ['a3', 'constructor', 'toString', '__proto__'])
+			expect(() => writePdf([jpeg(10, 10)], { paper: paper as 'a4' })).toThrow(RangeError);
 	});
 });
 

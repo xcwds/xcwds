@@ -3,7 +3,9 @@
  * JavaScript path, which works anywhere (a Worker, a browser without WebGL, Node in tests); a
  * WebGL path comes with the crop screen. Pure functions, safe to import anywhere.
  */
-import { homography, rectangle, type Quad } from './geometry.js';
+import { MAX_SIDE, homography, rectangle, type Quad } from './geometry.js';
+
+export { MAX_SIDE };
 
 /** RGBA pixels, row by row: the shape of `ImageData`, which can be passed as is. */
 export interface Pixels {
@@ -12,21 +14,25 @@ export interface Pixels {
 	data: Uint8ClampedArray;
 }
 
-/** The largest side an output may have, in pixels (the most canvases on phones allow). */
-export const MAX_SIDE = 8192;
-
 /**
  * The part of `source` inside `quad` (corners clockwise from the top left, in `source`'s pixels),
  * stretched onto a `width` × `height` rectangle with bilinear sampling. Points of the quad outside
  * the image take the colour of its nearest edge. Throws a `RangeError` for a size that isn't a
- * whole number from 1 to `MAX_SIDE`, or a quad with three corners on one line.
+ * whole number from 1 to `MAX_SIDE`, a source without pixels, or a quad with three corners on one
+ * line.
  */
 export function warp(source: Pixels, quad: Quad, size: { width: number; height: number }): Pixels {
 	const { width, height } = size;
 	for (const side of [width, height])
 		if (!Number.isInteger(side) || side < 1 || side > MAX_SIDE)
 			throw new RangeError(`The output must be 1 to ${MAX_SIDE} pixels on each side.`);
-	if (source.data.length !== source.width * source.height * 4)
+	if (
+		!Number.isInteger(source.width) ||
+		!Number.isInteger(source.height) ||
+		source.width < 1 ||
+		source.height < 1 ||
+		source.data.length !== source.width * source.height * 4
+	)
 		throw new RangeError('The source pixels don’t match its width and height.');
 	const m = homography(rectangle(width, height), quad);
 	if (!m) throw new RangeError('The corners don’t make a page: three of them are on one line.');

@@ -58,45 +58,65 @@ export function jpegInfo(bytes: Uint8Array): JpegInfo | null {
 /**
  * `bytes` without the segments that carry metadata: comments and every application segment but
  * APP0 (JFIF) and APP14 (Adobe, which says how the colours are encoded). That drops EXIF (GPS,
- * camera, dates), XMP, ICC profiles and maker notes. The image data is copied as it is. EXIF's
- * orientation goes too, so pass images whose pixels are upright, as a canvas encodes them. `null`
- * when `bytes` isn't a JPEG.
+ * camera, dates), XMP, ICC profiles and maker notes, between a progressive JPEG's scans too, and
+ * anything after the end of the image (a Motion Photo's video, Samsung's trailer). The image data
+ * is copied as it is. EXIF's orientation goes too, so pass images whose pixels are upright, as a
+ * canvas encodes them. `null` when `bytes` isn't a whole JPEG.
  */
 export function stripJpeg(bytes: Uint8Array): Uint8Array | null {
 	if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
 	const keep: Uint8Array[] = [bytes.subarray(0, 2)];
+	let scanned = false;
 	let i = 2;
-	while (i + 4 <= bytes.length) {
+	while (i + 2 <= bytes.length) {
 		if (bytes[i] !== 0xff) return null;
 		const marker = bytes[i + 1]!;
 		if (marker === 0xff) {
 			i++;
 			continue;
 		}
+		if (marker === 0xd9) {
+			if (!scanned) return null;
+			keep.push(bytes.subarray(i, i + 2));
+			return join(keep);
+		}
 		if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
 			keep.push(bytes.subarray(i, i + 2));
 			i += 2;
 			continue;
 		}
-		if (marker === 0xd9) return null;
-		const length = (bytes[i + 2]! << 8) | bytes[i + 3]!;
-		if (length < 2 || i + 2 + length > bytes.length) return null;
-		if (marker === 0xda) {
-			// Start of scan: the entropy-coded data and everything after it go in unchanged.
-			keep.push(bytes.subarray(i));
-			const out = new Uint8Array(keep.reduce((n, part) => n + part.length, 0));
-			let at = 0;
-			for (const part of keep) {
-				out.set(part, at);
-				at += part.length;
-			}
-			return out;
-		}
+		if (i + 4 > bytes.length) return null;
+		const end = i + 2 + ((bytes[i + 2]! << 8) | bytes[i + 3]!);
+		if (end < i + 4 || end > bytes.length) return null;
 		const metadata = marker === 0xfe || (marker >= 0xe1 && marker <= 0xef && marker !== 0xee);
-		if (!metadata) keep.push(bytes.subarray(i, i + 2 + length));
-		i += 2 + length;
+		if (!metadata) keep.push(bytes.subarray(i, end));
+		i = end;
+		if (marker === 0xda) {
+			// A scan's entropy-coded data runs to the next marker that isn't a stuffed 0xFF (FF 00)
+			// or a restart (FF D0 to FF D7).
+			scanned = true;
+			let j = i;
+			while (j + 1 < bytes.length) {
+				const next = bytes[j + 1]!;
+				if (bytes[j] === 0xff && next !== 0x00 && !(next >= 0xd0 && next <= 0xd7)) break;
+				j++;
+			}
+			if (j + 1 >= bytes.length) return null;
+			keep.push(bytes.subarray(i, j));
+			i = j;
+		}
 	}
 	return null;
+}
+
+function join(parts: readonly Uint8Array[]): Uint8Array {
+	const out = new Uint8Array(parts.reduce((n, part) => n + part.length, 0));
+	let at = 0;
+	for (const part of parts) {
+		out.set(part, at);
+		at += part.length;
+	}
+	return out;
 }
 
 export interface PdfOptions {
@@ -111,7 +131,8 @@ export interface PdfOptions {
  */
 export function writePdf(pages: readonly Uint8Array[], options: PdfOptions = {}): Uint8Array {
 	if (!pages.length) throw new RangeError('A PDF needs at least one page.');
-	const paper = PAGE_SIZES[options.paper ?? 'a4'];
+	const name = options.paper ?? 'a4';
+	const paper = Object.hasOwn(PAGE_SIZES, name) ? PAGE_SIZES[name] : undefined;
 	if (!paper) throw new RangeError('The paper must be "a4" or "letter".');
 	const images = pages.map((page, n) => {
 		const jpeg = stripJpeg(page);
@@ -183,13 +204,7 @@ export function writePdf(pages: readonly Uint8Array[], options: PdfOptions = {})
 	write(table);
 	write(`trailer\n<< /Size ${count} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
 
-	const out = new Uint8Array(length);
-	let at = 0;
-	for (const chunk of chunks) {
-		out.set(chunk, at);
-		at += chunk.length;
-	}
-	return out;
+	return join(chunks);
 }
 
 /** A number as PDF writes it: at most two decimals, no exponent. */

@@ -30,6 +30,9 @@ export const PAPER = { a4: Math.SQRT2, letter: 11 / 8.5 } as const;
 
 export type Paper = keyof typeof PAPER;
 
+/** The largest side a straightened page may have, in pixels (the most canvases on phones allow). */
+export const MAX_SIDE = 8192;
+
 /**
  * The homography that maps each corner of `from` onto the same corner of `to`, or `null` when
  * there's none (three corners of either quad on one line, or two in the same place).
@@ -76,9 +79,13 @@ export interface PageSize {
  * The size of the straightened page in pixels: as wide as the quad's longer horizontal edge and as
  * tall as its longer vertical edge, so no detail is lost. When the shape is within `tolerance`
  * (a fraction, 3% by default) of A4 or Letter, the short side is adjusted to match it exactly,
- * because a page photographed at an angle rarely measures true.
+ * because a page photographed at an angle rarely measures true. A page longer than `max`
+ * (`MAX_SIDE` by default) is scaled down to fit, keeping its shape.
  */
-export function pageSize(quad: Quad, { tolerance = 0.03 }: { tolerance?: number } = {}): PageSize {
+export function pageSize(
+	quad: Quad,
+	{ tolerance = 0.03, max = MAX_SIDE }: { tolerance?: number; max?: number } = {}
+): PageSize {
 	const [tl, tr, br, bl] = quad;
 	let width = Math.max(1, Math.round(Math.max(distance(tl, tr), distance(bl, br))));
 	let height = Math.max(1, Math.round(Math.max(distance(tl, bl), distance(tr, br))));
@@ -98,6 +105,11 @@ export function pageSize(quad: Quad, { tolerance = 0.03 }: { tolerance?: number 
 		const snapped = Math.max(1, Math.round(long / PAPER[paper]));
 		if (width >= height) height = snapped;
 		else width = snapped;
+	}
+	if (long > max) {
+		const scale = max / long;
+		width = Math.min(max, Math.max(1, Math.round(width * scale)));
+		height = Math.min(max, Math.max(1, Math.round(height * scale)));
 	}
 	return { width, height, paper };
 }
