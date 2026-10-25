@@ -1,5 +1,19 @@
 # @xcwds/plugin-qr
 
+## 0.4.0
+
+### Minor Changes
+
+- Needs `@xcwds/plugin-camera` 0.4 (peer range `^0.4.0`).
+- Needs `@xcwds/sveltekit` 0.7 (peer range `^0.7.0`).
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies [b3d3376]
+  - @xcwds/plugin-camera@0.4.0
+  - @xcwds/sveltekit@0.7.0
+
 ## 0.3.0
 
 ### Minor Changes

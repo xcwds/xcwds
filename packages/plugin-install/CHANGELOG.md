@@ -1,5 +1,16 @@
 # @xcwds/plugin-install
 
+## 0.8.0
+
+### Minor Changes
+
+- Needs `@xcwds/sveltekit` 0.7 (peer range `^0.7.0`).
+
+### Patch Changes
+
+- Updated dependencies [b3d3376]
+  - @xcwds/sveltekit@0.7.0
+
 ## 0.7.0
 
 ### Minor Changes

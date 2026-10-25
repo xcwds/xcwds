@@ -1,5 +1,18 @@
 # @xcwds/plugin-offline
 
+## 0.7.0
+
+### Minor Changes
+
+- Needs `@xcwds/sveltekit` 0.7 (peer range `^0.7.0`).
+- b3d3376: Keeps only the apps people turned on offline (#163). `offline({ byApp: true })` leaves the pages of `@xcwds/plugin-tools`' apps out of the install precache, downloads an app's pages when it's turned on and deletes them when it's turned off, and an update precaches the apps that were on. `@xcwds/plugin-tools` has a `./worker` entry that gives the service worker `app.tools`, and `@xcwds/sveltekit/worker`'s cache policy gains `defer`, with `app.worker.deferred()` and `app.worker.scope`.
+- d6c676c: The Apps page says what each app keeps offline (#163). With `offline({ byApp: true })`, `app.offline.usage()` asks the worker how many of each app's pages its cache holds and their size, and the browser how much the app stores in all (`navigator.storage.estimate()`). The worker now handles its messages one at a time, so an answer counts the pages of an app turned on just before. `@xcwds/plugin-tools`' `AppCatalog.svelte` shows it on each card ("Kept offline: 2 pages, 14 KB") and above the list.
+
+### Patch Changes
+
+- Updated dependencies [b3d3376]
+  - @xcwds/sveltekit@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes
