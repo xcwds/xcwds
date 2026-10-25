@@ -98,7 +98,8 @@ describe('blocks', () => {
 		expect(convertBlock(raw('to_do', { rich_text: text, checked: true }))).toEqual({
 			type: 'todo',
 			text: runs,
-			checked: true
+			checked: true,
+			id: 'to_do-id'
 		});
 		expect(convertBlock(raw('to_do', { rich_text: text }))).toMatchObject({ checked: false });
 		expect(
