@@ -5,14 +5,19 @@
  *
  * Imported at prerender too, so it only touches browser globals when called in the browser.
  */
-import { definePlugin } from '@xcwds/core';
+import { definePlugin, type BlobScope, type Collection } from '@xcwds/core';
 import type {} from '@xcwds/plugin-shell/client';
+import type { Component } from 'svelte';
 import {
 	CORE,
+	INBOX,
+	INBOX_MAX_AGE,
 	NAME,
+	filesFromFragment,
 	fromFragment,
 	fromQuery,
 	resolveOptions,
+	type InboxMeta,
 	type ShareOptions,
 	type Shared
 } from './options.js';
@@ -28,14 +33,22 @@ export type AppShare = {
 
 /** `app.shared`, with a `target`. */
 export type AppShared = {
-	/** The target page (an app path). */
+	/** The target page (an app path); with `files` only, `files.target`. */
 	readonly target: string;
+	/** The page that receives shared images, with `files`; otherwise null. */
+	readonly filesTarget: string | null;
 	/**
 	 * Calls `listener` with what was shared, now and whenever another share arrives (Safari may
 	 * reuse an open tab and only change the hash), and clears it from the address bar and
-	 * history. Call it from the target page's `onMount`; returns a function that stops it.
+	 * history. Shared images come as `files`, taken out of the inbox as they're handed over.
+	 * Call it from the target page's `onMount`; returns a function that stops it.
 	 */
 	listen(listener: (shared: Shared) => void): () => void;
+};
+
+/** What this plugin uses of `app.settingsPage` (from `@xcwds/plugin-settings`, if present). */
+type SettingsPageLike = {
+	add(component: Component, options?: { order?: number; in?: 'privacy' }): () => void;
 };
 
 declare module '@xcwds/core' {
@@ -54,6 +67,41 @@ export function readShared(location: URL): Shared | null {
 	return fromFragment(location.hash) ?? fromQuery(location.searchParams);
 }
 
+/**
+ * Takes shared files out of the inbox: each one read is deleted, so the inbox holds nothing once
+ * the page has them. One that can't be read (gone, or sealed while the app is locked) is left
+ * for the day-old clean-up and counted as skipped.
+ */
+export async function takeFiles(
+	blobs: Pick<BlobScope, 'get' | 'delete'>,
+	inbox: Collection<InboxMeta>,
+	ids: readonly string[]
+): Promise<{ files: File[]; missing: number }> {
+	const files: File[] = [];
+	let missing = 0;
+	for (const id of ids) {
+		const saved = await blobs.get(inbox, id);
+		if (!saved) {
+			missing++;
+			continue;
+		}
+		const { blob, meta } = saved;
+		files.push(new File([blob], meta?.name || 'shared', { type: blob.type }));
+		await blobs.delete(inbox, id);
+	}
+	return { files, missing };
+}
+
+/** Deletes inbox files older than a day: shares no page took. */
+export async function cleanInbox(
+	blobs: Pick<BlobScope, 'list' | 'delete'>,
+	inbox: Collection<InboxMeta>,
+	now = Date.now()
+): Promise<void> {
+	for (const info of await blobs.list(inbox))
+		if (now - info.created > INBOX_MAX_AGE) await blobs.delete(inbox, info.id);
+}
+
 export default definePlugin(
 	(app, input: ShareOptions) => {
 		const options = resolveOptions(input);
@@ -67,20 +115,35 @@ export default definePlugin(
 			}
 		} satisfies AppShare);
 
-		if (options.target)
+		const { files } = options;
+		const inbox = files ? app.blobs.register(INBOX) : null;
+		const target = options.target ?? files?.target;
+		if (target)
 			app.decorate('shared', {
-				target: options.target,
+				target,
+				filesTarget: files?.target ?? null,
 				listen(listener) {
+					let stopped = false;
 					const receive = () => {
-						const shared = readShared(new URL(location.href));
+						const url = new URL(location.href);
+						const shared = readShared(url);
 						if (!shared) return;
+						const ids = filesFromFragment(url.hash)?.ids ?? [];
 						// Don't leave it in the address bar or browser history.
 						history.replaceState(history.state, '', location.pathname);
-						listener(shared);
+						if (!ids.length || !inbox) return listener(shared);
+						void takeFiles(app.blobs, inbox, ids).then(({ files, missing }) => {
+							if (stopped) return;
+							const skipped = (shared.skipped ?? 0) + missing;
+							listener({ ...shared, files, ...(skipped ? { skipped } : {}) });
+						});
 					};
 					receive();
 					addEventListener('hashchange', receive);
-					return () => removeEventListener('hashchange', receive);
+					return () => {
+						stopped = true;
+						removeEventListener('hashchange', receive);
+					};
 				}
 			} satisfies AppShared);
 
@@ -89,7 +152,18 @@ export default definePlugin(
 		// import would make this entry and @xcwds/sveltekit import each other.
 		let remove: (() => void) | undefined;
 		let closed = false;
+		const stops: (() => void)[] = [];
 		app.addHook('onBoot', async () => {
+			if (inbox) {
+				void cleanInbox(app.blobs, inbox);
+				// With @xcwds/plugin-settings, Settings → Privacy says when a shared image can reach the
+				// server. Loaded lazily: the component imports @xcwds/sveltekit, which imports this entry.
+				const page = (app as { settingsPage?: SettingsPageLike }).settingsPage;
+				if (page)
+					void import('./FilesNote.svelte').then(({ default: FilesNote }) => {
+						if (!closed) stops.push(page.add(FilesNote, { in: 'privacy' }));
+					});
+			}
 			if (!app.shell) return;
 			const { default: ShareButton } = await import('./ShareButton.svelte');
 			if (!closed) remove = app.shell.header.add(ShareButton, { order: 100 });
@@ -97,6 +171,7 @@ export default definePlugin(
 		app.addHook('onClose', () => {
 			closed = true;
 			remove?.();
+			for (const stop of stops.splice(0)) stop();
 		});
 	},
 	{ name: NAME, core: CORE, encapsulate: false, network: false }

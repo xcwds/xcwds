@@ -110,7 +110,15 @@ export default defineConfig({
 		}),
 		// What others share arrives at /inbox; it stays private, so it has no Share button. Your apps'
 		// pages run apps that are only on this device, so a link to one would open nothing elsewhere.
-		share({ target: '/inbox', exclude: ['/inbox', '/settings', '/my-apps'] }),
+		// The base-path build (SHARE_FILES in `build:base`) takes shared images too (#148), so its
+		// share target is a POST the worker answers.
+		share({
+			target: '/inbox',
+			exclude: ['/inbox', '/settings', '/my-apps'],
+			...(process.env.SHARE_FILES
+				? { files: { target: '/inbox', allowColdStartRisk: true as const } }
+				: {})
+		}),
 		settings({
 			source: 'https://github.com/xcwds/xcwds',
 			backupName: 'minimal-backup',

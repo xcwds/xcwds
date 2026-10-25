@@ -150,6 +150,9 @@ leaves the browser. Put anything a person typed or saved in the fragment:
 
 - `@xcwds/plugin-share` moves shared links from the share target's `?query` to `#url=` in the
   service worker, before the page loads ([its README](../packages/plugin-share/README.md)).
+  With `files`, shared images go into the device's own storage the same way, except for a share
+  made before the worker runs, which uploads the image; that's why it needs
+  `allowColdStartRisk: true` and Settings → Privacy says so.
 - In development, `@xcwds/sveltekit` warns in the console when a page's query string carries a
   value the app has saved (`savedDataInQuery` from `@xcwds/core`).
 

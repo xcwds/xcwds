@@ -89,8 +89,10 @@ contacts (`@xcwds/plugin-lock` puts its cover switch there).
 
 - **`app.settingsPage.control(name, Component)`** shows a field with your component (it gets the
   field's `name`). `@xcwds/plugin-shell` shows its `nav` setting with `NavPicker` this way.
-- **`app.settingsPage.add(Component, { props?, order? })`** adds a whole section. Fields sit at
+- **`app.settingsPage.add(Component, { props?, order?, in? })`** adds a whole section. Fields sit at
   order 0, Your data at 100, Privacy at 150 and About at 200; `@xcwds/plugin-install` adds its card at -100.
+  With `in: 'privacy'` the component goes inside the Privacy card, after the servers the app
+  contacts: `@xcwds/plugin-share` says there when a shared image can reach a server.
 
 Both are usually called on boot, with the component imported dynamically (the component imports
 `@xcwds/sveltekit`, which imports your page entry).

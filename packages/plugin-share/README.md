@@ -23,6 +23,7 @@ export default defineConfig({
 | --------- | --------------- | ----------------------------------------------------------------------------------- |
 | `target`  | none            | The page that receives shares (an app path). Without it the app is no share target. |
 | `exclude` | `['/settings']` | Paths (and everything under them) whose pages never show the Share button.          |
+| `files`   | none            | Receive shared images too (see [Shared images](#shared-images)).                    |
 
 ## The Share button
 
@@ -64,3 +65,60 @@ decoded whole, so a raw `&` or `+` in it survives.
 The first share after install can open the target before the worker controls the page (Android
 may open it cold). Then the page reads the query instead and clears it the same way, but that
 one request did reach the server with the query (on GitHub Pages, its logs).
+
+## Shared images
+
+With `files`, Android's share sheet can send images to the app too:
+
+```ts
+share({
+	target: '/utils/url-sanitizer',
+	files: {
+		target: '/utils/photo-cleaner',
+		accept: ['image/jpeg', 'image/png'],
+		allowColdStartRisk: true
+	}
+});
+```
+
+| Option                     | Default       | What it does                                                        |
+| -------------------------- | ------------- | ------------------------------------------------------------------- |
+| `files.target`             | (required)    | The page that receives shared images (may be the same as `target`). |
+| `files.accept`             | `['image/*']` | The image types the app takes; others are left out and counted.     |
+| `files.allowColdStartRisk` | (required)    | Must be `true`: you accept the cold-start upload described below.   |
+
+A manifest has one `share_target`, so with `files` it becomes `method: "POST"`,
+`enctype: "multipart/form-data"`, sent to `files.target`, for links too. The service worker
+answers that POST itself: it keeps each accepted image in the `app:share:inbox` blob collection
+(sensitive, so a lock's reset clears it; never in backups), then `303`s to `files.target#shared.files=<ids>&…&url=<joined>` (a share of links alone goes to
+`target`, when there is one). `listen` hands the page the images as `files` (`File` objects
+with their names) and deletes them from the inbox, so it holds nothing once the page has them;
+`skipped` counts files that weren't kept (not an accepted type, storage full, or unreadable).
+Anything still in the inbox after a day is cleared when the app starts.
+
+With [`@xcwds/plugin-vault`](../plugin-vault/README.md), the inbox is **not sealed**: the worker
+has no key, so it saves the images as they came, and they stay that way until the page takes
+them (or the day-old clean-up). A share opened while the vault is locked can't be read: its
+images count as `skipped` and wait in the inbox, unsealed, until the clean-up.
+
+### The cold-start upload
+
+The worker can only answer a share once it runs. Android opens the target with a plain POST
+before that, and the POST carries **the image itself** to the server the app is loaded from (on
+GitHub Pages, a `405` answer, but the bytes were sent). That window can't be closed from the
+page:
+
+- **Right after install.** Chrome no longer needs a service worker to install an app, so the app
+  can be installed, and shared into, before its worker has activated.
+- **After the site's data is cleared** (by the person, or evicted under storage pressure). That
+  removes the worker but leaves the installed app and its manifest, so the next share is
+  uploaded until the app is opened again.
+- **When a worker plugin fails to load.** The worker then serves the app without its plugins'
+  hooks, so nothing answers the POST and it goes to the network as it would without a worker.
+
+A navigation goes through the active worker for its scope even when no page is open (Chrome
+starts the worker for it), so once the app has been opened once, shares stay on the device. Since
+the window can't be shown to be closed, `files` needs `allowColdStartRisk: true`, and Settings →
+Privacy (with `@xcwds/plugin-settings`) tells people that an image shared before the app has
+finished setting up is uploaded to the app's host. Without `files`, link sharing stays a GET, as
+above. iPhones have no Web Share Target; the Shortcut route is for links only.

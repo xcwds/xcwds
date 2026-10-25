@@ -227,6 +227,14 @@ plugin's worker entry, that limits `fetch`, `WebSocket`, `EventSource`, `WebTran
 `Cache#add`/`addAll` and background fetches to the same origins (#55). The settings page lists
 the declarations. See [docs/privacy.md](../privacy.md).
 
+Shared images (#148) are the one place a person's content can reach the app's own server: a
+share target that takes files must be a POST, and a POST sent before the service worker runs
+(after install, or after the site's data was cleared, which removes the worker but not the
+installed app) carries the image to the server. The page can't close that window, so
+`@xcwds/plugin-share` only offers `files` behind `allowColdStartRisk: true`, link sharing stays a
+GET without it, and Settings → Privacy says so. The worker passes same-origin POST navigations to
+`onFetch` so the plugin can answer them on the device.
+
 The scan runs in the adapter because it is the first point where the worker (built in its own
 Vite build, decision 3) and the prerendered pages both exist.
 

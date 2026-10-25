@@ -59,7 +59,9 @@
 			{ kind: 'data', order: 100 },
 			{ kind: 'privacy', order: 150 },
 			{ kind: 'about', order: 200 },
-			...added.map((section) => ({ kind: 'added', order: section.order, section }) as const)
+			...added
+				.filter((section) => !section.in)
+				.map((section) => ({ kind: 'added', order: section.order, section }) as const)
 		].sort((a, b) => a.order - b.order) as Block[]
 	);
 
@@ -71,6 +73,7 @@
 		: version;
 
 	const privacyFields = $derived(shown.filter((f) => f.section === 'privacy'));
+	const privacyAdded = $derived(added.filter((section) => section.in === 'privacy'));
 
 	const card = 'flex flex-col gap-3 rounded-2xl bg-(--xcwds-shell-card) p-4';
 	const control = (f: FieldInfo) => controls.get(f.name);
@@ -114,6 +117,9 @@
 						{#if Custom}<Custom name={field.name} />{:else}<FieldControl {field} />{/if}
 					{/each}
 					<PrivacySection />
+					{#each privacyAdded as section (section)}
+						<section.component {...section.props} />
+					{/each}
 				</section>
 			{:else if block.kind === 'about'}
 				<section class={card} aria-labelledby="{uid}-about" data-testid="about">
