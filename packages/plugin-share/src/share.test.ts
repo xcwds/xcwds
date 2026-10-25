@@ -355,7 +355,7 @@ describe('receiving shared images', () => {
 	}
 	const png = (name = 'a.png', bytes = 'png') => new File([bytes], name, { type: 'image/png' });
 
-	async function worker2(options: Record<string, unknown>, requests: string[] = []) {
+	async function bootWorker(options: Record<string, unknown>, requests: string[] = []) {
 		vi.stubGlobal('indexedDB', new IDBFactory());
 		vi.stubGlobal('IDBKeyRange', IDBKeyRange);
 		const sw = await buildTestWorker(
@@ -376,7 +376,7 @@ describe('receiving shared images', () => {
 
 	it('keeps the images in the inbox and redirects with their ids, never to the network', async () => {
 		const requests: string[] = [];
-		const { sw, inbox } = await worker2({ target: '/inbox', files }, requests);
+		const { sw, inbox } = await bootWorker({ target: '/inbox', files }, requests);
 		expect(inbox).toMatchObject({ sensitive: true, backup: false, label: 'Shared images' });
 		const form = new FormData();
 		form.append('text', 'secret note');
@@ -402,7 +402,7 @@ describe('receiving shared images', () => {
 
 	it('sends links alone to the link target, and refuses nothing to the network', async () => {
 		const requests: string[] = [];
-		const { sw } = await worker2({ target: '/inbox', files }, requests);
+		const { sw } = await bootWorker({ target: '/inbox', files }, requests);
 		const form = new FormData();
 		form.append('url', 'https://x.example/');
 		const response = (await sw.fetch(sharePost('/sub/photos', form), { mode: 'navigate' }))!;
@@ -425,7 +425,7 @@ describe('receiving shared images', () => {
 	});
 
 	it('with files only, links go to files.target too', async () => {
-		const { sw } = await worker2({ files });
+		const { sw } = await bootWorker({ files });
 		const form = new FormData();
 		form.append('text', 'hi');
 		const response = (await sw.fetch(sharePost('/sub/photos', form), { mode: 'navigate' }))!;

@@ -90,12 +90,16 @@ share({
 A manifest has one `share_target`, so with `files` it becomes `method: "POST"`,
 `enctype: "multipart/form-data"`, sent to `files.target`, for links too. The service worker
 answers that POST itself: it keeps each accepted image in the `app:share:inbox` blob collection
-(sensitive, so a lock's reset clears it and `@xcwds/plugin-vault` seals it; never in backups),
-then `303`s to `files.target#shared.files=<ids>&…&url=<joined>` (a share of links alone goes to
+(sensitive, so a lock's reset clears it; never in backups), then `303`s to `files.target#shared.files=<ids>&…&url=<joined>` (a share of links alone goes to
 `target`, when there is one). `listen` hands the page the images as `files` (`File` objects
 with their names) and deletes them from the inbox, so it holds nothing once the page has them;
-`skipped` counts files that weren't kept (not an accepted type, or storage full or locked).
+`skipped` counts files that weren't kept (not an accepted type, storage full, or unreadable).
 Anything still in the inbox after a day is cleared when the app starts.
+
+With [`@xcwds/plugin-vault`](../plugin-vault/README.md), the inbox is **not sealed**: the worker
+has no key, so it saves the images as they came, and they stay that way until the page takes
+them (or the day-old clean-up). A share opened while the vault is locked can't be read: its
+images count as `skipped` and wait in the inbox, unsealed, until the clean-up.
 
 ### The cold-start upload
 
@@ -109,6 +113,8 @@ page:
 - **After the site's data is cleared** (by the person, or evicted under storage pressure). That
   removes the worker but leaves the installed app and its manifest, so the next share is
   uploaded until the app is opened again.
+- **When a worker plugin fails to load.** The worker then serves the app without its plugins'
+  hooks, so nothing answers the POST and it goes to the network as it would without a worker.
 
 A navigation goes through the active worker for its scope even when no page is open (Chrome
 starts the worker for it), so once the app has been opened once, shares stay on the device. Since
