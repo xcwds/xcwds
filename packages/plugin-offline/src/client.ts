@@ -1,17 +1,23 @@
 /**
  * The page entry: tracks whether the browser is online, for `<OfflineNotice>`, and with `byApp`
- * tells the service worker which apps are on. Imported at prerender too, so it only touches
- * browser globals once the app boots.
+ * tells the service worker which apps are on and asks it what each keeps offline
+ * (`app.offline`). Imported at prerender too, so it only touches browser globals once the app
+ * boots (or `usage()` is called).
  */
 import { definePlugin } from '@xcwds/core';
 import {
 	APPS_MESSAGE,
 	CORE,
 	NAME,
+	USAGE_MESSAGE,
 	resolveOptions,
+	type AppUsage,
 	type AppsMessage,
-	type OfflineOptions
+	type OfflineOptions,
+	type UsageMessage
 } from './options.js';
+
+export type { AppUsage } from './options.js';
 
 /** The part of `@xcwds/plugin-tools`' `app.tools` this entry reads. */
 type Apps = {
@@ -28,12 +34,37 @@ export type NetworkStatus = {
 	subscribe(listener: (online: boolean) => void): () => void;
 };
 
+/** What the app keeps on the device, as `app.offline.usage()` answers it. */
+export type OfflineUsage = {
+	/**
+	 * What each app keeps offline, in the apps' order; undefined when no worker controls the page
+	 * or it didn't answer in time.
+	 */
+	apps: AppUsage[] | undefined;
+	/**
+	 * Everything the app stores on this device, offline copies and saved data alike, as the
+	 * browser estimates it (`navigator.storage.estimate()`); undefined where it can't say.
+	 */
+	storage: { usage: number; quota: number } | undefined;
+};
+
+/** With `byApp`, as `app.offline`. */
+export type OfflineApps = {
+	/** Asks the worker what each app keeps offline, and the browser how much is stored. */
+	usage(): Promise<OfflineUsage>;
+};
+
 declare module '@xcwds/core' {
 	interface App {
 		/** From `@xcwds/plugin-offline`. */
 		readonly network?: NetworkStatus;
+		/** From `@xcwds/plugin-offline`, with `byApp`. */
+		readonly offline?: OfflineApps;
 	}
 }
+
+/** How long `usage()` waits for the worker to answer. */
+const USAGE_TIMEOUT = 5000;
 
 export default definePlugin(
 	(app, input: OfflineOptions) => {
@@ -56,6 +87,7 @@ export default definePlugin(
 			}
 		};
 		app.decorate('network', status);
+		if (options.byApp) app.decorate('offline', { usage } satisfies OfflineApps);
 
 		const goOnline = () => set(true);
 		const goOffline = () => set(false);
@@ -104,6 +136,45 @@ export default definePlugin(
 	},
 	{ name: NAME, core: CORE, encapsulate: false, network: false }
 );
+
+async function usage(): Promise<OfflineUsage> {
+	// After the rest of the current task: when an app was just turned on or off, the apps message
+	// this entry sends for it reaches the worker first, so the answer counts its pages.
+	await Promise.resolve();
+	const [apps, storage] = await Promise.all([askWorker(), estimate()]);
+	return { apps, storage };
+}
+
+/** The worker's answer to `USAGE_MESSAGE`, or undefined without one in time. */
+function askWorker(): Promise<AppUsage[] | undefined> {
+	const controller =
+		typeof navigator !== 'undefined' ? navigator.serviceWorker?.controller : undefined;
+	if (!controller || typeof MessageChannel === 'undefined') return Promise.resolve(undefined);
+	const { port1, port2 } = new MessageChannel();
+	return new Promise((resolve) => {
+		const done = (answer: AppUsage[] | undefined) => {
+			clearTimeout(timer);
+			port1.close();
+			resolve(answer);
+		};
+		const timer = setTimeout(() => done(undefined), USAGE_TIMEOUT);
+		port1.onmessage = (event: MessageEvent) =>
+			done(Array.isArray(event.data) ? (event.data as AppUsage[]) : undefined);
+		const message: UsageMessage = { type: USAGE_MESSAGE, port: port2 };
+		controller.postMessage(message, [port2]);
+	});
+}
+
+async function estimate(): Promise<OfflineUsage['storage']> {
+	try {
+		const found = await navigator.storage?.estimate?.();
+		return typeof found?.usage === 'number' && typeof found.quota === 'number'
+			? { usage: found.usage, quota: found.quota }
+			: undefined;
+	} catch {
+		return undefined;
+	}
+}
 
 const both =
 	(a: (() => void) | undefined, b: () => void): (() => void) =>

@@ -81,3 +81,22 @@ export const isAppsMessage = (data: unknown): data is AppsMessage =>
 	(data as AppsMessage).type === APPS_MESSAGE &&
 	Array.isArray((data as AppsMessage).on) &&
 	(data as AppsMessage).on.every((id) => typeof id === 'string');
+
+/** What one app keeps offline: its pages in this version's cache and their size in bytes. */
+export type AppUsage = { id: string; pages: number; bytes: number };
+
+/**
+ * The message a page sends its worker to ask what each app keeps offline (`byApp`). The worker
+ * answers on `port` with an `AppUsage[]`, one per app, in the apps' order.
+ */
+export const USAGE_MESSAGE = `${NAME}:usage`;
+export type UsageMessage = {
+	type: typeof USAGE_MESSAGE;
+	port: { postMessage(usage: AppUsage[]): void };
+};
+
+export const isUsageMessage = (data: unknown): data is UsageMessage =>
+	typeof data === 'object' &&
+	data !== null &&
+	(data as UsageMessage).type === USAGE_MESSAGE &&
+	typeof (data as UsageMessage).port?.postMessage === 'function';

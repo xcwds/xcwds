@@ -71,6 +71,25 @@ for (const { name, dir, base } of targets) {
 			expect(await kept(page, url('/utils/timer'))).toBe('original');
 		});
 
+		test('the Apps page says what each app keeps offline, and follows it turning off and on', async ({
+			page
+		}) => {
+			await open(page, '/apps');
+			const card = (name: string) => page.getByTestId('app-card').filter({ hasText: name });
+			const kitchen = card('Kitchen').getByTestId('app-offline');
+			// Its two tools' pages, as the worker's cache holds them.
+			await expect(kitchen).toHaveText(/^Kept offline: 2 pages, [\d.]+ (KB|bytes)$/);
+			await expect(card('Hello').getByTestId('app-offline')).toHaveText(/^Kept offline: 1 page, /);
+			await expect(page.getByTestId('offline-storage')).toHaveText(
+				/^Stored on this device: about [\d.]+ (bytes|KB|MB), offline copies and saved data included\.$/
+			);
+
+			await toggle(page, 'Kitchen').click();
+			await expect(kitchen).toHaveText('Not kept offline');
+			await toggle(page, 'Kitchen').click();
+			await expect(kitchen).toHaveText(/^Kept offline: 2 pages, /);
+		});
+
 		test('an update keeps the apps that were on offline, and not the ones turned off', async ({
 			page,
 			context
