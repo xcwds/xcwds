@@ -88,7 +88,7 @@ function resolveFiles(input: unknown): ResolvedShareOptions['files'] {
 		fail('`files.accept` must be a list of image types, like "image/jpeg" or "image/*".');
 	if (files.allowColdStartRisk !== true)
 		fail(
-			'`files` needs `allowColdStartRisk: true`. A share made before the service worker runs (right after install, or after the site\'s data was cleared) uploads the image to the server the app is loaded from.'
+			"`files` needs `allowColdStartRisk: true`. A share made before the service worker runs (right after install, or after the site's data was cleared) uploads the image to the server the app is loaded from."
 		);
 	return { target: files.target, accept: [...accept] };
 }

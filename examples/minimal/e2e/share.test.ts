@@ -178,9 +178,7 @@ for (const { name, dir, base } of targets) {
 				expect(page.url()).toBe(url('/inbox'));
 			});
 
-			test('shared images stay on the device and are handed to the page once', async ({
-				page
-			}) => {
+			test('shared images stay on the device and are handed to the page once', async ({ page }) => {
 				test.skip(!base, 'Only the base-path build takes shared images.');
 				await gotoHydrated(page, url('/inbox'));
 				await waitForServiceWorker(page);
