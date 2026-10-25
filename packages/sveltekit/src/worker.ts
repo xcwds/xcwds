@@ -239,6 +239,26 @@ export function startWorker(
 
 	sw.addEventListener('fetch', (event) => {
 		const { request } = event;
+		// A form that navigates by POST (a share target's, #148) goes to plugins' `onFetch` only; if
+		// none answers, it goes to the network as it would without a worker. Other POSTs aren't ours.
+		if (request.method !== 'GET') {
+			const url = new URL(request.url);
+			const posted =
+				request.mode === 'navigate' && url.origin === sw.location.origin
+					? stripBase(url.pathname, base)
+					: null;
+			if (posted === null) return;
+			event.respondWith(
+				(async () => {
+					const s = await strategy;
+					const answer = s.ok
+						? await app.hooks.first('onFetch', [request, url], { path: posted })
+						: undefined;
+					return answer ?? fetch(request);
+				})()
+			);
+			return;
+		}
 		const path = workerPath(request, sw.location.origin, base);
 		if (path === null) return;
 		const url = new URL(request.url);

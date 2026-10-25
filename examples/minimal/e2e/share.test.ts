@@ -119,14 +119,33 @@ for (const { name, dir, base } of targets) {
 			await expect(page.getByRole('button', { name: 'Share Minimal' })).toBeVisible();
 		});
 
-		test('the manifest makes /inbox a GET share target', async ({ request }) => {
+		test('the manifest makes /inbox a share target', async ({ request }) => {
 			const manifest = await (await request.get(url('/manifest.webmanifest'))).json();
-			expect(manifest.share_target).toEqual({
-				action: `${base}/inbox`,
-				method: 'GET',
-				enctype: 'application/x-www-form-urlencoded',
-				params: { url: 'url', text: 'text', title: 'title' }
-			});
+			const params = { url: 'url', text: 'text', title: 'title' };
+			// The base-path build takes shared images too (`files`, #148): a POST the worker answers.
+			expect(manifest.share_target).toEqual(
+				base
+					? {
+							action: `${base}/inbox`,
+							method: 'POST',
+							enctype: 'multipart/form-data',
+							params: { ...params, files: [{ name: 'files', accept: ['image/*'] }] }
+						}
+					: {
+							action: `${base}/inbox`,
+							method: 'GET',
+							enctype: 'application/x-www-form-urlencoded',
+							params
+						}
+			);
+		});
+
+		test('Settings → Privacy says when a shared image can reach the server', async ({ page }) => {
+			await gotoHydrated(page, url('/settings'));
+			const note = page.getByTestId('settings-privacy').getByTestId('share-files-note');
+			if (!base) return void (await expect(note).toHaveCount(0));
+			await expect(note).toContainText('is uploaded to 127.0.0.1');
+			await expect(note).toContainText('Open Minimal once before sharing into it.');
 		});
 
 		test.describe('receiving a share', () => {
@@ -157,6 +176,60 @@ for (const { name, dir, base } of targets) {
 				await page.goto(url('/inbox?text=early'));
 				await expect(page.getByTestId('shared')).toHaveText('early');
 				expect(page.url()).toBe(url('/inbox'));
+			});
+
+			test('shared images stay on the device and are handed to the page once', async ({
+				page
+			}) => {
+				test.skip(!base, 'Only the base-path build takes shared images.');
+				await gotoHydrated(page, url('/inbox'));
+				await waitForServiceWorker(page);
+				// The form Android's share sheet sends: a multipart POST to the target.
+				await page.evaluate((action) => {
+					const form = Object.assign(document.createElement('form'), {
+						id: 'share-sheet',
+						method: 'post',
+						enctype: 'multipart/form-data',
+						action
+					});
+					form.innerHTML =
+						'<input type="file" name="files" multiple><input name="text" value="secret note">';
+					document.body.append(form);
+				}, url('/inbox'));
+				await page.setInputFiles('#share-sheet input[type=file]', [
+					{ name: 'cat.png', mimeType: 'image/png', buffer: Buffer.from('not really a png') },
+					{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') }
+				]);
+				const before = server.requests.length;
+				const redirected = page.waitForResponse(
+					(r) => r.url() === url('/inbox') && r.status() === 303 && r.fromServiceWorker()
+				);
+				await page.evaluate(() =>
+					(document.getElementById('share-sheet') as HTMLFormElement).submit()
+				);
+				await redirected;
+				await expect(page.getByTestId('shared-file')).toHaveText('cat.png (image/png, 16 bytes)');
+				await expect(page.getByTestId('shared-skipped')).toHaveText('1 not kept');
+				await expect(page.getByTestId('shared')).toHaveText('secret note');
+				// Nothing reached the server: not the POST, nor the page it redirected to (precached).
+				expect(server.requests.slice(before)).not.toContain(`${base}/inbox`);
+				expect(page.url()).toBe(url('/inbox'));
+				// The inbox is empty once the page has the files.
+				const left = await page.evaluate(
+					() =>
+						new Promise<number>((resolve, reject) => {
+							const open = indexedDB.open('app:blobs');
+							open.onerror = () => reject(open.error);
+							open.onsuccess = () => {
+								const count = open.result
+									.transaction('blobs')
+									.objectStore('blobs')
+									.count(IDBKeyRange.bound(['app:share:inbox', ''], ['app:share:inbox', []]));
+								count.onsuccess = () => resolve(count.result);
+							};
+						})
+				);
+				expect(left).toBe(0);
 			});
 
 			test('the iPhone Shortcut opens #url= directly, also in a reused tab', async ({ page }) => {

@@ -24,6 +24,16 @@ describe('buildTestWorker', () => {
 		expect(await worker.fetch(new Request('http://localhost/utils/timer'))).toBeUndefined();
 		expect(await worker.fetch(new Request('https://example.com/sub/utils/timer'))).toBeUndefined();
 		expect(await worker.fetch('/utils/timer', { method: 'POST' })).toBeUndefined();
+		// A form that navigates by POST (a share target's, #148) reaches the hooks, else the network.
+		const post = async (path: string) =>
+			(await worker.fetch(path, { method: 'POST', body: 'x', mode: 'navigate' }))?.text();
+		expect(await post('/utils/timer')).toBe('timer /sub/utils/timer');
+		expect(await post('/other')).toBe('net /sub/other');
+		expect(
+			await worker.fetch(new Request('http://localhost/utils/timer', { method: 'POST' }), {
+				mode: 'navigate'
+			})
+		).toBeUndefined();
 		await worker.close();
 	});
 

@@ -162,6 +162,7 @@ describe('the plugin', () => {
 					a.addHook('onBoot', () => {
 						a.settingsPage!.add(A, { order: 300 });
 						a.settingsPage!.add(B, { order: -100, props: { x: 1 } });
+						a.settingsPage!.add(A, { in: 'privacy' });
 					});
 				})
 			]
@@ -169,6 +170,7 @@ describe('the plugin', () => {
 		const page = app.settingsPage!;
 		expect(page.sections()).toEqual([
 			{ component: B, props: { x: 1 }, order: -100 },
+			{ component: A, order: 50, in: 'privacy' },
 			{ component: A, order: 300 }
 		]);
 		let calls = 0;

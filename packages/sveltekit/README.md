@@ -87,7 +87,8 @@ which `withXcwds()` used to add for you), `$app/environment` is `$app/env`, and 
   fetches to the origins the page's CSP allows (`@xcwds/sveltekit/guard`), since that `<meta>`
   policy doesn't reach the worker. It
   then starts the worker from `@xcwds/sveltekit/worker`: plugins' `onFetch`
-  hooks answer first; the build, static files, prerendered pages, manifest and icons are
+  hooks answer first (also for same-origin navigations that POST, such as a share target's; any
+  other non-GET request goes straight to the network); the build, static files, prerendered pages, manifest and icons are
   precached on install and served from this version's cache first; anything else goes to the
   network, with `404.html` for offline navigations. The strategy reads `app.worker.policy`
   (extra precache paths, exclusions, the fallback page, runtime caching, and `defer`: paths

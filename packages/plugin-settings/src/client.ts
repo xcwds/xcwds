@@ -16,13 +16,15 @@ import {
 
 /**
  * A section a plugin adds, in `order`: fields are at 0, Your data at 100, Privacy at 150 and About
- * at 200.
+ * at 200. With `in: 'privacy'` it goes inside the Privacy card instead, after the servers the app
+ * contacts (in `order` among the others there).
  */
 export type PageSection = {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	component: Component<any>;
 	props?: Record<string, unknown>;
 	order: number;
+	in?: 'privacy';
 };
 
 /** A component that shows one settings field; it gets the field's `name` as a prop. */
@@ -35,7 +37,7 @@ export type AppSettingsPage = {
 	/** Adds a section; returns a function that removes it. */
 	add(
 		component: PageSection['component'],
-		options?: { props?: Record<string, unknown>; order?: number }
+		options?: { props?: Record<string, unknown>; order?: number; in?: 'privacy' }
 	): () => void;
 	/** Shows the field `name` with `component` instead of its `control`. */
 	control(name: string, component: FieldComponent): () => void;
@@ -63,8 +65,13 @@ export default definePlugin(
 		};
 		app.decorate('settingsPage', {
 			options,
-			add(component, { props, order = 50 } = {}) {
-				const section: PageSection = { component, ...(props ? { props } : {}), order };
+			add(component, { props, order = 50, in: within } = {}) {
+				const section: PageSection = {
+					component,
+					...(props ? { props } : {}),
+					order,
+					...(within === 'privacy' ? { in: within } : {})
+				};
 				// Stable: equal orders keep the order they were added in.
 				sections = [...sections, section].sort((a, b) => a.order - b.order);
 				changed();

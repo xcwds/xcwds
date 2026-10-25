@@ -1,16 +1,29 @@
-import { createApp, definePlugin } from '@xcwds/core';
+import { createApp, definePlugin, type Collection } from '@xcwds/core';
 import { buildTestApp, buildTestWorker, type Importer } from '@xcwds/testing';
+import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import shellClient from '@xcwds/plugin-shell/client';
-import client, { readShared } from './client.js';
+import client, { cleanInbox, readShared, takeFiles } from './client.js';
 import shareFactory, { build } from './index.js';
-import { fromFragment, fromQuery, resolveOptions, toFragment } from './options.js';
+import {
+	INBOX_MAX_AGE,
+	accepts,
+	filesFromFragment,
+	fromFragment,
+	fromQuery,
+	resolveOptions,
+	toFragment,
+	type InboxMeta
+} from './options.js';
 import { share, shareData } from './share.js';
 import worker from './worker.js';
 
 afterEach(() => void vi.unstubAllGlobals());
 // The button needs SvelteKit's runtime; e2e tests cover it.
 vi.mock('./ShareButton.svelte', () => ({ default: function ShareButton() {} }));
+vi.mock('./FilesNote.svelte', () => ({ default: function FilesNote() {} }));
+
+const files = { target: '/photos', allowColdStartRisk: true } as const;
 
 const importer: Importer = async (id) => {
 	const entries: Record<string, () => Promise<Record<string, unknown>>> = {
@@ -25,10 +38,11 @@ const importer: Importer = async (id) => {
 
 describe('options', () => {
 	it('fills in defaults and refuses mistakes', async () => {
-		expect(resolveOptions()).toEqual({ target: null, exclude: ['/settings'] });
+		expect(resolveOptions()).toEqual({ target: null, exclude: ['/settings'], files: null });
 		expect(resolveOptions({ target: '/inbox', exclude: [] })).toEqual({
 			target: '/inbox',
-			exclude: []
+			exclude: [],
+			files: null
 		});
 		expect(() => resolveOptions({ target: '/' })).toThrow(/`target`/);
 		expect(() => resolveOptions({ target: '/inbox?x' })).toThrow(/`target`/);
@@ -37,6 +51,49 @@ describe('options', () => {
 		await expect(
 			buildTestApp({ plugins: [shareFactory({ target: 'inbox' })] }, { import: importer })
 		).rejects.toThrow(/@xcwds\/plugin-share: `target`/);
+	});
+});
+
+describe('the files option', () => {
+	it('needs the cold-start risk accepted, a target and image types', () => {
+		expect(resolveOptions({ files }).files).toEqual({ target: '/photos', accept: ['image/*'] });
+		expect(
+			resolveOptions({ files: { ...files, accept: ['image/jpeg', 'image/heic'] } }).files
+		).toEqual({ target: '/photos', accept: ['image/jpeg', 'image/heic'] });
+		expect(() => resolveOptions({ files: { target: '/photos' } })).toThrow(
+			/`allowColdStartRisk: true`.*uploads the image/
+		);
+		expect(() => resolveOptions({ files: { ...files, allowColdStartRisk: 'yes' } })).toThrow(
+			/allowColdStartRisk/
+		);
+		expect(() => resolveOptions({ files: { ...files, target: '/' } })).toThrow(/`files.target`/);
+		expect(() => resolveOptions({ files: { ...files, accept: ['application/pdf'] } })).toThrow(
+			/`files.accept`/
+		);
+		expect(() => resolveOptions({ files: { ...files, accept: [] } })).toThrow(/`files.accept`/);
+		expect(() => resolveOptions({ files: { ...files, max: 3 } })).toThrow(/`files.max`/);
+		expect(() => resolveOptions({ files: true })).toThrow(/`files` must be an object/);
+	});
+
+	it('accepts the listed types, any image for image/*', () => {
+		expect(accepts(['image/*'], 'image/png')).toBe(true);
+		expect(accepts(['image/*'], 'text/plain')).toBe(false);
+		expect(accepts(['image/*'], '')).toBe(false);
+		expect(accepts(['image/jpeg'], 'IMAGE/JPEG')).toBe(true);
+		expect(accepts(['image/jpeg'], 'image/png')).toBe(false);
+	});
+
+	it('names shared files in the fragment, with or without text', () => {
+		const fragment = toFragment({ joined: '' }, { ids: ['a', 'b'], skipped: 1 });
+		expect(fragment).toBe('#shared.files=a%2Cb&shared.skipped=1&url=');
+		expect(fromFragment(fragment)).toEqual({ joined: '', skipped: 1 });
+		expect(filesFromFragment(fragment)).toEqual({ ids: ['a', 'b'], skipped: 1 });
+		const withText = toFragment({ joined: 'Look', text: 'Look' }, { ids: ['a'], skipped: 0 });
+		expect(fromFragment(withText)).toEqual({ joined: 'Look', text: 'Look' });
+		expect(filesFromFragment(withText)).toEqual({ ids: ['a'], skipped: 0 });
+		expect(filesFromFragment('#url=https://x.example/?shared.files=a')).toBeNull();
+		expect(filesFromFragment(toFragment({ joined: 'x', text: 'x' }))).toBeNull();
+		expect(fromFragment('#shared.text=&url=')).toBeNull();
 	});
 });
 
@@ -267,5 +324,153 @@ describe('the share target', () => {
 		location.href = 'https://a.example/inbox#url=later';
 		events.dispatchEvent(new Event('hashchange'));
 		expect(seen).toHaveLength(2);
+	});
+
+	it('makes the manifest share_target a POST with files', async () => {
+		const app = createApp();
+		app.register(build, { target: '/inbox', files: { ...files, accept: ['image/jpeg'] } });
+		await app.ready();
+		expect(await app.hooks.reduce('onManifest', { name: 'A', scope: '/sub/' })).toEqual({
+			name: 'A',
+			scope: '/sub/',
+			share_target: {
+				action: '/sub/photos',
+				method: 'POST',
+				enctype: 'multipart/form-data',
+				params: {
+					url: 'url',
+					text: 'text',
+					title: 'title',
+					files: [{ name: 'files', accept: ['image/jpeg'] }]
+				}
+			}
+		});
+	});
+});
+
+describe('receiving shared images', () => {
+	/** A multipart share as Android's share sheet sends it. */
+	function sharePost(path: string, form: FormData) {
+		return new Request(`http://localhost${path}`, { method: 'POST', body: form });
+	}
+	const png = (name = 'a.png', bytes = 'png') => new File([bytes], name, { type: 'image/png' });
+
+	async function worker2(options: Record<string, unknown>, requests: string[] = []) {
+		vi.stubGlobal('indexedDB', new IDBFactory());
+		vi.stubGlobal('IDBKeyRange', IDBKeyRange);
+		const sw = await buildTestWorker(
+			{ plugins: [[worker, options]] },
+			{
+				base: '/sub',
+				network: (request) => {
+					requests.push(`${request.method} ${request.url}`);
+					return new Response('page');
+				}
+			}
+		);
+		const inbox = sw.app.blobs
+			.collections()
+			.find((c) => c.key === 'app:share:inbox') as Collection<InboxMeta>;
+		return { sw, inbox };
+	}
+
+	it('keeps the images in the inbox and redirects with their ids, never to the network', async () => {
+		const requests: string[] = [];
+		const { sw, inbox } = await worker2({ target: '/inbox', files }, requests);
+		expect(inbox).toMatchObject({ sensitive: true, backup: false, label: 'Shared images' });
+		const form = new FormData();
+		form.append('text', 'secret note');
+		form.append('files', png('cat.png'));
+		form.append('files', new File(['%PDF'], 'doc.pdf', { type: 'application/pdf' }));
+		form.append('files', new File([], 'empty.png', { type: 'image/png' }));
+		const response = (await sw.fetch(sharePost('/sub/photos', form), { mode: 'navigate' }))!;
+		expect(response.status).toBe(303);
+		const location = new URL(response.headers.get('location')!);
+		expect(location.pathname + location.search).toBe('/sub/photos');
+		expect(fromFragment(location.hash)).toEqual({
+			joined: 'secret note',
+			text: 'secret note',
+			skipped: 2
+		});
+		const { ids } = filesFromFragment(location.hash)!;
+		expect(ids).toHaveLength(1);
+		const saved = await sw.app.blobs.get(inbox, ids[0]!);
+		expect(saved?.meta).toEqual({ name: 'cat.png' });
+		expect(await saved?.blob.text()).toBe('png');
+		expect(requests).toEqual([]);
+	});
+
+	it('sends links alone to the link target, and refuses nothing to the network', async () => {
+		const requests: string[] = [];
+		const { sw } = await worker2({ target: '/inbox', files }, requests);
+		const form = new FormData();
+		form.append('url', 'https://x.example/');
+		const response = (await sw.fetch(sharePost('/sub/photos', form), { mode: 'navigate' }))!;
+		const location = new URL(response.headers.get('location')!);
+		expect(location.pathname).toBe('/sub/inbox');
+		expect(fromFragment(location.hash)?.joined).toBe('https://x.example/');
+		// Not a form: the page opens with nothing shared, and nothing reaches the server.
+		const broken = new Request('http://localhost/sub/photos', {
+			method: 'POST',
+			body: 'x',
+			headers: { 'content-type': 'multipart/form-data; boundary=nope' }
+		});
+		const empty = (await sw.fetch(broken, { mode: 'navigate' }))!;
+		expect(empty.status).toBe(303);
+		expect(empty.headers.get('location')).toBe('http://localhost/sub/inbox');
+		expect(requests).toEqual([]);
+		// Other POSTs aren't the worker's.
+		await sw.fetch(sharePost('/sub/other', new FormData()), { mode: 'navigate' });
+		expect(requests).toEqual(['POST http://localhost/sub/other']);
+	});
+
+	it('with files only, links go to files.target too', async () => {
+		const { sw } = await worker2({ files });
+		const form = new FormData();
+		form.append('text', 'hi');
+		const response = (await sw.fetch(sharePost('/sub/photos', form), { mode: 'navigate' }))!;
+		expect(new URL(response.headers.get('location')!).pathname).toBe('/sub/photos');
+	});
+
+	it('hands the page the files and empties the inbox', async () => {
+		const events = new EventTarget();
+		const location = { href: 'https://a.example/photos', pathname: '/photos' };
+		vi.stubGlobal('location', location);
+		vi.stubGlobal('history', {
+			state: null,
+			replaceState: (_: unknown, __: string, url: string) =>
+				void (location.href = `https://a.example${url}`)
+		});
+		vi.stubGlobal('addEventListener', events.addEventListener.bind(events));
+		vi.stubGlobal('removeEventListener', events.removeEventListener.bind(events));
+		const app = await buildTestApp({ plugins: [[client, { files }]] });
+		expect(app.shared).toMatchObject({ target: '/photos', filesTarget: '/photos' });
+		const inbox = app.blobs
+			.collections()
+			.find((c) => c.key === 'app:share:inbox') as Collection<InboxMeta>;
+		const id = (await app.blobs.put(inbox, png('cat.png', 'meow'), { name: 'cat.png' })) as string;
+		location.href = `https://a.example/photos${toFragment({ joined: '' }, { ids: [id, 'gone'], skipped: 1 })}`;
+		const seen: { joined: string; files?: File[]; skipped?: number }[] = [];
+		app.shared!.listen((shared) => seen.push(shared));
+		await vi.waitFor(() => expect(seen).toHaveLength(1));
+		expect(seen[0]).toMatchObject({ joined: '', skipped: 2 });
+		expect(seen[0]!.files!.map((f) => [f.name, f.type])).toEqual([['cat.png', 'image/png']]);
+		expect(await seen[0]!.files![0]!.text()).toBe('meow');
+		expect(await app.blobs.list(inbox)).toEqual([]);
+		expect(location.href).toBe('https://a.example/photos');
+	});
+
+	it('takes what it can read, and clears day-old files', async () => {
+		const app = await buildTestApp({ plugins: [[client, { files }]] });
+		const inbox = app.blobs
+			.collections()
+			.find((c) => c.key === 'app:share:inbox') as Collection<InboxMeta>;
+		const id = (await app.blobs.put(inbox, png(), { name: 'a.png' })) as string;
+		expect(await takeFiles(app.blobs, inbox, ['nope'])).toEqual({ files: [], missing: 1 });
+		const now = Date.now();
+		await cleanInbox(app.blobs, inbox, now);
+		expect((await app.blobs.list(inbox)).map((i) => i.id)).toEqual([id]);
+		await cleanInbox(app.blobs, inbox, now + INBOX_MAX_AGE + 1000);
+		expect(await app.blobs.list(inbox)).toEqual([]);
 	});
 });
