@@ -1,0 +1,62 @@
+{
+	"name": "@xcwds/plugin-scanner",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Scan paper documents to a PDF on the device in @xcwds apps, without a cloud scanning app. Work in progress (#151), not published yet.",
+	"license": "MIT",
+	"type": "module",
+	"sideEffects": false,
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/xcwds/xcwds.git",
+		"directory": "packages/plugin-scanner"
+	},
+	"exports": {
+		"./filters": {
+			"types": "./dist/filters.d.ts",
+			"default": "./dist/filters.js"
+		},
+		"./geometry": {
+			"types": "./dist/geometry.d.ts",
+			"default": "./dist/geometry.js"
+		},
+		"./pdf": {
+			"types": "./dist/pdf.d.ts",
+			"default": "./dist/pdf.js"
+		},
+		"./warp": {
+			"types": "./dist/warp.d.ts",
+			"default": "./dist/warp.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"!dist/**/*.test.*"
+	],
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"check": "tsc -p tsconfig.json --noEmit",
+		"publint": "publint"
+	},
+	"peerDependencies": {
+		"@xcwds/core": "workspace:^"
+	},
+	"devDependencies": {
+		"@xcwds/core": "workspace:^",
+		"typescript": "~6.0.3",
+		"vitest": "^5.0.0"
+	},
+	"keywords": [
+		"pwa",
+		"offline-first",
+		"xcwds",
+		"xcwds-plugin",
+		"privacy",
+		"scanner",
+		"pdf"
+	],
+	"engines": {
+		"node": ">=22.18"
+	}
+}
