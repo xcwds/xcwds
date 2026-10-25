@@ -401,6 +401,205 @@ describe('the Notion relay', () => {
 		});
 	});
 
+	describe('writes (#109)', () => {
+		const writes = { ...env, ALLOW_WRITES: 'true' };
+		const tick = JSON.stringify({ to_do: { checked: true } });
+		const paragraph = (content: unknown) => ({
+			paragraph: { rich_text: [{ text: { content } }] }
+		});
+		const note = JSON.stringify({
+			children: [
+				paragraph('Called the vet'),
+				// As Notion's docs write it.
+				{
+					object: 'block',
+					type: 'paragraph',
+					paragraph: { rich_text: [{ type: 'text', text: { content: 'Again' } }] }
+				}
+			]
+		});
+		const write = (
+			path: string,
+			body: string,
+			upstream = notion(),
+			relayEnv: RelayEnv = writes,
+			method = 'PATCH'
+		) =>
+			relay(
+				new Request(RELAY + path, {
+					method,
+					headers: {
+						Origin: APP,
+						Authorization: 'Bearer secret_abc',
+						'Notion-Version': '2025-09-03',
+						'Content-Type': 'text/plain'
+					},
+					body
+				}),
+				relayEnv,
+				upstream
+			);
+
+		it('forwards a tick and an append when the deployer turned writes on', async () => {
+			for (const [path, body] of [
+				[`/v1/blocks/${BLOCK}`, tick],
+				[`/v1/blocks/${PAGE}/children`, note]
+			] as const) {
+				const upstream = notion();
+				const response = await write(path, body, upstream);
+				expect(response.status, path).toBe(200);
+				const { url, init, headers } = sent(upstream);
+				expect(url).toBe(NOTION + path);
+				expect(init.method).toBe('PATCH');
+				expect(headers.get('Content-Type')).toBe('application/json');
+				expect(headers.get('Authorization')).toBe('Bearer secret_abc');
+				expect(JSON.parse(new TextDecoder().decode(init.body as Uint8Array))).toEqual(
+					JSON.parse(body)
+				);
+			}
+			// A repeated key reaches Notion as the value that was checked.
+			const upstream = notion();
+			await write(
+				`/v1/blocks/${BLOCK}`,
+				'{"to_do":{"checked":"yes"},"to_do":{"checked":false}}',
+				upstream
+			);
+			expect(new TextDecoder().decode(sent(upstream).init.body as Uint8Array)).toBe(
+				'{"to_do":{"checked":false}}'
+			);
+		});
+
+		it('refuses every write unless ALLOW_WRITES is exactly "true"', async () => {
+			for (const ALLOW_WRITES of [undefined, '', 'false', '1', 'TRUE', ' true']) {
+				const upstream = notion();
+				const relayEnv = { ...env, ALLOW_WRITES };
+				expect((await write(`/v1/blocks/${BLOCK}`, tick, upstream, relayEnv)).status).toBe(403);
+				expect((await write(`/v1/blocks/${PAGE}/children`, note, upstream, relayEnv)).status).toBe(
+					403
+				);
+				const preflight = await relay(
+					new Request(`${RELAY}/v1/blocks/${BLOCK}`, {
+						method: 'OPTIONS',
+						headers: { Origin: APP, 'Access-Control-Request-Method': 'PATCH' }
+					}),
+					relayEnv,
+					upstream
+				);
+				expect(preflight.status).toBe(403);
+				expect(upstream).not.toHaveBeenCalled();
+			}
+			const preflight = await relay(
+				new Request(`${RELAY}/v1/blocks/${BLOCK}/children`, {
+					method: 'OPTIONS',
+					headers: { Origin: APP, 'Access-Control-Request-Method': 'PATCH' }
+				}),
+				writes,
+				notion()
+			);
+			expect(preflight.status).toBe(204);
+			expect(preflight.headers.get('Access-Control-Allow-Methods')).toBe('PATCH');
+		});
+
+		it('refuses any other write, block or body before anything leaves', async () => {
+			const long = 'x'.repeat(2001);
+			const refused: [string, string, string?][] = [
+				// Other paths and methods stay closed with writes on.
+				[`/v1/pages/${PAGE}`, JSON.stringify({ archived: true })],
+				[`/v1/blocks/${BLOCK}`, tick, 'DELETE'],
+				[`/v1/blocks/${BLOCK}/children`, note, 'POST'],
+				['/v1/pages', note, 'POST'],
+				[`/v1/blocks/${BLOCK}?page_size=1`, tick],
+				// Ticks: exactly `{ to_do: { checked: boolean } }`.
+				[`/v1/blocks/${BLOCK}`, '{"to_do":{"checked":"true"}}'],
+				[`/v1/blocks/${BLOCK}`, '{"to_do":{}}'],
+				[`/v1/blocks/${BLOCK}`, '{"to_do":{"checked":true,"rich_text":[]}}'],
+				[`/v1/blocks/${BLOCK}`, '{"to_do":{"checked":true},"archived":true}'],
+				[`/v1/blocks/${BLOCK}`, '{"archived":true}'],
+				[`/v1/blocks/${BLOCK}`, '{"in_trash":true}'],
+				[`/v1/blocks/${BLOCK}`, '{"paragraph":{"rich_text":[]}}'],
+				[`/v1/blocks/${BLOCK}`, '[{"to_do":{"checked":true}}]'],
+				[`/v1/blocks/${BLOCK}`, 'not json'],
+				[`/v1/blocks/${BLOCK}`, ''],
+				// Appends: 1 to 20 paragraphs of one plain run each.
+				[`/v1/blocks/${PAGE}/children`, '{"children":[]}'],
+				[
+					`/v1/blocks/${PAGE}/children`,
+					JSON.stringify({ children: Array(21).fill(paragraph('x')) })
+				],
+				[`/v1/blocks/${PAGE}/children`, JSON.stringify({ children: [paragraph('')] })],
+				[`/v1/blocks/${PAGE}/children`, JSON.stringify({ children: [paragraph(long)] })],
+				[`/v1/blocks/${PAGE}/children`, JSON.stringify({ children: [paragraph(1)] })],
+				[
+					`/v1/blocks/${PAGE}/children`,
+					JSON.stringify({ children: [paragraph('x')], after: BLOCK })
+				],
+				[
+					`/v1/blocks/${PAGE}/children`,
+					JSON.stringify({ children: [{ ...paragraph('x'), type: 'to_do' }] })
+				],
+				[
+					`/v1/blocks/${PAGE}/children`,
+					JSON.stringify({ children: [{ ...paragraph('x'), object: 'page' }] })
+				],
+				[
+					`/v1/blocks/${PAGE}/children`,
+					JSON.stringify({ children: [{ to_do: { rich_text: [{ text: { content: 'x' } }] } }] })
+				],
+				[
+					`/v1/blocks/${PAGE}/children`,
+					JSON.stringify({
+						children: [
+							{ paragraph: { rich_text: [{ text: { content: 'x', link: { url: 'https://x' } } }] } }
+						]
+					})
+				],
+				[
+					`/v1/blocks/${PAGE}/children`,
+					JSON.stringify({
+						children: [
+							{
+								paragraph: {
+									rich_text: [{ text: { content: 'x' }, annotations: { bold: true } }]
+								}
+							}
+						]
+					})
+				],
+				[
+					`/v1/blocks/${PAGE}/children`,
+					JSON.stringify({
+						children: [
+							{ paragraph: { rich_text: [{ text: { content: 'a' } }, { text: { content: 'b' } }] } }
+						]
+					})
+				],
+				[
+					`/v1/blocks/${PAGE}/children`,
+					JSON.stringify({
+						children: [{ paragraph: { rich_text: [{ text: { content: 'x' } }], children: [] } }]
+					})
+				],
+				[
+					`/v1/blocks/${PAGE}/children`,
+					JSON.stringify({ children: [{ paragraph: { rich_text: [{ mention: { page: {} } }] } }] })
+				],
+				[`/v1/blocks/${PAGE}/children`, tick]
+			];
+			for (const [path, body, method] of refused) {
+				const upstream = notion();
+				const response = await write(path, body, upstream, writes, method);
+				expect(response.status, `${method ?? 'PATCH'} ${path} ${body}`).toBe(403);
+				expect(response.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+				expect(upstream).not.toHaveBeenCalled();
+			}
+			// Still within the body limit.
+			const upstream = notion();
+			const big = await write(`/v1/blocks/${BLOCK}`, 'x'.repeat(BODY_LIMIT + 1), upstream);
+			expect(big.status).toBe(413);
+			expect(upstream).not.toHaveBeenCalled();
+		});
+	});
+
 	it('is a Worker module that uses the runtime fetch', async () => {
 		const upstream = vi.fn(async () => Response.json({ object: 'user' }));
 		vi.stubGlobal('fetch', upstream);

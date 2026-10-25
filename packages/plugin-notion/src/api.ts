@@ -3,7 +3,8 @@
  * `Notion-Version`, follows `start_cursor` pagination, keeps requests apart to stay under
  * Notion's ~3 requests a second, waits out `429` (`Retry-After`, then backoff), and stops when its
  * `signal` aborts. `blocks` fetches a page's content recursively, up to a depth and a number of
- * blocks, and says when it stopped short instead of failing.
+ * blocks, and says when it stopped short instead of failing. `setChecked` and `appendParagraphs`
+ * are the two writes (#109), which the relay forwards only when its deployer turned them on.
  *
  * Failures are `NotionError`s with a `kind` a page can explain. Their messages never carry the
  * token or what Notion said, so they're safe to show. Browser globals (`fetch`, timers) are only
@@ -157,6 +158,8 @@ function kindOf(status: number): NotionErrorKind {
 
 export type NotionClient = ReturnType<typeof createNotionClient>;
 
+type Method = 'GET' | 'POST' | 'PATCH';
+
 /** A client for the Notion API through `relay`, with `token`. */
 export function createNotionClient(options: NotionClientOptions) {
 	const relay = options.relay.replace(/\/+$/, '');
@@ -182,7 +185,7 @@ export function createNotionClient(options: NotionClientOptions) {
 		return result;
 	}
 
-	async function send(method: 'GET' | 'POST', path: string, body?: unknown): Promise<Response> {
+	async function send(method: Method, path: string, body?: unknown): Promise<Response> {
 		const fetcher = options.fetch ?? globalThis.fetch;
 		if (signal?.aborted) throw aborted();
 		try {
@@ -205,7 +208,7 @@ export function createNotionClient(options: NotionClientOptions) {
 	}
 
 	/** One request, in turn, tried again while rate limited. */
-	async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+	async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
 		for (let attempt = 0; ; attempt++) {
 			if (signal?.aborted) throw aborted();
 			let response: Response;
@@ -252,7 +255,7 @@ export function createNotionClient(options: NotionClientOptions) {
 	}
 
 	/** One page of a list, refused unless it is one (a proxy's other JSON, say). */
-	async function requestList<T>(method: 'GET' | 'POST', path: string, body?: unknown) {
+	async function requestList<T>(method: Method, path: string, body?: unknown) {
 		const list = await request<List<T>>(method, path, body);
 		if (!Array.isArray(list?.results)) throw new NotionError('failed', 200);
 		return list;
@@ -334,6 +337,26 @@ export function createNotionClient(options: NotionClientOptions) {
 	return {
 		/** The integration's bot user (checks the token). */
 		me: () => request<RawObject & { name?: string | null }>('GET', '/v1/users/me'),
+		/** One block, as Notion has it now. */
+		block: (id: string) => request<RawBlock>('GET', `/v1/blocks/${path(id)}`),
+		/**
+		 * Ticks or unticks a to-do (#109). Needs the relay's writes on and the integration's
+		 * "Update content" capability; a `4xx` other than `429` is never tried again.
+		 */
+		setChecked: (id: string, checked: boolean) =>
+			request<RawBlock>('PATCH', `/v1/blocks/${path(id)}`, { to_do: { checked } }),
+		/**
+		 * Adds paragraphs of plain text at the end of a page or block (#109), each at most 2,000
+		 * characters (the relay takes 20 at a time). Needs "Insert content".
+		 */
+		appendParagraphs: (id: string, paragraphs: string[]) =>
+			requestList<RawBlock>('PATCH', `/v1/blocks/${path(id)}/children`, {
+				children: paragraphs.map((content) => ({
+					object: 'block',
+					type: 'paragraph',
+					paragraph: { rich_text: [{ type: 'text', text: { content } }] }
+				}))
+			}),
 		page: (id: string) => request<RawObject>('GET', `/v1/pages/${path(id)}`),
 		database: (id: string) => request<RawObject>('GET', `/v1/databases/${path(id)}`),
 		dataSource: (id: string) => request<RawObject>('GET', `/v1/data_sources/${path(id)}`),

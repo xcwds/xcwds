@@ -6,9 +6,9 @@ install yet.
 
 So far it holds:
 
-- [The relay](relay/README.md): a stateless, read-only Cloudflare Worker that lets a static app
-  reach the Notion API, which sends no CORS headers. It holds no token and stores nothing; the
-  person's own token passes through it.
+- [The relay](relay/README.md): a stateless Cloudflare Worker that lets a static app reach the
+  Notion API, which sends no CORS headers. It holds no token and stores nothing; the person's own
+  token passes through it. It's read-only unless its deployer turns on two writes (`ALLOW_WRITES`).
 - **`./api`**: `createNotionClient({ relay, token, signal })`, the API client through the relay.
   It pins `Notion-Version: 2025-09-03`, keeps requests 350 ms apart (Notion allows about 3 a
   second), waits out `429` (`Retry-After`, then backoff, up to 3 times) and stops when `signal`
@@ -16,14 +16,27 @@ So far it holds:
   2,000 blocks, and says `truncated` when it stopped short. Failures are `NotionError`s with a
   `kind` (`offline`, `unauthorized`, `not-shared`, `rate-limited`, `aborted`, `failed`) and a
   message that's safe to show: never the token, never Notion's own text. `parseId(link)` finds the
-  id in a Notion link.
+  id in a Notion link. `setChecked(id, checked)` and `appendParagraphs(id, paragraphs)` are its
+  two writes ([#109](https://github.com/xcwds/xcwds/issues/109)), which need the relay's writes
+  on.
 - **`./document`**: `toDocument(page, blocks, { fetchedAt, truncated })` turns a downloaded page
   into the plugin's own versioned JSON (`v: 1`): title, emoji icon, link, created time, properties
   and blocks, with rich text kept as runs of text and their formatting. Rendering will read only
   this shape. Blocks it doesn't know become `{ type: 'unsupported', notionType }`; files, PDFs,
   video and audio are placeholders. An image is `{ type: 'image', caption }` with `file` (its id
   among the saved images), `external` (a link to an image on another site) or `skipped` (why it
-  isn't on the device). Notion's signed links to images are never kept.
+  isn't on the device). Notion's signed links to images are never kept. A to-do keeps its Notion
+  block `id`, so it can be ticked.
+- **`./outbox`** ([#109](https://github.com/xcwds/xcwds/issues/109), not wired into the plugin
+  yet): changes waiting to be sent to Notion, ticking a to-do and adding a short note at the end
+  of a page. `enqueue` adds one (a tick that undoes a waiting one cancels both), `applyOutbox`
+  shows the waiting changes on a copy, and `flush(client, update)` sends them in order, each
+  step applied to the latest saved outbox so changes made meanwhile aren't lost. A
+  tick Notion has the other way, edited there since the copy was downloaded, keeps Notion's and
+  comes back as a conflict. No connection, rate limits and Notion's own errors keep the rest queued
+  for later; a refusal (`4xx`) stays queued with its reason until `retry`. A note that may have
+  reached Notion before the connection dropped is looked for at the end of the page before it's
+  sent again. `parseOutbox` checks the saved entry.
 
 - **`./sources`**: what to download. A source is one page, the newest page of a database (by
   created time or a date property, optionally only pages whose title contains some text: the daily

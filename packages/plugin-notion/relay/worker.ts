@@ -1,8 +1,8 @@
 /**
- * A stateless, read-only relay to the Notion API for `@xcwds/plugin-notion` (#105), deployed as a
- * Cloudflare Worker (see `README.md`). The Notion API sends no CORS headers, so a static app can't
- * call it from the browser; this adds them for the app's own origins and forwards a short
- * allowlist of read requests, and nothing else.
+ * A stateless relay to the Notion API for `@xcwds/plugin-notion` (#105), deployed as a Cloudflare
+ * Worker (see `README.md`). The Notion API sends no CORS headers, so a static app can't call it
+ * from the browser; this adds them for the app's own origins and forwards a short allowlist of
+ * read requests (and, if the deployer turns them on, two kinds of write), and nothing else.
  *
  * - It holds no token: the app sends the person's own `Authorization: Bearer <token>`, passed on
  *   unchanged. Without one, Notion refuses the request.
@@ -19,6 +19,9 @@
  *   app, so the app never contacts the file's origin itself. Only `https:` links on the hosts
  *   `fileHost` accepts, sent with no headers at all (the token stays behind), and only images
  *   (`FILE_TYPES`) of at most `FILE_LIMIT` bytes come back.
+ * - Writes (#109) only when the deployer sets `ALLOW_WRITES=true`, and only two: ticking a
+ *   to-do (`PATCH /v1/blocks/:id` with exactly `{ to_do: { checked } }`) and adding paragraphs
+ *   of plain text at the end of a page (`PATCH /v1/blocks/:id/children`; `writeAllowed`).
  *
  * No dependencies beyond the Workers runtime (standard `fetch`, `Request` and `Response`).
  */
@@ -27,6 +30,8 @@
 export type RelayEnv = {
 	/** The origins allowed to use the relay, separated by commas or spaces: `https://xcwds.com`. */
 	ALLOWED_ORIGINS?: string;
+	/** `true` turns on the writes in `WRITES` (#109); anything else leaves the relay read-only. */
+	ALLOW_WRITES?: string;
 };
 
 /** Where requests go. */
@@ -65,8 +70,10 @@ const FILE_URL_LIMIT = 4096;
 /** A Notion id: a UUID, dashed or not. */
 const ID = '(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
 
-/** The requests the relay forwards: read-only at launch (writes come with #109). */
-export const ROUTES: readonly { method: 'GET' | 'POST'; path: RegExp }[] = [
+type Route = { method: 'GET' | 'POST' | 'PATCH'; path: RegExp };
+
+/** The read requests the relay forwards. */
+export const ROUTES: readonly Route[] = [
 	{ method: 'GET', path: /^\/v1\/users\/me$/ },
 	{ method: 'GET', path: new RegExp(`^/v1/pages/${ID}$`, 'i') },
 	{ method: 'GET', path: new RegExp(`^/v1/blocks/${ID}$`, 'i') },
@@ -76,6 +83,72 @@ export const ROUTES: readonly { method: 'GET' | 'POST'; path: RegExp }[] = [
 	{ method: 'POST', path: new RegExp(`^/v1/data_sources/${ID}/query$`, 'i') },
 	{ method: 'POST', path: /^\/v1\/search$/ }
 ];
+
+/** The writes it forwards with `ALLOW_WRITES=true` (#109), each body checked by `writeAllowed`. */
+export const WRITES: readonly Route[] = [
+	{ method: 'PATCH', path: new RegExp(`^/v1/blocks/${ID}$`, 'i') },
+	{ method: 'PATCH', path: new RegExp(`^/v1/blocks/${ID}/children$`, 'i') }
+];
+
+/** The most paragraphs one append adds, and the longest text in one (Notion's own limit). */
+export const MAX_PARAGRAPHS = 20;
+export const MAX_TEXT = 2000;
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+	!!value && typeof value === 'object' && !Array.isArray(value);
+/**
+ * `value` is an object with exactly the keys `keys`, plus any of `fixed` holding the value given
+ * there (Notion's `"type": "paragraph"`, which says again what the other key says).
+ */
+const exactly = (
+	value: unknown,
+	keys: string[],
+	fixed: Record<string, string> = {}
+): value is Record<string, unknown> =>
+	isObject(value) &&
+	keys.every((key) => Object.hasOwn(value, key)) &&
+	Object.entries(value).every(([key, item]) =>
+		Object.hasOwn(fixed, key) ? item === fixed[key] : keys.includes(key)
+	);
+
+/** One paragraph of plain text: no links, mentions, formatting or children. */
+function plainParagraph(block: unknown): boolean {
+	if (!exactly(block, ['paragraph'], { object: 'block', type: 'paragraph' })) return false;
+	const { paragraph } = block;
+	if (!exactly(paragraph, ['rich_text']) || !Array.isArray(paragraph.rich_text)) return false;
+	const runs = paragraph.rich_text;
+	return (
+		runs.length === 1 &&
+		exactly(runs[0], ['text'], { type: 'text' }) &&
+		exactly(runs[0].text, ['content']) &&
+		typeof runs[0].text.content === 'string' &&
+		runs[0].text.content.length > 0 &&
+		runs[0].text.content.length <= MAX_TEXT
+	);
+}
+
+/**
+ * Whether a write's JSON body is one the relay passes on: to tick a to-do, exactly
+ * `{ "to_do": { "checked": true | false } }`; to append, exactly `{ "children": [...] }` with 1 to
+ * `MAX_PARAGRAPHS` plain paragraphs (`plainParagraph`). Nothing else: no other block types or
+ * fields, no `after` (only the end of a page), no archiving.
+ */
+export function writeAllowed(path: string, body: unknown): boolean {
+	if (path.endsWith('/children')) {
+		return (
+			exactly(body, ['children']) &&
+			Array.isArray(body.children) &&
+			body.children.length > 0 &&
+			body.children.length <= MAX_PARAGRAPHS &&
+			body.children.every(plainParagraph)
+		);
+	}
+	return (
+		exactly(body, ['to_do']) &&
+		exactly(body.to_do, ['checked']) &&
+		typeof body.to_do.checked === 'boolean'
+	);
+}
 
 /** The query parameters allowed, and what their values must look like. */
 const QUERY: Record<string, RegExp> = {
@@ -101,9 +174,10 @@ function origins(env: RelayEnv): Set<string> {
 	return allowed;
 }
 
-/** The route `method` and `path` match, if any. */
-function route(method: string, path: string) {
-	return ROUTES.find((r) => r.method === method && r.path.test(path));
+/** The route `method` and `path` match, if any (the writes only when `env` allows them). */
+function route(method: string, path: string, env: RelayEnv) {
+	const match = (r: Route) => r.method === method && r.path.test(path);
+	return ROUTES.find(match) ?? (env.ALLOW_WRITES === 'true' ? WRITES.find(match) : undefined);
 }
 
 /** Whether the query string has only allowed parameters, each once and well-formed. */
@@ -266,7 +340,7 @@ export async function relay(
 
 	if (request.method === 'OPTIONS') {
 		const method = request.headers.get('Access-Control-Request-Method') ?? '';
-		if (!route(method, url.pathname))
+		if (!route(method, url.pathname, env))
 			return refuse(403, 'Not a request the relay forwards.', allowed);
 		return new Response(null, {
 			status: 204,
@@ -282,7 +356,12 @@ export async function relay(
 
 	if (request.method === 'GET' && url.pathname === '/file') return file(url, allowed, upstream);
 
-	if (!route(request.method, url.pathname) || !queryAllowed(url.searchParams)) {
+	if (
+		!route(request.method, url.pathname, env) ||
+		!queryAllowed(url.searchParams) ||
+		// Writes take no query string.
+		(request.method === 'PATCH' && url.search !== '')
+	) {
 		return refuse(403, 'Not a request the relay forwards.', allowed);
 	}
 
@@ -296,10 +375,23 @@ export async function relay(
 	}
 
 	let body: Uint8Array<ArrayBuffer> | undefined;
-	if (request.method === 'POST') {
+	if (request.method === 'POST' || request.method === 'PATCH') {
 		const read = await readBody(request);
 		if (!read) return refuse(413, `Request bodies are limited to ${BODY_LIMIT} bytes.`, allowed);
 		body = read;
+		if (request.method === 'PATCH') {
+			let parsed: unknown;
+			try {
+				parsed = JSON.parse(new TextDecoder().decode(read));
+			} catch {
+				return refuse(403, 'Not a write the relay forwards.', allowed);
+			}
+			if (!writeAllowed(url.pathname, parsed)) {
+				return refuse(403, 'Not a write the relay forwards.', allowed);
+			}
+			// What was checked, so a repeated key can't mean something else to Notion.
+			body = new TextEncoder().encode(JSON.stringify(parsed));
+		}
 		// Notion takes only JSON.
 		headers.set('Content-Type', 'application/json');
 	}

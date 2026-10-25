@@ -14,8 +14,8 @@ version your app installs, and it's never part of an app's bundle.
   their token.
 - **Stores nothing.** No KV, D1, cache or logs, and every answer says `Cache-Control: no-store`.
   The example config turns Workers Logs off; leave it off.
-- **Read-only.** It forwards these and refuses everything else with `403` before a request
-  leaves:
+- **Read-only, unless you turn on writes.** It forwards these and refuses everything else with
+  `403` before a request leaves:
 
   | Request                                         | For                               |
   | ----------------------------------------------- | --------------------------------- |
@@ -30,6 +30,24 @@ version your app installs, and it's never part of an app's bundle.
 
   Ids must be Notion ids (UUIDs, dashed or not). The only query parameters are `start_cursor` and
   `page_size` (1 to 100), each once.
+
+- **Two writes, only if you turn them on.** With `ALLOW_WRITES = "true"` in `[vars]`, it also
+  forwards ticking a to-do and adding a note at the end of a page
+  ([#109](https://github.com/xcwds/xcwds/issues/109)), and nothing else that changes Notion. The
+  relay can't tell a page's id from a block's, so the second also adds paragraphs under any block
+  the token can edit (inside a toggle, say); that's still only what the token itself allows:
+
+  | Request                         | Body, exactly                                                                                   |
+  | ------------------------------- | ----------------------------------------------------------------------------------------------- |
+  | `PATCH /v1/blocks/:id`          | `{ "to_do": { "checked": true } }` (or `false`)                                                 |
+  | `PATCH /v1/blocks/:id/children` | `{ "children": [...] }`: 1 to 20 paragraphs, each one run of plain text (1 to 2,000 characters) |
+
+  A paragraph may say `"object": "block"` and `"type": "paragraph"`, and its run `"type": "text"`.
+  Anything more is refused: other fields or block types, links, mentions or formatting, nested
+  children, `after` (so notes only go at the end), archiving, and any query string. The body sent
+  on is the one that was checked. The token decides the rest: writes also need the integration's
+  "Update content" and "Insert content" capabilities in Notion. Leave writes off (the default)
+  if your app doesn't use them.
 
 - **Images, and only Notion's.** Notion gives an image it hosts as a signed link that expires
   within the hour, on an origin the app's content security policy doesn't allow. `GET /file`
@@ -80,5 +98,4 @@ not in the table, returns `403`.
 ## Not included
 
 OAuth sign-in (a public Notion integration needs a server holding its client secret), writes
-(planned in [#109](https://github.com/xcwds/xcwds/issues/109), behind a separate allowlist you
-turn on) and per-person rate limits beyond Cloudflare's own.
+beyond the two above, and per-person rate limits beyond Cloudflare's own.

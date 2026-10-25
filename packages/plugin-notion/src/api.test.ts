@@ -104,6 +104,38 @@ describe('the Notion client', () => {
 		expect(queryInit!.headers).toMatchObject({ 'Content-Type': 'application/json' });
 	});
 
+	it('ticks a to-do and adds paragraphs with PATCH (#109)', async () => {
+		const { notion, fetch } = client((url, init) =>
+			url.pathname.endsWith('/children')
+				? list([block('p1')])
+				: Response.json({ ...block(ID, 'to_do'), method: init.method })
+		);
+		expect(await notion.block(ID)).toMatchObject({ id: ID, method: 'GET' });
+		expect(await notion.setChecked(ID, true)).toMatchObject({ id: ID, method: 'PATCH' });
+		expect((await notion.appendParagraphs(ID, ['Fed', 'Walked'])).results).toHaveLength(1);
+		expect(fetch.mock.calls[0]![1]!.body).toBeUndefined();
+		const [tick, append] = fetch.mock.calls.slice(1).map(([url, init]) => ({
+			url: String(url),
+			method: init!.method,
+			body: JSON.parse(String(init!.body)),
+			headers: init!.headers
+		}));
+		expect(tick).toMatchObject({
+			url: `${RELAY}/v1/blocks/${ID}`,
+			method: 'PATCH',
+			body: { to_do: { checked: true } },
+			headers: { 'Content-Type': 'application/json' }
+		});
+		expect(append).toMatchObject({ url: `${RELAY}/v1/blocks/${ID}/children`, method: 'PATCH' });
+		expect(append!.body).toEqual({
+			children: ['Fed', 'Walked'].map((content) => ({
+				object: 'block',
+				type: 'paragraph',
+				paragraph: { rich_text: [{ type: 'text', text: { content } }] }
+			}))
+		});
+	});
+
 	it('keeps requests apart, to stay under Notion’s rate limit', async () => {
 		const { notion, time } = client(() => Response.json({ object: 'page', id: ID }));
 		await Promise.all([notion.page(ID), notion.page(ID), notion.page(ID)]);

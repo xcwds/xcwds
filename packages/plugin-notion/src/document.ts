@@ -62,7 +62,14 @@ export type Block =
 	  } & WithChildren)
 	| ({ type: 'bulleted'; text: RichText[]; color?: Color } & WithChildren)
 	| ({ type: 'numbered'; text: RichText[]; color?: Color } & WithChildren)
-	| ({ type: 'todo'; text: RichText[]; checked: boolean; color?: Color } & WithChildren)
+	| ({
+			type: 'todo';
+			text: RichText[];
+			checked: boolean;
+			/** Its Notion block id, for ticking it (#109); copies from before then have none. */
+			id?: string;
+			color?: Color;
+	  } & WithChildren)
 	| ({ type: 'toggle'; text: RichText[]; color?: Color } & WithChildren)
 	| ({ type: 'quote'; text: RichText[]; color?: Color } & WithChildren)
 	| ({ type: 'callout'; text: RichText[]; icon?: string; color?: Color } & WithChildren)
@@ -203,6 +210,7 @@ export function convertBlock(raw: RawBlock, images?: ImageLinks): Block {
 				type: 'todo',
 				text,
 				checked: data.checked === true,
+				...(raw.id ? { id: raw.id } : {}),
 				...color(data.color),
 				...nested
 			};

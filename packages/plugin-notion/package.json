@@ -36,6 +36,10 @@
 			"types": "./dist/sources.d.ts",
 			"default": "./dist/sources.js"
 		},
+		"./outbox": {
+			"types": "./dist/outbox.d.ts",
+			"default": "./dist/outbox.js"
+		},
 		"./render": {
 			"types": "./dist/render.d.ts",
 			"default": "./dist/render.js"
