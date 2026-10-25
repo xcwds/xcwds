@@ -2,7 +2,9 @@
 	/**
 	 * The sources page (#107), at the plugin's `page`: the connection, "Add source", and the
 	 * sources with when each was last downloaded and a Refresh button. Each source links to its
-	 * copy at `<page>/view#<source id>`. Render it from that route's file, inside
+	 * copy at `<page>/view#<source id>`. With the `writes` option (#109), the setup names the
+	 * capabilities the integration needs to send ticks and notes, and each source says how many of
+	 * its changes are waiting to be sent. Render it from that route's file, inside
 	 * `<main class="page-narrow">`:
 	 *
 	 * ```svelte
@@ -23,15 +25,24 @@
 	const view = $derived.by(() => {
 		void version;
 		if (!notion) return undefined;
+		const outbox = notion.outbox();
 		return {
 			connected: notion.connected(),
+			unsent: outbox.length > 0,
 			sources: notion.sources().map((source) => ({
 				source,
 				status: notion.status(source.id),
-				copy: notion.copy(source.id)
+				copy: notion.copy(source.id),
+				waiting: outbox.filter((item) => item.source === source.id)
 			}))
 		};
 	});
+
+	const waitingText = (items: { failed?: unknown }[]) => {
+		const refused = items.filter((item) => item.failed).length;
+		const changes = items.length === 1 ? '1 change' : `${items.length} changes`;
+		return `${changes} waiting to send${refused ? `, ${refused} refused by Notion` : ''}.`;
+	};
 
 	const field = 'min-h-11 rounded-xl border border-current/20 bg-transparent p-2';
 	const button =
@@ -144,8 +155,17 @@
 			<h2 id="notion-connection" class="text-lg font-semibold">Connection</h2>
 			{#if view.connected}
 				<p data-testid="notion-connected">Connected to Notion.</p>
+				{#if notion.writes}
+					<p class="text-sm opacity-70" data-testid="notion-capabilities">
+						Ticked to-dos and notes you add go to Notion, so the integration needs “Update content”
+						and “Insert content” as well as “Read content”.
+					</p>
+				{/if}
 				{#if confirmDisconnect}
-					<p>Disconnecting removes the token and every saved copy. Your sources stay.</p>
+					<p>
+						Disconnecting removes the token and every saved copy{#if view.unsent}, and drops the
+							changes not sent to Notion yet{/if}. Your sources stay.
+					</p>
 					<div class="flex flex-wrap gap-2">
 						<button type="button" class={button} onclick={disconnect}>Disconnect</button>
 						<button type="button" class={button} onclick={() => (confirmDisconnect = false)}
@@ -163,7 +183,9 @@
 				<ol class="flex list-decimal flex-col gap-1 ps-6 text-sm">
 					<li>
 						Make an internal integration in Notion (Settings → Connections → Develop or manage
-						integrations) with “Read content” only.
+						integrations) with
+						{#if notion.writes}“Read content”, plus “Update content” to tick to-dos and “Insert
+							content” to add notes.{:else}“Read content” only.{/if}
 					</li>
 					<li>
 						Share each page or database you want here with it (the page’s ••• menu → Connections).
@@ -193,7 +215,7 @@
 			<h2 id="notion-sources" class="text-lg font-semibold">Sources</h2>
 			{#if view.sources.length}
 				<ul class="flex flex-col gap-3" aria-label="Sources">
-					{#each view.sources as { source, status, copy } (source.id)}
+					{#each view.sources as { source, status, copy, waiting } (source.id)}
 						<li
 							class="flex flex-col gap-2 rounded-xl border border-current/20 p-3"
 							data-testid="source"
@@ -210,6 +232,9 @@
 								{:else if copy}Downloaded {when(copy.fetchedAt)}.
 								{:else}Not downloaded yet.{/if}
 							</p>
+							{#if waiting.length}
+								<p class="text-sm" data-testid="source-waiting">{waitingText(waiting)}</p>
+							{/if}
 							<div class="flex flex-wrap gap-2">
 								<button
 									type="button"

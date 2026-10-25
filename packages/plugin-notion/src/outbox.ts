@@ -356,6 +356,51 @@ export async function flush(client: OutboxClient, update: OutboxUpdate): Promise
 	return { outbox, ...result };
 }
 
+/** The text of the to-do `id` in `blocks`, at any depth, or `undefined` if it isn't there. */
+export function todoText(blocks: readonly Block[], id: string): string | undefined {
+	for (const block of blocks) {
+		if (block.type === 'todo' && block.id === id) return plainText(block.text);
+		const nested =
+			block.type === 'columns'
+				? block.columns.flat()
+				: 'children' in block && block.children
+					? block.children
+					: [];
+		const found = nested.length ? todoText(nested, id) : undefined;
+		if (found !== undefined) return found;
+	}
+	return undefined;
+}
+
+/** A line of text at most `max` characters long, cut with an ellipsis. */
+const short = (text: string, max = 60) => {
+	const line = text.trim().split('\n')[0]!.trim();
+	const chars = [...line];
+	return chars.length > max || line !== text.trim() ? `${chars.slice(0, max).join('')}…` : line;
+};
+
+/** A to-do as a page names it: “Buy milk”, or "a to-do" when `blocks` don't have it. */
+export function todoName(blocks: readonly Block[], id: string): string {
+	const text = todoText(blocks, id);
+	return text?.trim() ? `“${short(text)}”` : 'a to-do';
+}
+
+/** What a queued change does, in a few words, for a page to list: Tick “Buy milk”. */
+export function describeChange(item: OutboxItem, blocks: readonly Block[] = []): string {
+	if (item.kind === 'note') return `Note: “${short(item.text)}”`;
+	return `${item.checked ? 'Tick' : 'Untick'} ${todoName(blocks, item.block)}`;
+}
+
+/** Why Notion (or the relay) refused a change, safe to show. */
+export function failureMessage(failure: OutboxFailure): string {
+	if (failure.code === 'not_a_to_do') return 'This to-do isn’t on the page in Notion any more.';
+	if (failure.code === 'relay_forbidden')
+		return 'The relay doesn’t send changes to Notion. Its deployer turns them on (ALLOW_WRITES).';
+	if (failure.code === 'restricted_resource')
+		return 'Notion refused the change. The integration needs “Update content” and “Insert content”.';
+	return new NotionError(failure.kind).message;
+}
+
 const KINDS: ReadonlySet<string> = new Set([
 	'offline',
 	'unauthorized',

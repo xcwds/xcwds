@@ -3,7 +3,9 @@
 	 * One saved Notion page (#107): its icon and title (an `<h2>`, since the shell's header holds the
 	 * `<h1>`), its properties, then its blocks. It reads only the plugin's saved format, so other
 	 * plugins and apps can show a copy with it too. Saved images need `image` (`app.notion.image`,
-	 * as `<NotionView>` passes it); without it they say they aren't on the device.
+	 * as `<NotionView>` passes it); without it they say they aren't on the device. To-dos can be
+	 * ticked when `check` is given (#109; `<NotionView>` passes one with the `writes` option): it gets
+	 * the to-do's block id and whether it's now ticked, and answers whether the change was kept.
 	 */
 	import Blocks from './Blocks.svelte';
 	import RichText from './RichText.svelte';
@@ -12,8 +14,13 @@
 
 	let {
 		document,
-		image
-	}: { document: Doc; image?: ((id: string) => Promise<Blob | undefined>) | undefined } = $props();
+		image,
+		check
+	}: {
+		document: Doc;
+		image?: ((id: string) => Promise<Blob | undefined>) | undefined;
+		check?: ((block: string, checked: boolean) => boolean) | undefined;
+	} = $props();
 	const url = $derived(safeHref(document.url));
 	const properties = $derived(
 		document.properties.filter((p) => p.type === 'checkbox' || propertyText(p) !== '')
@@ -45,7 +52,7 @@
 			{/each}
 		</dl>
 	{/if}
-	<div class="flex flex-col gap-2"><Blocks blocks={document.blocks} {url} {image} /></div>
+	<div class="flex flex-col gap-2"><Blocks blocks={document.blocks} {url} {image} {check} /></div>
 	{#if document.truncated}
 		<p class="text-sm opacity-70" data-notion="truncated">
 			This page is longer than a download takes, so it stops here.

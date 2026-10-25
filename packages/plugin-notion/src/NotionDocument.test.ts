@@ -207,3 +207,32 @@ describe('NotionDocument', () => {
 		expect(out).toContain('data-notion="truncated"');
 	});
 });
+
+describe('NotionDocument with check (#109)', () => {
+	const todos = doc([
+		{ type: 'todo', id: 'b1', text: t('Buy milk'), checked: false },
+		{
+			type: 'columns',
+			columns: [[{ type: 'todo', id: 'b2', text: t('In a column'), checked: true }]]
+		},
+		// Saved before to-dos kept their id: it can't be ticked.
+		{ type: 'todo', text: t('Old copy'), checked: false }
+	]);
+	const withCheck = (document: Doc) =>
+		render(NotionDocument, { props: { document, check: () => true } }).body.replace(
+			/<!--[^]*?-->/g,
+			''
+		);
+
+	it('lets to-dos with a block id be ticked, at any depth', () => {
+		const out = withCheck(todos);
+		expect(out).toMatch(/<input type="checkbox" class="[^"]*"\s*\/?>[^]*?Buy milk/);
+		expect(out).toMatch(/<input type="checkbox" class="[^"]*" checked=""\/?>[^]*?In a column/);
+		expect(out).toMatch(/<input type="checkbox" class="[^"]*" disabled[^>]*\/?>[^]*?Old copy/);
+	});
+
+	it('keeps every to-do read-only without it', () => {
+		const out = html(todos);
+		expect(out.match(/<input type="checkbox"[^>]*disabled/g)).toHaveLength(3);
+	});
+});

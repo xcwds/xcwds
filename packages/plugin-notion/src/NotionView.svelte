@@ -10,8 +10,12 @@
 	 * The id is in the fragment, so it never reaches a server. Opening the page downloads the
 	 * source again when its copy is older than the refresh setting; the saved copy shows meanwhile,
 	 * offline, and when a download fails, with a note that says why.
+	 *
+	 * With the `writes` option (#109), the copy's to-dos can be ticked and a note added at its end
+	 * (`<NotionChanges>`); both show at once, and the changes still waiting to be sent are listed.
 	 */
 	import { useApp } from '@xcwds/sveltekit';
+	import NotionChanges from './NotionChanges.svelte';
 	import NotionDocument from './NotionDocument.svelte';
 	import type {} from './client.js';
 	import { fromToday } from './sources.js';
@@ -46,9 +50,20 @@
 			source,
 			status: notion.status(source.id),
 			copy: notion.copy(source.id),
-			connected: notion.connected()
+			connected: notion.connected(),
+			outbox: notion.writes ? notion.outbox().filter((item) => item.source === source.id) : [],
+			conflicts: notion.conflicts().filter((conflict) => conflict.item.source === source.id),
+			sending: notion.sending()
 		};
 	});
+
+	let checkError = $state('');
+	/** Ticks or unticks a to-do of the copy on show; false puts the box back. */
+	function check(block: string, checked: boolean) {
+		const ok = !!id && !!notion?.change(id, { kind: 'check', block, checked });
+		checkError = ok ? '' : 'That change couldn’t be saved on this device.';
+		return ok;
+	}
 
 	// Opening the page brings a stale copy up to date (`refresh` does nothing for a fresh one).
 	$effect(() => {
@@ -74,7 +89,7 @@
 {:else if view && !view.source}
 	<p data-testid="notion-view-missing">This Notion source isn’t on this device.</p>
 {:else if view?.source}
-	{@const { source, status, copy, connected } = view}
+	{@const { source, status, copy, connected, outbox, conflicts, sending } = view}
 	<div class="flex flex-col gap-4" data-testid="notion-view">
 		<div class="flex flex-wrap items-center justify-between gap-3">
 			<p class="text-sm opacity-70" aria-live="polite" data-testid="notion-view-status">
@@ -98,7 +113,25 @@
 					No newer page yet{copy.createdTime ? `: this one is from ${day(copy.createdTime)}` : ''}.
 				</p>
 			{/if}
-			<NotionDocument document={copy} image={notion.image} />
+			{#if notion.writes}
+				<p data-testid="notion-check-error" role="status" class="empty:hidden">{checkError}</p>
+			{/if}
+			<NotionDocument
+				document={copy}
+				image={notion.image}
+				check={notion.writes ? check : undefined}
+			/>
+		{/if}
+		{#if notion.writes && (copy || outbox.length)}
+			<NotionChanges
+				{notion}
+				source={source.id}
+				blocks={copy?.blocks ?? []}
+				{outbox}
+				{conflicts}
+				{sending}
+				{connected}
+			/>
 		{/if}
 	</div>
 {/if}
