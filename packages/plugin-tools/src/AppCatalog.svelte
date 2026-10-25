@@ -53,17 +53,23 @@
 		}>;
 	};
 	const offline = (app as { offline?: OfflineLike }).offline;
-	/** Bytes kept offline per app id, and everything stored on the device. */
-	let kept = $state.raw<Map<string, { pages: number; bytes: number }> | undefined>(undefined);
+	/**
+	 * What each app kept offline at the last answer, with whether it was on when asked (the
+	 * worker answers for that state), and everything stored on the device.
+	 */
+	let kept = $state.raw<Map<string, { pages: number; bytes: number; on: boolean }> | undefined>(
+		undefined
+	);
 	let stored = $state<number | undefined>(undefined);
 	let asking = 0;
 	async function askUsage() {
 		if (!offline) return;
 		const run = ++asking;
+		const asked = new Set(apps.filter((a) => tools?.isOn(a.id)).map((a) => a.id));
 		const found = await offline.usage();
 		if (run !== asking) return;
 		// No answer (a worker busy downloading, say) keeps the last one rather than none.
-		if (found.apps) kept = new Map(found.apps.map((u) => [u.id, u]));
+		if (found.apps) kept = new Map(found.apps.map((u) => [u.id, { ...u, on: asked.has(u.id) }]));
 		if (found.storage) stored = found.storage.usage;
 	}
 	$effect(() => {
@@ -87,13 +93,14 @@
 		const shown = value < 10 ? Math.round(value * 10) / 10 : Math.round(value);
 		return `${shown} ${mb ? 'MB' : 'KB'}`;
 	}
-	function offlineText(id: string, isOn: boolean): string | undefined {
+	function offlineText(id: string): string | undefined {
 		const found = kept?.get(id);
 		if (!found) return undefined;
-		if (found.pages === 0) return isOn ? 'Not downloaded for offline use yet' : 'Not kept offline';
+		if (found.pages === 0)
+			return found.on ? 'Not downloaded for offline use yet' : 'Not kept offline';
 		const pages = `${found.pages} ${found.pages === 1 ? 'page' : 'pages'}`;
 		// An app that's off keeps only pages someone opened (runtime caching).
-		return isOn
+		return found.on
 			? `Kept offline: ${pages}, ${sizeText(found.bytes)}`
 			: `Off, but ${pages} from a visit ${found.pages === 1 ? 'is' : 'are'} kept offline (${sizeText(found.bytes)})`;
 	}
@@ -152,7 +159,7 @@
 <ul class="grid gap-2 md:grid-cols-2 lg:grid-cols-3" data-testid="apps">
 	{#each apps as a (a.id)}
 		{@const names = tools?.all().filter((t) => t.app === a.id) ?? []}
-		{@const offlineNote = offlineText(a.id, on[a.id] ?? false)}
+		{@const offlineNote = offlineText(a.id)}
 		<li
 			class="flex flex-col gap-2 rounded-xl bg-(--xcwds-shell-card) px-4 py-3"
 			data-testid="app-card"
