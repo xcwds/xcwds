@@ -27,8 +27,7 @@ So far it holds:
   among the saved images), `external` (a link to an image on another site) or `skipped` (why it
   isn't on the device). Notion's signed links to images are never kept. A to-do keeps its Notion
   block `id`, so it can be ticked.
-- **`./outbox`** ([#109](https://github.com/xcwds/xcwds/issues/109), not wired into the plugin
-  yet): changes waiting to be sent to Notion, ticking a to-do and adding a short note at the end
+- **`./outbox`** ([#109](https://github.com/xcwds/xcwds/issues/109)): changes waiting to be sent to Notion, ticking a to-do and adding a short note at the end
   of a page. `enqueue` adds one (a tick that undoes a waiting one cancels both), `applyOutbox`
   shows the waiting changes on a copy, and `flush(client, update)` sends them in order, each
   step applied to the latest saved outbox so changes made meanwhile aren't lost. A
@@ -50,7 +49,7 @@ So far it holds:
   `/file`, without the token): at most 5 MB an image, and 20 MB or 50 images a source, reusing
   an image already saved for the same file.
 
-- **The plugin** (`.` and `./client`): `notion({ relay, page })` in `xcwds.config.ts`. `relay`
+- **The plugin** (`.` and `./client`): `notion({ relay, page, writes })` in `xcwds.config.ts`. `relay`
   is your relay's `https:` origin, and the build declares it as the plugin's only network use
   ([#103](https://github.com/xcwds/xcwds/issues/103)), so the page's content security policy allows exactly that origin. Pages get
   `app.notion`:
@@ -61,15 +60,30 @@ So far it holds:
   - `copy(id)`, `status(id)` (downloading, or why the last try failed, with a message safe to
     show) and `refresh(id, { force })`.
   - `image(id)`: a saved image a copy shows, as a `Blob`.
+  - With `writes: true` ([#109](https://github.com/xcwds/xcwds/issues/109); the relay's
+    `ALLOW_WRITES` on, and a token with Notion's "Update content" and "Insert content"
+    capabilities): `change(source, { kind: 'check', block, checked })` ticks one of the copy's
+    to-dos and `change(source, { kind: 'note', text })` adds a note at its end. The change is saved
+    in the outbox and `copy(source)` shows it at once. It's sent right away, when the connection
+    comes back, when the app comes back to the foreground and before that source is downloaded
+    again, one send at a time across tabs (a Web Lock). The copies it changed are downloaded again
+    afterwards. `outbox()` lists what's waiting (a change Notion refused has `failed`, kept until
+    `retry(id)` or `discard(id)`), `send()` sends now and says what happened, `sending()` says
+    whether a send runs, and `conflicts()` lists the ticks Notion had the other way, edited there
+    since, whose Notion value stays (`clearConflicts()` once shown). The pages don't offer these
+    yet.
 
   Saved data: the token (`app:notion:token`, its own "Notion connection" group, personal, never
   in backups), the sources (in backups), the copies (personal, out of backups) and their images
   (the blob collection `app:notion:images`, in the copies' group, personal, out of backups). A
   new copy deletes the images the one before showed and it doesn't, removing a source deletes
-  its images, and Disconnect deletes them all. When the app
+  its images, and Disconnect deletes them all. With `writes`, the outbox (`app:notion:outbox`) is
+  personal and out of backups too, since a restored change could go to Notion twice, and
+  Disconnect clears it. When the app
   comes back to the foreground, copies older than the `notionRefreshMinutes` setting (30 by
   default; 0 means only by hand) are downloaded again. Going to the background cancels downloads
-  in flight, and app updates wait while one runs. The token is saved unencrypted in browser
+  in flight, and app updates wait while one runs or changes are being sent (a change still
+  waiting is saved, so it survives the update). The token is saved unencrypted in browser
   storage until [#79](https://github.com/xcwds/xcwds/issues/79), so use a read-only integration
   shared with only the pages you need.
 
