@@ -62,8 +62,9 @@
 		const run = ++asking;
 		const found = await offline.usage();
 		if (run !== asking) return;
-		kept = found.apps && new Map(found.apps.map((u) => [u.id, u]));
-		stored = found.storage?.usage;
+		// No answer (a worker busy downloading, say) keeps the last one rather than none.
+		if (found.apps) kept = new Map(found.apps.map((u) => [u.id, u]));
+		if (found.storage) stored = found.storage.usage;
 	}
 	$effect(() => {
 		if (!offline) return;
@@ -89,9 +90,12 @@
 	function offlineText(id: string, isOn: boolean): string | undefined {
 		const found = kept?.get(id);
 		if (!found) return undefined;
-		if (found.pages > 0)
-			return `Kept offline: ${found.pages} ${found.pages === 1 ? 'page' : 'pages'}, ${sizeText(found.bytes)}`;
-		return isOn ? 'Not downloaded for offline use yet' : 'Not kept offline';
+		if (found.pages === 0) return isOn ? 'Not downloaded for offline use yet' : 'Not kept offline';
+		const pages = `${found.pages} ${found.pages === 1 ? 'page' : 'pages'}`;
+		// An app that's off keeps only pages someone opened (runtime caching).
+		return isOn
+			? `Kept offline: ${pages}, ${sizeText(found.bytes)}`
+			: `Off, but ${pages} from a visit ${found.pages === 1 ? 'is' : 'are'} kept offline (${sizeText(found.bytes)})`;
 	}
 
 	const groupsOf = (a: AppGroup): Group[] => {

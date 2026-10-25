@@ -88,6 +88,16 @@ for (const { name, dir, base } of targets) {
 			await expect(kitchen).toHaveText('Not kept offline');
 			await toggle(page, 'Kitchen').click();
 			await expect(kitchen).toHaveText(/^Kept offline: 2 pages, /);
+
+			// Off, a page someone opens is still kept (runtime caching), and the card says so.
+			await toggle(page, 'Kitchen').click();
+			await expect(kitchen).toHaveText('Not kept offline');
+			await open(page, '/utils/coffee');
+			await expect.poll(() => kept(page, url('/utils/coffee'))).toBe('original');
+			await open(page, '/apps');
+			await expect(kitchen).toHaveText(
+				/^Off, but 1 page from a visit is kept offline \([\d.]+ (KB|bytes)\)$/
+			);
 		});
 
 		test('an update keeps the apps that were on offline, and not the ones turned off', async ({
