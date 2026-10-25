@@ -1,5 +1,16 @@
 # @xcwds/plugin-camera
 
+## 0.5.0
+
+### Minor Changes
+
+- Needs `@xcwds/sveltekit` 0.8 (peer range `^0.8.0`).
+
+### Patch Changes
+
+- Updated dependencies [3eccb4f]
+  - @xcwds/sveltekit@0.8.0
+
 ## 0.4.0
 
 ### Minor Changes
