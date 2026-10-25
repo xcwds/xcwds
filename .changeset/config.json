@@ -15,6 +15,7 @@
 		"@xcwds-site/plugin-pages",
 		"@xcwds/plugin-vault",
 		"@xcwds/plugin-recorder",
-		"@xcwds/plugin-notion"
+		"@xcwds/plugin-notion",
+		"@xcwds/plugin-scanner"
 	]
 }
