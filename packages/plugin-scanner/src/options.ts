@@ -1,7 +1,7 @@
 /**
  * The plugin's name and the @xcwds/core versions it works with. The plugin's entries (`index.ts`,
  * `client.ts`) and its components come in later slices of #151; until then only `./corners`,
- * `./geometry`, `./warp`, `./filters` and `./pdf` are exported.
+ * `./geometry`, `./warp`, `./filters`, `./pdf` and `./pages` are exported.
  */
 export const NAME = '@xcwds/plugin-scanner';
 /**

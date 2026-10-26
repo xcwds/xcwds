@@ -6,8 +6,8 @@ Nothing is sent anywhere. **Work in progress**
 ([#151](https://github.com/xcwds/xcwds/issues/151)): not published yet, and not a plugin you can
 install yet.
 
-So far it holds the image and PDF code the plugin will be built on. The crop screen, the pages
-kept between visits (`app:scanner:pages`), the plugin entry and the components come next.
+So far it holds the image and PDF code the plugin will be built on, and the store that keeps a
+scan's pages between visits. The crop screen, the plugin entry and the components come next.
 
 - **`@xcwds/plugin-scanner/corners`.** `findPage(pixels)` finds the corners of a page in a photo,
   where the crop screen's handles start, or returns `null` when nothing in it stands out clearly
@@ -43,9 +43,20 @@ kept between visits (`app:scanner:pages`), the plugin entry and the components c
   and comments out of each image first (between a progressive JPEG's scans too), along with
   anything after the end of the image, such as a Motion Photo's video. Pass images that are
   already upright, as a canvas encodes them, since EXIF's orientation goes too.
+- **`@xcwds/plugin-scanner/pages`.** `createPages(app.blobs, { key, label, group })` keeps the
+  pages of the scan in progress in a blob collection (`app:scanner:pages` by default), so an
+  unfinished scan survives a reload. Each page is the finished image, an upright JPEG with its
+  size and the filter that made it. `add` puts a page at the end, `retake` replaces one's image in
+  its place, `move(id, index)` reorders, `delete` removes one and `clear` starts over; `list()`
+  gives them in order and `jpegs()` hands their bytes to `writePdf`. The collection is personal
+  (`sensitive`, so a lock's reset clears it) and stays out of backups. The first page added asks
+  the browser to keep the app's data (`persist`), since it follows a tap. A saved blob can't be
+  changed, so moving or retaking a page saves a new copy and then deletes the old one; if the tab
+  closes in between, the newer copy wins and the next `list()` deletes the other.
 
-Everything is pure functions that use no browser APIs and make no network requests, safe to
-import anywhere.
+The image and PDF modules are pure functions that use no browser APIs, and `pages` reaches the
+browser only when a method is called. None makes a network request, and all are safe to import
+anywhere.
 
 ## What it won't do
 
