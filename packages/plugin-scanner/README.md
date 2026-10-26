@@ -6,9 +6,20 @@ Nothing is sent anywhere. **Work in progress**
 ([#151](https://github.com/xcwds/xcwds/issues/151)): not published yet, and not a plugin you can
 install yet.
 
-So far it holds the image and PDF code the plugin will be built on. Finding the page's corners,
-the crop screen, the pages kept between visits (`app:scanner:pages`), the plugin entry and the
-components come next.
+So far it holds the image and PDF code the plugin will be built on. The crop screen, the pages
+kept between visits (`app:scanner:pages`), the plugin entry and the components come next.
+
+- **`@xcwds/plugin-scanner/corners`.** `findPage(pixels)` finds the corners of a page in a photo,
+  where the crop screen's handles start, or returns `null` when nothing in it stands out clearly
+  as a page; `startCorners(pixels)` gives `{ quad, found }`, with the whole photo when it found
+  none. It shrinks the photo to a small greyscale frame (`size`, 256 px on the longer side by
+  default, 1024 at most), splits page from background by brightness (Otsu's threshold), takes the largest bright
+  region and the four corners that cover most of its outline, then straightens each side with a
+  line fitted through the outline, so rounded or dog-eared corners land where the sides meet. It
+  finds nothing when the region is under 8% or over 95% of the photo, isn't four-cornered (a
+  plate), has corners sharper than 35° or flatter than 145°, or barely differs from what it's on
+  (a white page on a white desk). It looks for a page lighter than what it's on. It takes about
+  60 ms on a 9-megapixel photo in Node, in plain JavaScript, with no OpenCV.
 
 - **`@xcwds/plugin-scanner/geometry`.** `homography(from, to)` is the projective transform that
   maps one quad's corners onto another's (`null` when three corners are on one line), and
