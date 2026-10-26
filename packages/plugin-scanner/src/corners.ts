@@ -207,13 +207,8 @@ function fitPage(frame: Frame, threshold: number): Quad | undefined {
 	return quad;
 }
 
-interface Region {
-	labels: Uint8Array;
-	count: number;
-}
-
-/** The largest 4-connected region of `mask`'s set pixels. */
-function largestRegion(mask: Uint8Array, width: number, height: number): Region | undefined {
+/** The largest 4-connected region of `mask`'s set pixels, as a mask of its own. */
+function largestRegion(mask: Uint8Array, width: number, height: number): Uint8Array | undefined {
 	const seen = new Uint8Array(mask.length);
 	const stack = new Int32Array(mask.length);
 	let bestStart = -1;
@@ -229,7 +224,7 @@ function largestRegion(mask: Uint8Array, width: number, height: number): Region 
 	if (bestStart < 0) return;
 	const labels = new Uint8Array(mask.length);
 	flood(mask, labels, stack, bestStart, width, height);
-	return { labels, count: bestCount };
+	return labels;
 }
 
 /** Marks in `seen` the 4-connected pixels of `mask` reached from `start`, and counts them. */
@@ -266,15 +261,14 @@ function flood(
 }
 
 /**
- * `region` with its holes (such as a page's text) filled in: everything the frame's border can't
+ * The region `labels` marks, with its holes (such as a page's text) filled in: everything the frame's border can't
  * reach without crossing it. `filled` counts its pixels.
  */
 function fill(
-	region: Region,
+	labels: Uint8Array,
 	width: number,
 	height: number
 ): { solid: Uint8Array; filled: number } {
-	const { labels } = region;
 	const outside = new Uint8Array(labels.length);
 	for (let i = 0; i < labels.length; i++) outside[i] = labels[i] ? 0 : 1;
 	const reached = new Uint8Array(labels.length);
