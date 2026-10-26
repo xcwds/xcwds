@@ -5,7 +5,9 @@
 	"description": "Scan paper documents to a PDF on the device in @xcwds apps, without a cloud scanning app. Work in progress (#151), not published yet.",
 	"license": "MIT",
 	"type": "module",
-	"sideEffects": false,
+	"sideEffects": [
+		"**/*.worker.js"
+	],
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/xcwds/xcwds.git",
@@ -31,6 +33,10 @@
 		"./pdf": {
 			"types": "./dist/pdf.d.ts",
 			"default": "./dist/pdf.js"
+		},
+		"./process": {
+			"types": "./dist/process.d.ts",
+			"default": "./dist/process.js"
 		},
 		"./warp": {
 			"types": "./dist/warp.d.ts",
