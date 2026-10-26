@@ -13,7 +13,7 @@ kept between visits (`app:scanner:pages`), the plugin entry and the components c
   where the crop screen's handles start, or returns `null` when nothing in it stands out clearly
   as a page; `startCorners(pixels)` gives `{ quad, found }`, with the whole photo when it found
   none. It shrinks the photo to a small greyscale frame (`size`, 256 px on the longer side by
-  default), splits page from background by brightness (Otsu's threshold), takes the largest bright
+  default, 1024 at most), splits page from background by brightness (Otsu's threshold), takes the largest bright
   region and the four corners that cover most of its outline, then straightens each side with a
   line fitted through the outline, so rounded or dog-eared corners land where the sides meet. It
   finds nothing when the region is under 8% or over 95% of the photo, isn't four-cornered (a

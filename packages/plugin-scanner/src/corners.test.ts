@@ -302,7 +302,8 @@ describe('findPage', () => {
 		])
 			expect(() => findPage(bad)).toThrow(RangeError);
 		const ok = { width: 4, height: 4, data: new Uint8ClampedArray(64) };
-		for (const size of [0, 8, 20.5, NaN]) expect(() => findPage(ok, { size })).toThrow(RangeError);
+		for (const size of [0, 8, 20.5, 1025, 1e6, NaN])
+			expect(() => findPage(ok, { size })).toThrow(RangeError);
 	});
 });
 

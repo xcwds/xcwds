@@ -10,7 +10,7 @@ import { isConvex, rectangle, type Point, type Quad } from './geometry.js';
 import type { Pixels } from './warp.js';
 
 export interface FindPageOptions {
-	/** The longer side of the frame the search runs on, in pixels: 256 by default. */
+	/** The longer side of the frame the search runs on, in pixels: 256 by default, at most 1024. */
 	size?: number;
 }
 
@@ -35,6 +35,8 @@ const MIN_SEPARATION = 2.5;
 /** The flattest and sharpest a corner may be, in degrees, for a page photographed at an angle. */
 const MIN_ANGLE = 35;
 const MAX_ANGLE = 145;
+/** The largest frame `size` allowed: plenty for a starting point, and the search stays quick. */
+const MAX_SIZE = 1024;
 
 /**
  * The corners of the page in `pixels` (clockwise from the top left, in its pixels), or `null`
@@ -52,8 +54,8 @@ export function findPage(pixels: Pixels, options: FindPageOptions = {}): Quad | 
 	)
 		throw new RangeError('The pixels don’t match their width and height.');
 	const size = options.size ?? 256;
-	if (!(Number.isInteger(size) && size >= 16))
-		throw new RangeError('The size must be a whole number of pixels from 16.');
+	if (!(Number.isInteger(size) && size >= 16 && size <= MAX_SIZE))
+		throw new RangeError(`The size must be a whole number of pixels from 16 to ${MAX_SIZE}.`);
 	const frame = shrink(pixels, size);
 	const split = otsu(frame.luma);
 	if (!split) return null;
