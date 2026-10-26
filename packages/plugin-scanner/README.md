@@ -6,8 +6,8 @@ Nothing is sent anywhere. **Work in progress**
 ([#151](https://github.com/xcwds/xcwds/issues/151)): not published yet, and not a plugin you can
 install yet.
 
-So far it holds the image and PDF code the plugin will be built on, the Worker that straightens
-and filters a page, and the store that keeps a scan's pages between visits. The crop screen, the
+So far it holds the image and PDF code the plugin will be built on, the Worker that straightens,
+filters and encodes a page, and the store that keeps a scan's pages between visits. The crop screen, the
 plugin entry and the components come next.
 
 - **`@xcwds/plugin-scanner/corners`.** `findPage(pixels)` finds the corners of a page in a photo,
@@ -65,10 +65,20 @@ plugin entry and the components come next.
   checked on the page before anything is copied. Where the Worker can't start or stops working
   (offline before its file was ever fetched, since a service worker precaches the app's pages and
   chunks but not Vite's worker files), pages are processed on the page instead. After `close()`,
-  anything still waiting rejects.
+  anything still waiting rejects. `finish(pixels, quad, { filter, max, quality })` goes on to
+  encode the page as a JPEG, in the Worker where it has an `OffscreenCanvas` and on the page
+  otherwise, and resolves with `{ blob, width, height, filter, paper }`, which the pages store's
+  `add` and `retake` take as they are. It rejects with a `RangeError` for a bad `quality` too, and
+  with `ENCODE_ERROR` when the browser can't make a JPEG of the page.
+- **`@xcwds/plugin-scanner/encode`.** `encodeJpeg(pixels, { quality })` encodes a finished page
+  as a JPEG `Blob` (`quality` from 0 to 1, `JPEG_QUALITY`, 0.9, by default) on an
+  `OffscreenCanvas`, else a `<canvas>`, and gives `null` where neither can make a JPEG (no canvas,
+  a page too big for this browser's canvas, or a canvas that writes PNG instead). See-through
+  pixels go on white first (`onWhite`), since JPEG has none and a canvas would make them black.
+  The canvas encodes from pixels, so the JPEG carries no EXIF, and `writePdf` strips anything else.
 
-The image and PDF modules are pure functions that use no browser APIs, and `pages` and `process`
-reach the browser only when a method is called. None makes a network request, and all are safe to
+The image and PDF modules are pure functions that use no browser APIs, and `pages`, `process` and
+`encode` reach the browser only when a method is called. None makes a network request, and all are safe to
 import anywhere.
 
 ## What it won't do

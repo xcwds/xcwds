@@ -10,11 +10,24 @@ import {
 	type WorkerLike
 } from './process.js';
 import { warp, type Pixels } from './warp.js';
+import { ENCODE_ERROR, JPEG_QUALITY, encodeJpeg } from './encode.js';
 
 // The real filters, watched, to see which pages skip them.
 vi.mock('./filters.js', async (original) => {
 	const actual = await original<typeof import('./filters.js')>();
 	return { ...actual, applyFilter: vi.fn(actual.applyFilter) };
+});
+
+// Node has no canvas: a stand-in JPEG that says what it was made from.
+vi.mock('./encode.js', async (original) => {
+	const actual = await original<typeof import('./encode.js')>();
+	return {
+		...actual,
+		encodeJpeg: vi.fn(
+			async (page: Pixels, { quality = actual.JPEG_QUALITY }: { quality?: number } = {}) =>
+				new Blob([`${page.width}x${page.height} at ${quality}`], { type: 'image/jpeg' })
+		)
+	};
 });
 
 function image(width: number, height: number, colour: (x: number, y: number) => number[]): Pixels {
@@ -86,8 +99,8 @@ describe('processPage', () => {
 });
 
 describe('answer', () => {
-	it('answers with the page and hands its buffer back', () => {
-		const { response, transfer } = answer({ id: 3, ...photo, quad: corners, filter: 'bw' });
+	it('answers with the page and hands its buffer back', async () => {
+		const { response, transfer } = await answer({ id: 3, ...photo, quad: corners, filter: 'bw' });
 		expect(response).toMatchObject({
 			id: 3,
 			ok: true,
@@ -96,15 +109,36 @@ describe('answer', () => {
 		expect(response.ok && transfer).toEqual([response.ok && response.data.buffer]);
 	});
 
-	it('answers with the error’s message when the page can’t be made', () => {
+	it('answers with the error’s message when the page can’t be made', async () => {
 		const [tl, tr, br, bl] = corners;
-		const { response, transfer } = answer({ id: 4, ...photo, quad: [tl, br, tr, bl] });
+		const { response, transfer } = await answer({ id: 4, ...photo, quad: [tl, br, tr, bl] });
 		expect(response).toEqual({
 			id: 4,
 			ok: false,
 			error: 'The corners don’t make a page: drag them to its corners.'
 		});
 		expect(transfer).toEqual([]);
+	});
+
+	it('encodes the page only when asked, and answers without a JPEG when it can’t', async () => {
+		vi.mocked(encodeJpeg).mockClear();
+		const plain = await answer({ id: 5, ...photo, quad: corners });
+		expect(plain.response).not.toHaveProperty('jpeg');
+		expect(encodeJpeg).not.toHaveBeenCalled();
+		const { response } = await answer({ id: 6, ...photo, quad: corners, jpeg: 0.5 });
+		const page = processPage(photo, corners);
+		expect(response).toMatchObject({ id: 6, ok: true, ...page });
+		expect(response.ok && (await response.jpeg?.text())).toBe(
+			`${page.width}x${page.height} at 0.5`
+		);
+		vi.mocked(encodeJpeg).mockResolvedValueOnce(null);
+		const none = await answer({ id: 7, ...photo, quad: corners, jpeg: 0.5 });
+		expect(none.response).toMatchObject({ id: 7, ok: true });
+		expect(none.response).not.toHaveProperty('jpeg');
+		vi.mocked(encodeJpeg).mockRejectedValueOnce(new Error('out of memory'));
+		const failed = await answer({ id: 8, ...photo, quad: corners, jpeg: 0.5 });
+		expect(failed.response).toMatchObject({ id: 8, ok: true });
+		expect(failed.response).not.toHaveProperty('jpeg');
 	});
 });
 
@@ -121,9 +155,10 @@ class FakeWorker implements WorkerLike {
 		this.requests.push(request);
 		if (this.auto) setTimeout(() => this.reply(request));
 	}
-	reply(request = this.requests.at(-1)!) {
+	async reply(request = this.requests.at(-1)!) {
 		if (this.terminated) return;
-		const { response, transfer } = answer(request);
+		const { response, transfer } = await answer(request);
+		if (this.terminated) return;
 		this.onmessage?.({ data: structuredClone(response, { transfer }) } as MessageEvent);
 	}
 	fail() {
@@ -159,8 +194,8 @@ describe('createProcessor', () => {
 		const processor = createProcessor({ worker: () => worker });
 		const a = processor.process(photo, corners);
 		const b = processor.process(photo, corners, { filter: 'bw' });
-		worker.reply(worker.requests[1]);
-		worker.reply(worker.requests[0]);
+		await worker.reply(worker.requests[1]);
+		await worker.reply(worker.requests[0]);
 		expect((await a).data).toEqual(processPage(photo, corners).data);
 		expect((await b).data).toEqual(processPage(photo, corners, { filter: 'bw' }).data);
 	});
@@ -189,7 +224,7 @@ describe('createProcessor', () => {
 		expect(start).not.toHaveBeenCalled();
 		const page = processor.process(photo, corners);
 		expect(worker.requests.map((r) => r.id)).toEqual([0]);
-		worker.reply();
+		await worker.reply();
 		await expect(page).resolves.toEqual(processPage(photo, corners));
 	});
 
@@ -235,8 +270,86 @@ describe('createProcessor', () => {
 		const waiting = processor.process(photo, corners);
 		processor.close();
 		await expect(waiting).rejects.toThrow('closed');
-		worker.reply(worker.requests[0]);
+		await worker.reply(worker.requests[0]);
 		await expect(processor.process(photo, corners)).rejects.toThrow('closed');
 		expect(worker.requests).toHaveLength(1);
+	});
+});
+
+describe('finish', () => {
+	const text = (page: { width: number; height: number }, quality = JPEG_QUALITY) =>
+		`${page.width}x${page.height} at ${quality}`;
+
+	it('makes the page and its JPEG in the Worker, ready for the pages store', async () => {
+		vi.mocked(encodeJpeg).mockClear();
+		const worker = new FakeWorker();
+		const processor = createProcessor({ worker: () => worker });
+		const page = processPage(photo, corners, { filter: 'greyscale' });
+		const done = await processor.finish(photo, corners, { filter: 'greyscale', quality: 0.6 });
+		expect(done).toEqual({
+			blob: expect.any(Blob),
+			width: page.width,
+			height: page.height,
+			filter: 'greyscale',
+			paper: null
+		});
+		expect(await done.blob.text()).toBe(text(page, 0.6));
+		expect(worker.requests[0]).toMatchObject({ filter: 'greyscale', jpeg: 0.6 });
+		// Encoded once, in the Worker.
+		expect(encodeJpeg).toHaveBeenCalledTimes(1);
+		const plain = await processor.finish(photo, corners);
+		expect(plain.filter).toBe('original');
+		expect(await plain.blob.text()).toBe(text(page));
+		expect(worker.requests[1]).toMatchObject({ jpeg: JPEG_QUALITY });
+		// `process` asks for no JPEG and gives none.
+		const processed = await processor.process(photo, corners);
+		expect(worker.requests[2]).not.toHaveProperty('jpeg');
+		expect(processed).not.toHaveProperty('jpeg');
+	});
+
+	it('encodes on the page when the Worker couldn’t', async () => {
+		vi.mocked(encodeJpeg).mockClear();
+		vi.mocked(encodeJpeg).mockResolvedValueOnce(null);
+		const processor = createProcessor({ worker: () => new FakeWorker() });
+		const done = await processor.finish(photo, corners, { quality: 0.4 });
+		expect(await done.blob.text()).toBe(text(done, 0.4));
+		expect(encodeJpeg).toHaveBeenCalledTimes(2);
+	});
+
+	it('makes and encodes the page on the page when the Worker can’t start', async () => {
+		const processor = createProcessor({ worker: () => null });
+		const done = await processor.finish(photo, corners, { filter: 'bw' });
+		const page = processPage(photo, corners, { filter: 'bw' });
+		expect(done).toMatchObject({ width: page.width, height: page.height, filter: 'bw' });
+		expect(await done.blob.text()).toBe(text(page));
+	});
+
+	it('rejects when no JPEG can be made anywhere', async () => {
+		vi.mocked(encodeJpeg).mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+		const processor = createProcessor({ worker: () => new FakeWorker() });
+		await expect(processor.finish(photo, corners)).rejects.toThrow(ENCODE_ERROR);
+		// The next page is fine.
+		await expect(processor.finish(photo, corners)).resolves.toHaveProperty('blob');
+	});
+
+	it('refuses a bad quality, or a bad page, before starting anything', async () => {
+		const start = vi.fn(() => new FakeWorker());
+		const processor = createProcessor({ worker: start });
+		for (const quality of [-1, 1.5, NaN])
+			await expect(processor.finish(photo, corners, { quality })).rejects.toThrow(RangeError);
+		await expect(processor.finish(photo, corners, { max: 0 })).rejects.toThrow(RangeError);
+		expect(start).not.toHaveBeenCalled();
+	});
+
+	it('rejects once closed, even while the page is being encoded here', async () => {
+		let encoded!: (blob: Blob) => void;
+		vi.mocked(encodeJpeg).mockReturnValueOnce(new Promise((resolve) => (encoded = resolve)));
+		const processor = createProcessor({ worker: () => null });
+		const waiting = processor.finish(photo, corners);
+		await vi.waitFor(() => expect(encoded).toBeDefined());
+		processor.close();
+		encoded(new Blob(['x'], { type: 'image/jpeg' }));
+		await expect(waiting).rejects.toThrow('closed');
+		await expect(processor.finish(photo, corners)).rejects.toThrow('closed');
 	});
 });
