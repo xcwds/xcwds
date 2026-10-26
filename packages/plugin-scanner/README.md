@@ -7,8 +7,8 @@ Nothing is sent anywhere. **Work in progress**
 install yet.
 
 So far it holds the image and PDF code the plugin will be built on, the Worker that straightens,
-filters and encodes a page, and the store that keeps a scan's pages between visits. The crop screen, the
-plugin entry and the components come next.
+filters and encodes a page, and the store that keeps a scan's pages between visits. The crop
+screen, the plugin entry and the components come next.
 
 - **`@xcwds/plugin-scanner/corners`.** `findPage(pixels)` finds the corners of a page in a photo,
   where the crop screen's handles start, or returns `null` when nothing in it stands out clearly
@@ -78,8 +78,8 @@ plugin entry and the components come next.
   The canvas encodes from pixels, so the JPEG carries no EXIF, and `writePdf` strips anything else.
 
 The image and PDF modules are pure functions that use no browser APIs, and `pages`, `process` and
-`encode` reach the browser only when a method is called. None makes a network request, and all are safe to
-import anywhere.
+`encode` reach the browser only when a method is called. None makes a network request, and all
+are safe to import anywhere.
 
 ## What it won't do
 
