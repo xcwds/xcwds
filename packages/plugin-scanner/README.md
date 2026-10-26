@@ -6,8 +6,9 @@ Nothing is sent anywhere. **Work in progress**
 ([#151](https://github.com/xcwds/xcwds/issues/151)): not published yet, and not a plugin you can
 install yet.
 
-So far it holds the image and PDF code the plugin will be built on, and the store that keeps a
-scan's pages between visits. The crop screen, the plugin entry and the components come next.
+So far it holds the image and PDF code the plugin will be built on, the Worker that straightens
+and filters a page, and the store that keeps a scan's pages between visits. The crop screen, the
+plugin entry and the components come next.
 
 - **`@xcwds/plugin-scanner/corners`.** `findPage(pixels)` finds the corners of a page in a photo,
   where the crop screen's handles start, or returns `null` when nothing in it stands out clearly
@@ -53,10 +54,20 @@ scan's pages between visits. The crop screen, the plugin entry and the component
   the browser to keep the app's data (`persist`), since it follows a tap. A saved blob can't be
   changed, so moving or retaking a page saves a new copy and then deletes the old one; if the tab
   closes in between, the newer copy wins and the next `list()` deletes the other.
+- **`@xcwds/plugin-scanner/process`.** `processPage(pixels, quad, { filter, max })` makes the
+  finished page from a photo and the page's corners: sized by `pageSize` (at most `max` pixels on
+  its longer side, `MAX_SIDE` by default), straightened by `warp` and passed through the filter.
+  It throws a `RangeError` for corners that don't make a page. `createProcessor()` does the same
+  in a Worker, started on first use and kept until `close()`, so a large photo never holds up the
+  page: `process(pixels, quad, options)` copies the pixels over (the page keeps its own for
+  another crop) and resolves with the page. Where the Worker can't start or stops working
+  (offline before its file was ever fetched, since a service worker precaches the app's pages and
+  chunks but not Vite's worker files), pages are processed on the page instead. After `close()`,
+  anything still waiting rejects.
 
-The image and PDF modules are pure functions that use no browser APIs, and `pages` reaches the
-browser only when a method is called. None makes a network request, and all are safe to import
-anywhere.
+The image and PDF modules are pure functions that use no browser APIs, and `pages` and `process`
+reach the browser only when a method is called. None makes a network request, and all are safe to
+import anywhere.
 
 ## What it won't do
 
