@@ -26,6 +26,8 @@ interface Scene {
 	light?: (x: number, y: number) => number;
 	/** Camera noise, in grey levels either way. */
 	noise?: number;
+	/** The page's top-right corner folded under, this far along each edge, in millimetres. */
+	fold?: number;
 	/** One look-up per pixel instead of four, for big photos, whose edges are sharp anyway. */
 	sharp?: boolean;
 	seed?: number;
@@ -53,6 +55,9 @@ function photo(scene: Scene): Pixels {
 			] as const);
 	const sheet = { width: 210, height: 297 };
 	const toSheet = page ? homography(page, rectangle(sheet.width, sheet.height))! : undefined;
+	const fold = scene.fold ?? 0;
+	const onSheet = (u: number, v: number) =>
+		u >= 0 && v >= 0 && u <= sheet.width && v <= sheet.height && sheet.width - u + v >= fold;
 	const ink = (u: number, v: number) => {
 		if (u < 20 || u > 190 || v < 25 || v > 270) return false;
 		const line = (v - 25) % 12;
@@ -70,8 +75,7 @@ function photo(scene: Scene): Pixels {
 				const py = y + oy;
 				const s = toSheet && project(toSheet, { x: px, y: py });
 				let c: readonly number[];
-				if (s && s.x >= 0 && s.y >= 0 && s.x <= sheet.width && s.y <= sheet.height)
-					c = ink(s.x, s.y) ? [40, 40, 50] : paper;
+				if (s && onSheet(s.x, s.y)) c = ink(s.x, s.y) ? [40, 40, 50] : paper;
 				else {
 					const grain = 0.85 + 0.15 * Math.sin(py / 7 + Math.sin(px / 40) * 3);
 					c = desk.map((v) => v * grain);
@@ -163,15 +167,15 @@ describe('findPage', () => {
 
 	it('finds a page in a full-size photo, with the corners in its pixels', () => {
 		const page: Quad = [
-			{ x: 700, y: 260 },
-			{ x: 2300, y: 330 },
-			{ x: 2240, y: 2700 },
-			{ x: 620, y: 2600 }
+			{ x: 700, y: 160 },
+			{ x: 1800, y: 210 },
+			{ x: 1760, y: 1680 },
+			{ x: 640, y: 1620 }
 		];
-		const quad = findPage(photo({ width: 3000, height: 3000, page, seed: 5, sharp: true }));
+		const quad = findPage(photo({ width: 2400, height: 1800, page, seed: 5, sharp: true }));
 		expect(quad).not.toBeNull();
-		// Within 1% of the diagonal (42 px of 4243): a starting point the crop screen refines.
-		expect(error(quad!, page)).toBeLessThan(42);
+		// Within 1% of the diagonal (30 px of 3000): a starting point the crop screen refines.
+		expect(error(quad!, page)).toBeLessThan(30);
 	});
 
 	it('finds a page in a portrait photo whose sides the frame doesn’t divide evenly', () => {
@@ -184,6 +188,19 @@ describe('findPage', () => {
 		const quad = findPage(photo({ width: 509, height: 777, page, seed: 6 }));
 		expect(quad).not.toBeNull();
 		expect(error(quad!, page)).toBeLessThan(9);
+	});
+
+	it('puts a dog-eared corner where the page’s sides meet', () => {
+		const page: Quad = [
+			{ x: 170, y: 60 },
+			{ x: 462, y: 52 },
+			{ x: 470, y: 440 },
+			{ x: 164, y: 446 }
+		];
+		// 30 mm folded under: the paper's corner is about 40 px from where its sides meet.
+		const quad = findPage(photo({ width: 640, height: 480, page, fold: 30, seed: 14 }));
+		expect(quad).not.toBeNull();
+		expect(error(quad!, page)).toBeLessThan(8);
 	});
 
 	it('keeps the corners inside the photo when the page runs off its edge', () => {
@@ -253,6 +270,19 @@ describe('findPage', () => {
 		for (let y = 0; y < height; y++)
 			for (let x = 0; x < width; x++)
 				if (Math.hypot(x - 320, y - 240) < 180) desk.data.set([240, 240, 236], (y * width + x) * 4);
+		expect(findPage(desk)).toBeNull();
+	});
+
+	it('finds nothing when the bright shape has three corners', () => {
+		// A white triangle: the largest quad on its outline covers nearly all of it, so only the
+		// flat fourth corner gives it away.
+		const width = 640;
+		const height = 480;
+		const desk = photo({ width, height, seed: 15 });
+		for (let y = 60; y < 420; y++)
+			for (let x = 0; x < width; x++)
+				if (Math.abs(x - 320) < ((y - 60) / 360) * 220)
+					desk.data.set([240, 240, 236], (y * width + x) * 4);
 		expect(findPage(desk)).toBeNull();
 	});
 

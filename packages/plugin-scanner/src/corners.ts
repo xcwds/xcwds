@@ -156,7 +156,8 @@ function otsu(luma: Float32Array): { threshold: number } | null {
 	}
 	const m0 = s0 / n0;
 	const m1 = s1 / n1;
-	const spread = Math.sqrt((q0 / n0 - m0 * m0 + (q1 / n1 - m1 * m1)) / 2);
+	// Rounding can leave a flat side's variance a hair below 0, which would make the spread NaN.
+	const spread = Math.sqrt((Math.max(0, q0 / n0 - m0 * m0) + Math.max(0, q1 / n1 - m1 * m1)) / 2);
 	if (m1 - m0 < MIN_CONTRAST || m1 - m0 < MIN_SEPARATION * spread) return null;
 	return { threshold: threshold + 0.5 };
 }
@@ -168,25 +169,26 @@ function fitPage(frame: Frame, threshold: number): Quad | undefined {
 	for (let i = 0; i < mask.length; i++) mask[i] = luma[i]! > threshold ? 1 : 0;
 	const region = largestRegion(mask, width, height);
 	if (!region) return;
-	const filled = region.count + holes(region.labels, width, height);
+	const { solid, filled } = fill(region, width, height);
 	const area = width * height;
 	if (filled < MIN_AREA * area || filled > MAX_AREA * area) return;
 
-	// The region's outline: the centres of its pixels that touch something else.
+	// The region's outline: the centres of its pixels that touch what's around it (not its holes,
+	// so a page's text never pulls a side in).
 	const edge: Point[] = [];
 	for (let y = 0; y < height; y++)
 		for (let x = 0; x < width; x++) {
 			const i = y * width + x;
-			if (!region.labels[i]) continue;
+			if (!solid[i]) continue;
 			if (
 				x === 0 ||
 				y === 0 ||
 				x === width - 1 ||
 				y === height - 1 ||
-				!region.labels[i - 1] ||
-				!region.labels[i + 1] ||
-				!region.labels[i - width] ||
-				!region.labels[i + width]
+				!solid[i - 1] ||
+				!solid[i + 1] ||
+				!solid[i - width] ||
+				!solid[i + width]
 			)
 				edge.push({ x: x + 0.5, y: y + 0.5 });
 		}
@@ -196,7 +198,9 @@ function fitPage(frame: Frame, threshold: number): Quad | undefined {
 	if (!(hullArea > 0) || filled < MIN_SOLIDITY * hullArea) return;
 	const coarse = largestQuad(hull);
 	if (!coarse || polygonArea(coarse) < MIN_FIT * hullArea) return;
-	const quad = order(refine(coarse, edge));
+	// A wide look first, since a dog-eared corner leaves the hull's corner well off the page's
+	// sides, then a close one along the sides that look found.
+	const quad = order(refine(refine(coarse, coarse, edge, 0.08), coarse, edge, 0.03));
 	if (!isConvex(quad) || !anglesOk(quad)) return;
 	return quad;
 }
@@ -259,25 +263,39 @@ function flood(
 	}
 }
 
-/** How many pixels `labels` encloses without covering: holes such as a page's text. */
-function holes(labels: Uint8Array, width: number, height: number): number {
+/**
+ * `region` with its holes (such as a page's text) filled in: everything the frame's border can't
+ * reach without crossing it. `filled` counts its pixels.
+ */
+function fill(
+	region: Region,
+	width: number,
+	height: number
+): { solid: Uint8Array; filled: number } {
+	const { labels } = region;
 	const outside = new Uint8Array(labels.length);
 	for (let i = 0; i < labels.length; i++) outside[i] = labels[i] ? 0 : 1;
 	const reached = new Uint8Array(labels.length);
 	const stack = new Int32Array(labels.length);
-	let open = 0;
-	for (let i = 0; i < labels.length; i++) if (outside[i]) open++;
-	for (let x = 0; x < width; x++)
-		for (const y of [0, height - 1]) {
-			const i = y * width + x;
-			if (outside[i] && !reached[i]) open -= flood(outside, reached, stack, i, width, height);
+	const from = (i: number) => {
+		if (outside[i] && !reached[i]) flood(outside, reached, stack, i, width, height);
+	};
+	for (let x = 0; x < width; x++) {
+		from(x);
+		from((height - 1) * width + x);
+	}
+	for (let y = 0; y < height; y++) {
+		from(y * width);
+		from(y * width + width - 1);
+	}
+	const solid = new Uint8Array(labels.length);
+	let filled = 0;
+	for (let i = 0; i < labels.length; i++)
+		if (!reached[i]) {
+			solid[i] = 1;
+			filled++;
 		}
-	for (let y = 0; y < height; y++)
-		for (const x of [0, width - 1]) {
-			const i = y * width + x;
-			if (outside[i] && !reached[i]) open -= flood(outside, reached, stack, i, width, height);
-		}
-	return open;
+	return { solid, filled };
 }
 
 /** The convex hull of `points`, clockwise on screen (y down), without points along its sides. */
@@ -357,11 +375,12 @@ function triangle(a: Point, b: Point, c: Point): number {
 }
 
 /**
- * The corners where lines fitted through each side's outline meet. The outline near a corner is
- * left out, since a dog-eared or rounded corner bends away from the page's sides; a corner whose
- * lines meet far from the hull's corner keeps the hull's.
+ * The corners where lines fitted through each side's outline meet, looking for the outline within
+ * `band` (a fraction of the side's length) of each side of `quad`. The outline near a corner is
+ * left out, since a dog-eared or rounded corner bends away from the page's sides. A corner whose
+ * lines meet far from `coarse`'s (nearly parallel sides) keeps `quad`'s.
  */
-function refine(quad: Point[], edge: Point[]): Point[] {
+function refine(quad: Point[], coarse: Point[], edge: Point[], band: number): Point[] {
 	const centre = {
 		x: (quad[0]!.x + quad[1]!.x + quad[2]!.x + quad[3]!.x) / 4,
 		y: (quad[0]!.y + quad[1]!.y + quad[2]!.y + quad[3]!.y) / 4
@@ -371,7 +390,7 @@ function refine(quad: Point[], edge: Point[]): Point[] {
 		const a = quad[s]!;
 		const b = quad[(s + 1) % 4]!;
 		const length = Math.hypot(b.x - a.x, b.y - a.y);
-		const near = Math.max(1.5, 0.03 * length);
+		const near = Math.max(1.5, band * length);
 		const ux = (b.x - a.x) / length;
 		const uy = (b.y - a.y) / length;
 		const on: Point[] = [];
@@ -391,14 +410,13 @@ function refine(quad: Point[], edge: Point[]): Point[] {
 		}
 		lines.push(line);
 	}
-	const diagonal = Math.hypot(quad[2]!.x - quad[0]!.x, quad[2]!.y - quad[0]!.y);
+	const diagonal = Math.hypot(coarse[2]!.x - coarse[0]!.x, coarse[2]!.y - coarse[0]!.y);
 	return quad.map((corner, i) => {
 		const before = lines[(i + 3) % 4];
 		const after = lines[i];
 		const meet = before && after ? intersect(before, after) : undefined;
-		return meet && Math.hypot(meet.x - corner.x, meet.y - corner.y) < 0.05 * diagonal
-			? meet
-			: corner;
+		const from = coarse[i]!;
+		return meet && Math.hypot(meet.x - from.x, meet.y - from.y) < 0.15 * diagonal ? meet : corner;
 	});
 }
 
