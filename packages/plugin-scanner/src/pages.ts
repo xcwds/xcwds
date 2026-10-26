@@ -284,7 +284,9 @@ export function createPages(
 				changed();
 				if (!persisted) {
 					persisted = true;
-					await blobs.persist().catch(() => 'denied');
+					// Not awaited: Firefox settles it only once the person answers its prompt, and
+					// nothing here should wait for that.
+					void blobs.persist().catch(() => {});
 				}
 				return { ok: true, id };
 			});

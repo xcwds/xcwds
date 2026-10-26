@@ -127,6 +127,22 @@ describe('createPages', () => {
 		expect(persist).toHaveBeenCalledOnce();
 	});
 
+	it('never waits for the answer to that request', async () => {
+		const { pages, persist } = store();
+		// Firefox settles it only once the person answers its prompt.
+		persist.mockReturnValue(new Promise(() => {}));
+		expect(await pages.add(page(1))).toEqual({ ok: true, id: 'p1' });
+		expect(await pages.add(page(2))).toEqual({ ok: true, id: 'p2' });
+		expect(await pages.move('p2', 0)).toBe(true);
+		expect(await ids(pages)).toEqual(['p2', 'p1']);
+	});
+
+	it('shrugs off a refused or failed request', async () => {
+		const { pages, persist } = store();
+		persist.mockRejectedValue(new Error('blocked'));
+		expect(await pages.add(page(1))).toEqual({ ok: true, id: 'p1' });
+	});
+
 	it('refuses what isn’t a JPEG page', async () => {
 		const { pages, backend } = store();
 		const png = { ...page(), blob: new Blob(['x'], { type: 'image/png' }) };
