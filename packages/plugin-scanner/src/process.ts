@@ -2,8 +2,8 @@
  * `@xcwds/plugin-scanner/process`: turn a photo and the page's corners into the finished page,
  * straightened and filtered. `processPage` does it where it's called; `createProcessor()` does it
  * in a Worker, so a 12-megapixel photo never holds up the page, and on the page where a Worker
- * can't start. Safe to import during prerender: browser APIs are reached only when a page is
- * processed.
+ * can't start. Its `finish` also encodes the page as the JPEG the pages store keeps. Safe to
+ * import during prerender: browser APIs are reached only when a page is processed.
  */
 import {
 	MAX_SIDE,
@@ -16,6 +16,7 @@ import {
 } from './geometry.js';
 import { FILTERS, applyFilter, type Filter } from './filters.js';
 import { warp, type Pixels } from './warp.js';
+import { ENCODE_ERROR, encodeJpeg, jpegQuality, type EncodeOptions } from './encode.js';
 
 export interface ProcessOptions {
 	/** Default `original`. */
@@ -87,31 +88,40 @@ export interface ProcessRequest extends Pixels {
 	quad: Quad;
 	filter?: Filter;
 	max?: number;
+	/** Also encode the page as a JPEG, at this quality. */
+	jpeg?: number;
 }
 
-/** What the Worker answers. */
+/**
+ * What the Worker answers. `jpeg` is there when it was asked for and the Worker could encode it
+ * (it has an `OffscreenCanvas`); otherwise the page encodes the pixels itself.
+ */
 export type ProcessResponse =
-	({ id: number; ok: true } & ProcessedPage) | { id: number; ok: false; error: string };
+	| ({ id: number; ok: true; jpeg?: Blob } & ProcessedPage)
+	| { id: number; ok: false; error: string };
 
 /**
  * The Worker's answer to `request`, with the buffers to transfer back. The Worker
  * (`process.worker.ts`) is only this; tests call it directly.
  */
-export function answer(request: ProcessRequest): {
+export async function answer(request: ProcessRequest): Promise<{
 	response: ProcessResponse;
 	transfer: ArrayBuffer[];
-} {
-	const { id, quad, filter, max } = request;
+}> {
+	const { id, quad, filter, max, jpeg: quality } = request;
+	let page: ProcessedPage;
 	try {
-		const page = processPage(request, quad, { filter, max });
-		return {
-			response: { id, ok: true, ...page },
-			transfer: [page.data.buffer as ArrayBuffer]
-		};
+		page = processPage(request, quad, { filter, max });
 	} catch (e) {
 		const error = e instanceof Error ? e.message : 'The page couldn’t be processed.';
 		return { response: { id, ok: false, error }, transfer: [] };
 	}
+	let jpeg: Blob | null = null;
+	if (quality !== undefined) jpeg = await encodeJpeg(page, { quality }).catch(() => null);
+	return {
+		response: { id, ok: true, ...page, ...(jpeg ? { jpeg } : {}) },
+		transfer: [page.data.buffer as ArrayBuffer]
+	};
 }
 
 /** The part of a Worker the processor uses, so tests can pass a stand-in. */
@@ -138,7 +148,27 @@ export interface Processor {
 	 * an `Error` once the processor is closed.
 	 */
 	process(source: Pixels, quad: Quad, options?: ProcessOptions): Promise<ProcessedPage>;
+	/**
+	 * `process`, then the page as a JPEG at `quality` (default `JPEG_QUALITY`), ready for the
+	 * pages store's `add` or `retake`. Encoded in the Worker where it has an `OffscreenCanvas`,
+	 * else on the page. Rejects as `process` does, with a `RangeError` for a bad `quality`, and
+	 * with an `Error` (`ENCODE_ERROR`) when the browser can't make a JPEG of it.
+	 */
+	finish(
+		source: Pixels,
+		quad: Quad,
+		options?: ProcessOptions & EncodeOptions
+	): Promise<FinishedPage>;
 	close(): void;
+}
+
+/** A finished page as the pages store takes it, and the paper size its shape was snapped to. */
+export interface FinishedPage {
+	blob: Blob;
+	width: number;
+	height: number;
+	filter: Filter;
+	paper: Paper | null;
 }
 
 const CLOSED = 'The scanner was closed before the page was ready.';
@@ -158,9 +188,10 @@ export function createProcessor(options: ProcessorOptions = {}): Processor {
 	let worker: WorkerLike | null | undefined;
 	let closed = false;
 	let next = 0;
+	type Done = ProcessedPage & { jpeg?: Blob };
 	const waiting = new Map<
 		number,
-		{ resolve(page: ProcessedPage): void; reject(e: Error): void; fallback(): void }
+		{ resolve(page: Done): void; reject(e: Error): void; fallback(): void }
 	>();
 
 	function launch(): WorkerLike | null {
@@ -178,8 +209,8 @@ export function createProcessor(options: ProcessorOptions = {}): Processor {
 			if (!job) return;
 			waiting.delete(response.id);
 			if (response.ok) {
-				const { width, height, data, paper } = response;
-				job.resolve({ width, height, data, paper });
+				const { width, height, data, paper, jpeg } = response;
+				job.resolve({ width, height, data, paper, ...(jpeg ? { jpeg } : {}) });
 			} else job.reject(new RangeError(response.error));
 		};
 		started.onerror = (event) => {
@@ -197,46 +228,63 @@ export function createProcessor(options: ProcessorOptions = {}): Processor {
 	const onPage = (source: Pixels, quad: Quad, opts: ProcessOptions) =>
 		new Promise<ProcessedPage>((resolve) => resolve(processPage(source, quad, opts)));
 
-	return {
-		process(source, quad, opts = {}) {
-			if (closed) return Promise.reject(new Error(CLOSED));
-			// A bad request is refused here, before the photo is copied or anything waits on it.
-			try {
-				pagePlan(source, quad, opts);
-			} catch (e) {
-				return Promise.reject(e as Error);
-			}
-			if (worker === undefined) worker = launch();
-			const w = worker;
-			if (!w) return onPage(source, quad, opts);
-			return new Promise<ProcessedPage>((resolve, reject) => {
-				const id = next++;
-				waiting.set(id, {
-					resolve,
-					reject,
-					fallback: () => {
-						if (closed) reject(new Error(CLOSED));
-						else onPage(source, quad, opts).then(resolve, reject);
-					}
-				});
-				// A copy goes over, so the page keeps its pixels for another crop or if the Worker fails.
-				const data = source.data.slice();
-				const request: ProcessRequest = {
-					id,
-					width: source.width,
-					height: source.height,
-					data,
-					quad: quad.map(({ x, y }) => ({ x, y })) as unknown as Quad,
-					filter: opts.filter,
-					max: opts.max
-				};
-				try {
-					w.postMessage(request, [data.buffer]);
-				} catch {
-					waiting.delete(id);
-					onPage(source, quad, opts).then(resolve, reject);
+	/** `process`, with the Worker also encoding a JPEG at `quality` when it's given. */
+	function run(source: Pixels, quad: Quad, opts: ProcessOptions, quality?: number): Promise<Done> {
+		if (closed) return Promise.reject(new Error(CLOSED));
+		// A bad request is refused here, before the photo is copied or anything waits on it.
+		try {
+			pagePlan(source, quad, opts);
+		} catch (e) {
+			return Promise.reject(e as Error);
+		}
+		if (worker === undefined) worker = launch();
+		const w = worker;
+		if (!w) return onPage(source, quad, opts);
+		return new Promise<Done>((resolve, reject) => {
+			const id = next++;
+			waiting.set(id, {
+				resolve,
+				reject,
+				fallback: () => {
+					if (closed) reject(new Error(CLOSED));
+					else onPage(source, quad, opts).then(resolve, reject);
 				}
 			});
+			// A copy goes over, so the page keeps its pixels for another crop or if the Worker fails.
+			const data = source.data.slice();
+			const request: ProcessRequest = {
+				id,
+				width: source.width,
+				height: source.height,
+				data,
+				quad: quad.map(({ x, y }) => ({ x, y })) as unknown as Quad,
+				filter: opts.filter,
+				max: opts.max,
+				...(quality === undefined ? {} : { jpeg: quality })
+			};
+			try {
+				w.postMessage(request, [data.buffer]);
+			} catch {
+				waiting.delete(id);
+				onPage(source, quad, opts).then(resolve, reject);
+			}
+		});
+	}
+
+	return {
+		async process(source, quad, opts = {}) {
+			const { width, height, data, paper } = await run(source, quad, opts);
+			return { width, height, data, paper };
+		},
+		async finish(source, quad, opts = {}) {
+			const quality = jpegQuality(opts.quality);
+			const page = await run(source, quad, opts, quality);
+			// The Worker had no OffscreenCanvas, or the page was made here: encode it here.
+			const blob = page.jpeg ?? (await encodeJpeg(page, { quality }));
+			if (closed) throw new Error(CLOSED);
+			if (!blob) throw new Error(ENCODE_ERROR);
+			const { width, height, paper } = page;
+			return { blob, width, height, filter: opts.filter ?? 'original', paper };
 		},
 		close() {
 			closed = true;

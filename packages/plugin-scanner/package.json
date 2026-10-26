@@ -18,6 +18,10 @@
 			"types": "./dist/corners.d.ts",
 			"default": "./dist/corners.js"
 		},
+		"./encode": {
+			"types": "./dist/encode.d.ts",
+			"default": "./dist/encode.js"
+		},
 		"./filters": {
 			"types": "./dist/filters.d.ts",
 			"default": "./dist/filters.js"
