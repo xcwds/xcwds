@@ -12,6 +12,10 @@
 		"directory": "packages/plugin-scanner"
 	},
 	"exports": {
+		"./corners": {
+			"types": "./dist/corners.d.ts",
+			"default": "./dist/corners.js"
+		},
 		"./filters": {
 			"types": "./dist/filters.d.ts",
 			"default": "./dist/filters.js"
