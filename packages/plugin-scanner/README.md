@@ -57,10 +57,12 @@ plugin entry and the components come next.
 - **`@xcwds/plugin-scanner/process`.** `processPage(pixels, quad, { filter, max })` makes the
   finished page from a photo and the page's corners: sized by `pageSize` (at most `max` pixels on
   its longer side, `MAX_SIDE` by default), straightened by `warp` and passed through the filter.
-  It throws a `RangeError` for corners that don't make a page. `createProcessor()` does the same
-  in a Worker, started on first use and kept until `close()`, so a large photo never holds up the
-  page: `process(pixels, quad, options)` copies the pixels over (the page keeps its own for
-  another crop) and resolves with the page. Where the Worker can't start or stops working
+  It throws a `RangeError` for corners that don't make a page, an unknown filter, a bad `max` or
+  pixels that don't match their size. `createProcessor()` does the same in a Worker, started on
+  first use and kept until `close()`, so a large photo never holds up the page:
+  `process(pixels, quad, options)` copies the pixels over (the page keeps its own for another
+  crop) and resolves with the page. It rejects with the same `RangeError` for a bad request,
+  checked on the page before anything is copied. Where the Worker can't start or stops working
   (offline before its file was ever fetched, since a service worker precaches the app's pages and
   chunks but not Vite's worker files), pages are processed on the page instead. After `close()`,
   anything still waiting rejects.

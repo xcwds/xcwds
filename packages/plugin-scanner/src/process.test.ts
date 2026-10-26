@@ -11,6 +11,12 @@ import {
 } from './process.js';
 import { warp, type Pixels } from './warp.js';
 
+// The real filters, watched, to see which pages skip them.
+vi.mock('./filters.js', async (original) => {
+	const actual = await original<typeof import('./filters.js')>();
+	return { ...actual, applyFilter: vi.fn(actual.applyFilter) };
+});
+
 function image(width: number, height: number, colour: (x: number, y: number) => number[]): Pixels {
 	const data = new Uint8ClampedArray(width * height * 4);
 	for (let y = 0; y < height; y++)
@@ -61,6 +67,21 @@ describe('processPage', () => {
 		for (const max of [0, 1.5, MAX_SIDE + 1])
 			expect(() => processPage(photo, corners, { max })).toThrow(RangeError);
 		expect(() => processPage({ ...photo, width: 61 }, corners)).toThrow(RangeError);
+		// Corners missing or not points, as a crop screen's state could hand over.
+		const holed = Object.assign(new Array(4), { 0: tl, 1: tr, 3: bl });
+		for (const quad of [null, [tl, tr, null, bl], holed, [tl, tr, br, bl, tl]])
+			expect(() => processPage(photo, quad as unknown as Quad)).toThrow(RangeError);
+		expect(() => processPage(null as unknown as Pixels, corners)).toThrow(RangeError);
+	});
+
+	it('keeps the warped pixels for Original rather than copying them', () => {
+		vi.mocked(applyFilter).mockClear();
+		const page = processPage(photo, corners);
+		const straight = warp(photo, corners, { width: page.width, height: page.height });
+		expect(page.data).toEqual(straight.data);
+		expect(applyFilter).not.toHaveBeenCalled();
+		processPage(photo, corners, { filter: 'greyscale' });
+		expect(applyFilter).toHaveBeenCalledTimes(1);
 	});
 });
 
@@ -150,6 +171,26 @@ describe('createProcessor', () => {
 		await expect(processor.process(photo, [tl, br, tr, bl])).rejects.toThrow(RangeError);
 		// The Worker is still there for the next page.
 		await expect(processor.process(photo, corners)).resolves.toMatchObject({ paper: null });
+	});
+
+	it('refuses a bad request on the page, before starting or sending anything', async () => {
+		const worker = new FakeWorker(false);
+		const start = vi.fn(() => worker);
+		const processor = createProcessor({ worker: start });
+		const [tl, tr, , bl] = corners;
+		for (const [source, quad, options] of [
+			[photo, [tl, tr, null, bl]],
+			[photo, null],
+			[photo, corners, { max: 0 }],
+			[photo, corners, { filter: 'sepia' }],
+			[{ ...photo, height: 3 }, corners]
+		] as [Pixels, Quad, object?][])
+			await expect(processor.process(source, quad, options)).rejects.toThrow(RangeError);
+		expect(start).not.toHaveBeenCalled();
+		const page = processor.process(photo, corners);
+		expect(worker.requests.map((r) => r.id)).toEqual([0]);
+		worker.reply();
+		await expect(page).resolves.toEqual(processPage(photo, corners));
 	});
 
 	it('processes on the page when the Worker can’t start', async () => {

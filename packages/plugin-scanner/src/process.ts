@@ -5,7 +5,15 @@
  * can't start. Safe to import during prerender: browser APIs are reached only when a page is
  * processed.
  */
-import { MAX_SIDE, isConvex, pageSize, type Paper, type Quad } from './geometry.js';
+import {
+	MAX_SIDE,
+	isConvex,
+	pageSize,
+	type PageSize,
+	type Paper,
+	type Point,
+	type Quad
+} from './geometry.js';
 import { FILTERS, applyFilter, type Filter } from './filters.js';
 import { warp, type Pixels } from './warp.js';
 
@@ -31,21 +39,46 @@ export interface ProcessedPage extends Pixels {
 export function processPage(
 	source: Pixels,
 	quad: Quad,
-	{ filter = 'original', max = MAX_SIDE }: ProcessOptions = {}
+	options: ProcessOptions = {}
 ): ProcessedPage {
+	const { width, height, paper, filter } = pagePlan(source, quad, options);
+	const straight = warp(source, quad, { width, height });
+	// Original keeps the warped pixels: `applyFilter` would copy a page of up to MAX_SIDE².
+	const page = filter === 'original' ? straight : applyFilter(straight, filter);
+	return { ...page, paper };
+}
+
+/**
+ * The checks `processPage` makes, and the page's size and filter. Cheap, so the processor runs
+ * them on the page before copying a photo to the Worker.
+ */
+function pagePlan(
+	source: Pixels,
+	quad: Quad,
+	{ filter = 'original', max = MAX_SIDE }: ProcessOptions
+): PageSize & { filter: Filter } {
 	if (!FILTERS.includes(filter)) throw new RangeError(`The filter must be ${FILTERS.join(', ')}.`);
 	if (!Number.isInteger(max) || max < 1 || max > MAX_SIDE)
 		throw new RangeError(`The page's longest side must be 1 to ${MAX_SIDE} pixels.`);
+	// Spread, so a hole in the array counts as a missing corner.
+	const points: unknown[] = Array.isArray(quad) ? [...quad] : [];
 	if (
-		!Array.isArray(quad) ||
-		quad.length !== 4 ||
-		!quad.every((p) => Number.isFinite(p?.x) && Number.isFinite(p?.y)) ||
+		points.length !== 4 ||
+		!points.every((p) => Number.isFinite((p as Point)?.x) && Number.isFinite((p as Point)?.y)) ||
 		!isConvex(quad)
 	)
 		throw new RangeError('The corners don’t make a page: drag them to its corners.');
-	const { width, height, paper } = pageSize(quad, { max });
-	const page = applyFilter(warp(source, quad, { width, height }), filter);
-	return { ...page, paper };
+	if (
+		!source ||
+		!Number.isInteger(source.width) ||
+		!Number.isInteger(source.height) ||
+		source.width < 1 ||
+		source.height < 1 ||
+		!(source.data instanceof Uint8ClampedArray) ||
+		source.data.length !== source.width * source.height * 4
+	)
+		throw new RangeError('The source pixels don’t match its width and height.');
+	return { ...pageSize(quad, { max }), filter };
 }
 
 /** What the page sends the Worker. */
@@ -167,6 +200,12 @@ export function createProcessor(options: ProcessorOptions = {}): Processor {
 	return {
 		process(source, quad, opts = {}) {
 			if (closed) return Promise.reject(new Error(CLOSED));
+			// A bad request is refused here, before the photo is copied or anything waits on it.
+			try {
+				pagePlan(source, quad, opts);
+			} catch (e) {
+				return Promise.reject(e as Error);
+			}
 			if (worker === undefined) worker = launch();
 			const w = worker;
 			if (!w) return onPage(source, quad, opts);
