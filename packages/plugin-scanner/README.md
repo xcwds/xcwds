@@ -3,12 +3,42 @@
 Scan paper documents to a PDF on the device in an @xcwds app: photograph a page, straighten it,
 make it readable and export the pages as one PDF, without the cloud scanning apps phones suggest.
 Nothing is sent anywhere. **Work in progress**
-([#151](https://github.com/xcwds/xcwds/issues/151)): not published yet, and not a plugin you can
-install yet.
+([#151](https://github.com/xcwds/xcwds/issues/151)): not published yet.
 
-So far it holds the image and PDF code the plugin will be built on, the Worker that straightens,
-filters and encodes a page, the store that keeps a scan's pages between visits, and sharing or
-saving the finished scan. The crop screen, the plugin entry and the components come next.
+So far it holds the plugin entry, the image and PDF code it's built on, the Worker that
+straightens, filters and encodes a page, the store that keeps a scan's pages between visits, and
+sharing or saving the finished scan. The crop screen and the page list come next.
+
+## The plugin
+
+```ts
+import camera from '@xcwds/plugin-camera';
+import scanner from '@xcwds/plugin-scanner';
+
+export default defineConfig({ brand, plugins: [camera(), scanner()] });
+```
+
+One option, `collection`: the key of the blob collection that keeps the scan's pages,
+`app:scanner:<collection>` (lowercase letters, digits and dashes; `pages` by default). The plugin
+declares `network: false`.
+
+The page gets `app.scanner`:
+
+- **`pages`**: the scan in progress, the pages store described below, in `app:scanner:pages`.
+- **`scan(photo, corners, { filter, max, quality, retake })`** makes the finished page from a photo
+  (RGBA pixels shaped like `ImageData`) and the page's corners, in the processing Worker, and saves
+  it: at the end of the scan, or in place of the page `retake` names. The photo is copied, so it
+  stays usable for another crop. It resolves with `{ ok: true, id, paper }` (`paper` is `a4`,
+  `letter` or `null`), or `{ ok: false, error }` with a message to show when the browser can't
+  make a JPEG of the page or it can't be saved. It rejects with a `RangeError` for a request that
+  can't be met, such as corners that don't make a page, so check `isConvex` first.
+- **`busy`** is true from a `scan` call until its page is saved, and `onChange(listener)` says
+  when it changes. Meanwhile an `onBeforeReload` reason ("page being scanned") holds app updates
+  back, so an update never drops a page halfway.
+
+Closing the app stops the Worker; a page it was still making resolves with an error.
+
+## The modules
 
 - **`@xcwds/plugin-scanner/corners`.** `findPage(pixels)` finds the corners of a page in a photo,
   where the crop screen's handles start, or returns `null` when nothing in it stands out clearly

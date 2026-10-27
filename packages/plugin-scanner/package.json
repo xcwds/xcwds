@@ -13,7 +13,16 @@
 		"url": "git+https://github.com/xcwds/xcwds.git",
 		"directory": "packages/plugin-scanner"
 	},
+	"types": "./dist/index.d.ts",
 	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./client": {
+			"types": "./dist/client.d.ts",
+			"default": "./dist/client.js"
+		},
 		"./corners": {
 			"types": "./dist/corners.d.ts",
 			"default": "./dist/corners.js"
@@ -66,6 +75,7 @@
 	},
 	"devDependencies": {
 		"@xcwds/core": "workspace:^",
+		"@xcwds/testing": "workspace:*",
 		"typescript": "~6.0.3",
 		"vitest": "^5.0.0"
 	},
