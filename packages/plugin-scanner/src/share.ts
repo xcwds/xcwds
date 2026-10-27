@@ -55,6 +55,10 @@ export interface ScanPdfOptions extends ScanFileOptions {
 	paper?: Paper;
 }
 
+/** `scannedAt`, or now when it isn't a time a file can be named for. */
+const when = (options: ScanFileOptions) =>
+	Number.isFinite(options.scannedAt) ? options.scannedAt! : Date.now();
+
 /**
  * Each page's JPEG, in order, stripped of metadata (`stripJpeg`), or the error to show: no pages,
  * or a page that isn't a JPEG `writePdf` can embed.
@@ -82,7 +86,7 @@ export async function scanPdf(
 	const jpegs = await readPages(pages);
 	if (typeof jpegs === 'string') return { ok: false, error: jpegs };
 	const pdf = writePdf(jpegs, { paper: options.paper ?? 'a4' });
-	const name = fileName(options.scannedAt ?? Date.now(), 'pdf');
+	const name = fileName(when(options), 'pdf');
 	return { ok: true, files: [new File([pdf as BlobPart], name, { type: 'application/pdf' })] };
 }
 
@@ -96,7 +100,7 @@ export async function scanImages(
 ): Promise<FilesResult> {
 	const jpegs = await readPages(pages);
 	if (typeof jpegs === 'string') return { ok: false, error: jpegs };
-	const at = options.scannedAt ?? Date.now();
+	const at = when(options);
 	const files = jpegs.map(
 		(jpeg, n) => new File([jpeg as BlobPart], fileName(at, 'jpg', n + 1), { type: 'image/jpeg' })
 	);
@@ -106,20 +110,20 @@ export async function scanImages(
 const nav = (env: ShareEnv) =>
 	env.navigator ?? (typeof navigator === 'undefined' ? undefined : navigator);
 
-/**
- * Whether this browser can hand `files` to the share sheet (to label the button Share or Save).
- * Without `files`, whether it can share a PDF at all.
- */
-export function canShareFiles(files?: readonly File[], env: ShareEnv = {}): boolean {
+/** Whether this browser can hand `files` to the share sheet; otherwise `shareFiles` saves them. */
+export function canShareFiles(files: readonly File[], env: ShareEnv = {}): boolean {
 	const n = nav(env);
 	if (typeof n?.share !== 'function' || typeof n.canShare !== 'function') return false;
 	try {
-		return n.canShare({
-			files: files ? [...files] : [new File([], 'scan.pdf', { type: 'application/pdf' })]
-		});
+		return n.canShare({ files: [...files] });
 	} catch {
 		return false;
 	}
+}
+
+/** Whether this browser can share a PDF at all (to label the button Share or Save). */
+export function canSharePdf(env: ShareEnv = {}): boolean {
+	return canShareFiles([new File([], 'scan.pdf', { type: 'application/pdf' })], env);
 }
 
 /** Downloads `file`: the fallback where Web Share can't take files (most computers). */

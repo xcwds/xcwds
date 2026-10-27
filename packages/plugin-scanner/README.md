@@ -82,8 +82,8 @@ saving the finished scan. The crop screen, the plugin entry and the components c
   JPEG per page (`scan-20261027-090142-1.jpg`, …), each without metadata. Both resolve with
   `{ ok: true, files }`, or `{ ok: false, error }` with a message to show when there are no pages
   or a saved page can't be read. `shareFiles(files)` hands them to the share sheet in one go where
-  the browser can share files (`canShareFiles`, to label the button Share or Save), and otherwise
-  downloads each. It resolves with `shared`, `saved`, `cancelled` (the sheet was dismissed) or
+  the browser can share them (`canShareFiles(files)`; `canSharePdf()` to label the button Share
+  or Save), and otherwise downloads each. It resolves with `shared`, `saved`, `cancelled` (the sheet was dismissed) or
   `failed`, and never rejects. Safari opens the share sheet only straight from a tap, and reading
   every page takes a moment, so make the files first (when the pages change, or when an Export
   panel opens) and call `shareFiles` from the tap. `SHARE_MESSAGES.outside` is the note to show

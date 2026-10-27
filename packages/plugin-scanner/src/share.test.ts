@@ -3,6 +3,7 @@ import { jpegInfo } from './pdf.js';
 import {
 	SHARE_MESSAGES,
 	canShareFiles,
+	canSharePdf,
 	fileName,
 	scanImages,
 	scanPdf,
@@ -88,13 +89,19 @@ describe('scanPdf', () => {
 		expect(pdf).not.toMatch(/\/Producer|\/Author|\/CreationDate/);
 	});
 
-	it('takes Letter, and the time now by default', async () => {
+	it('takes Letter, and the time now by default or for a time that is no time', async () => {
 		vi.useFakeTimers({ now: scannedAt });
 		try {
 			const result = await scanPdf(pagesOf(jpegBytes()), { paper: 'letter' });
 			if (!result.ok) throw new Error(result.error);
 			expect(result.files[0]!.name).toBe('scan-20261027-090142.pdf');
 			expect(await text(result.files[0]!)).toContain('/MediaBox [0 0 612 792]');
+			const bad = await scanPdf(pagesOf(jpegBytes()), { scannedAt: Number.NaN });
+			if (!bad.ok) throw new Error(bad.error);
+			expect(bad.files[0]!.name).toBe('scan-20261027-090142.pdf');
+			const images = await scanImages(pagesOf(jpegBytes()), { scannedAt: Infinity });
+			if (!images.ok) throw new Error(images.error);
+			expect(images.files[0]!.name).toBe('scan-20261027-090142-1.jpg');
 		} finally {
 			vi.useRealTimers();
 		}
@@ -149,7 +156,8 @@ describe('shareFiles', () => {
 
 	it('shares the files in one share sheet where the browser can', async () => {
 		const env = shareEnv(async () => {});
-		expect(canShareFiles(undefined, env)).toBe(true);
+		expect(canSharePdf(env)).toBe(true);
+		expect(canShareFiles(images, env)).toBe(true);
 		expect(await shareFiles(images, env)).toBe('shared');
 		expect(env.navigator!.share).toHaveBeenCalledWith({ files: images });
 	});
@@ -173,7 +181,8 @@ describe('shareFiles', () => {
 
 	it("downloads each file where they can't be shared", async () => {
 		const { env, clicked } = downloadEnv();
-		expect(canShareFiles(undefined, env)).toBe(false);
+		expect(canSharePdf(env)).toBe(false);
+		expect(canShareFiles(images, env)).toBe(false);
 		expect(await shareFiles(images, { ...env, ...shareEnv(async () => {}, false) })).toBe('saved');
 		expect(clicked).toEqual([
 			{ href: 'blob:x', download: 'scan-1.jpg' },
