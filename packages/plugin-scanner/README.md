@@ -7,8 +7,8 @@ Nothing is sent anywhere. **Work in progress**
 install yet.
 
 So far it holds the image and PDF code the plugin will be built on, the Worker that straightens,
-filters and encodes a page, and the store that keeps a scan's pages between visits. The crop
-screen, the plugin entry and the components come next.
+filters and encodes a page, the store that keeps a scan's pages between visits, and sharing or
+saving the finished scan. The crop screen, the plugin entry and the components come next.
 
 - **`@xcwds/plugin-scanner/corners`.** `findPage(pixels)` finds the corners of a page in a photo,
   where the crop screen's handles start, or returns `null` when nothing in it stands out clearly
@@ -76,9 +76,21 @@ screen, the plugin entry and the components come next.
   a page too big for this browser's canvas, or a canvas that writes PNG instead). See-through
   pixels go on white first (`onWhite`), since JPEG has none and a canvas would make them black.
   The canvas encodes from pixels, so the JPEG carries no EXIF, and `writePdf` strips anything else.
+- **`@xcwds/plugin-scanner/share`.** Takes the scan out of the app, only on the person's tap.
+  `scanPdf(pages, { paper, scannedAt })` makes one PDF of the pages store's pages
+  (`scan-20261027-090142.pdf`, A4 by default), and `scanImages(pages, { scannedAt })` makes one
+  JPEG per page (`scan-20261027-090142-1.jpg`, …), each without metadata. Both resolve with
+  `{ ok: true, files }`, or `{ ok: false, error }` with a message to show when there are no pages
+  or a saved page can't be read. `shareFiles(files)` hands them to the share sheet in one go where
+  the browser can share files (`canShareFiles`, to label the button Share or Save), and otherwise
+  downloads each. It resolves with `shared`, `saved`, `cancelled` (the sheet was dismissed) or
+  `failed`, and never rejects. Safari opens the share sheet only straight from a tap, and reading
+  every page takes a moment, so make the files first (when the pages change, or when an Export
+  panel opens) and call `shareFiles` from the tap. `SHARE_MESSAGES.outside` is the note to show
+  the first time a scan leaves the app: wherever it goes may keep or back it up.
 
-The image and PDF modules are pure functions that use no browser APIs, and `pages`, `process` and
-`encode` reach the browser only when a method is called. None makes a network request, and all
+The image and PDF modules are pure functions that use no browser APIs, and `pages`, `process`,
+`encode` and `share` reach the browser only when a method is called. None makes a network request, and all
 are safe to import anywhere.
 
 ## What it won't do

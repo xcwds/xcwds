@@ -42,6 +42,10 @@
 			"types": "./dist/process.d.ts",
 			"default": "./dist/process.js"
 		},
+		"./share": {
+			"types": "./dist/share.d.ts",
+			"default": "./dist/share.js"
+		},
 		"./warp": {
 			"types": "./dist/warp.d.ts",
 			"default": "./dist/warp.js"
