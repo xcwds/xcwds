@@ -10,10 +10,14 @@ import {
 	moveCorner,
 	nudge,
 	readPhoto,
+	THUMB_MAX,
+	thumbnail,
 	toPhoto,
-	type ReadEnv
+	type ReadEnv,
+	type ThumbnailEnv
 } from './crop.js';
 import { rectangle, type Quad } from './geometry.js';
+import type { Pixels } from './warp.js';
 
 const size = { width: 400, height: 300 };
 const page: Quad = [
@@ -155,5 +159,48 @@ describe('readPhoto', () => {
 	it('refuses a bad max', async () => {
 		await expect(readPhoto(new Blob(), { max: 0 })).rejects.toThrow(RangeError);
 		await expect(readPhoto(new Blob(), { max: 9000 })).rejects.toThrow(RangeError);
+	});
+});
+
+describe('thumbnail', () => {
+	const fakeEnv = (bitmap: { width: number; height: number }) => {
+		const close = vi.fn();
+		return {
+			close,
+			env: {
+				createImageBitmap: vi.fn(async () => ({ ...bitmap, close }) as unknown as ImageBitmap),
+				canvas: vi.fn(
+					(width: number, height: number) =>
+						({
+							getContext: () => ({
+								drawImage: vi.fn(),
+								getImageData: () => ({ data: new Uint8ClampedArray(width * height * 4) })
+							})
+						}) as unknown as OffscreenCanvas
+				),
+				encode: vi.fn(
+					async (pixels: Pixels) =>
+						new Blob([`${pixels.width}x${pixels.height}`], { type: 'image/jpeg' })
+				)
+			} satisfies ThumbnailEnv
+		};
+	};
+
+	it('scales a page down to THUMB_MAX on its longer side and encodes it as a JPEG', async () => {
+		expect(THUMB_MAX).toBe(240);
+		const { env, close } = fakeEnv({ width: 2480, height: 3508 });
+		const small = await thumbnail(new Blob(), {}, env);
+		expect(await small!.text()).toBe('170x240');
+		expect(env.encode).toHaveBeenCalledWith(expect.anything(), { quality: 0.8 });
+		expect(close).toHaveBeenCalled();
+		const tiny = fakeEnv({ width: 2480, height: 3508 });
+		expect(await (await thumbnail(new Blob(), { max: 100 }, tiny.env))!.text()).toBe('71x100');
+	});
+
+	it('gives null where the page can’t be opened or encoded', async () => {
+		expect(await thumbnail(new Blob())).toBeNull();
+		const { env } = fakeEnv({ width: 10, height: 10 });
+		expect(await thumbnail(new Blob(), {}, { ...env, encode: async () => null })).toBeNull();
+		await expect(thumbnail(new Blob(), { max: 0 })).rejects.toThrow(RangeError);
 	});
 });

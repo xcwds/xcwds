@@ -131,8 +131,8 @@ export async function scanFiles(
 }
 
 /**
- * When a scan was made, for its file names: when its first page still there was saved (a retake
- * counts as saving it again), or now when it has no pages.
+ * When a scan was made, for its file names: when its first page still there was last saved (a move
+ * or a retake saves a page again), or now when it has no pages.
  */
 export function scannedAt(pages: readonly { saved: number }[]): number {
 	const times = pages.map((p) => p.saved).filter(Number.isFinite);

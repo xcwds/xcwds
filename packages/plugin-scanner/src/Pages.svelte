@@ -20,6 +20,7 @@
 	import { useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
 	import type { Scanner } from './client.js';
+	import { thumbnail } from './crop.js';
 	import type { Paper } from './geometry.js';
 	import type { PageInput, ScanPage } from './pages.js';
 	import {
@@ -155,18 +156,24 @@
 		list = next;
 		const ids = new Set(next.map((p) => p.id));
 		for (const id of Object.keys(thumbs)) if (!ids.has(id)) forget(id);
-		for (const page of next) if (thumbs[page.id]?.saved !== page.saved) void load(page);
+		// One at a time: each page is decoded at full size while its thumbnail is made.
+		for (const page of next) {
+			if (thumbs[page.id]?.saved === page.saved) continue;
+			await load(page);
+			if (run !== listing || locked) return;
+		}
 	}
 
 	async function load(page: ScanPage) {
 		if (!scanner) return;
 		const blob = await scanner.pages.get(page.id);
-		// Still the page's latest image, and still unlocked, once read.
+		const small = blob ? await thumbnail(blob) : null;
+		// Still the page's latest image, and still unlocked, once made.
 		const now = list?.find((p) => p.id === page.id);
-		if (!blob || locked || now?.saved !== page.saved || thumbs[page.id]?.saved === page.saved)
+		if (!small || locked || now?.saved !== page.saved || thumbs[page.id]?.saved === page.saved)
 			return;
 		forget(page.id);
-		thumbs[page.id] = { saved: page.saved, url: URL.createObjectURL(blob) };
+		thumbs[page.id] = { saved: page.saved, url: URL.createObjectURL(small) };
 	}
 
 	function forget(id: string) {
@@ -184,12 +191,16 @@
 		if (!scanner || working) return;
 		working = true;
 		message = '';
+		// The files made before this change may no longer match the pages.
+		files = undefined;
 		try {
 			const result = await task();
 			if (result === false) message = t.failed;
 			else if (typeof result === 'string') message = result;
 		} finally {
 			working = false;
+			// A new list makes the files again, even where the change saved nothing.
+			void refresh();
 		}
 	}
 
@@ -292,7 +303,11 @@
 			} else void refresh();
 		});
 		void refresh();
-		const stop = scanner?.pages.onChange(() => void refresh());
+		const stop = scanner?.pages.onChange(() => {
+			// Another tab's change, or this one's: the files wait for the new list.
+			files = undefined;
+			void refresh();
+		});
 		return () => {
 			stopLock?.();
 			stop?.();
@@ -429,7 +444,7 @@
 						type="button"
 						class="min-h-11 rounded-xl bg-(--xcwds-shell-accent) px-4 font-medium text-white hover:not-disabled:opacity-90 active:opacity-90 disabled:opacity-40"
 						onclick={share}
-						disabled={!files?.ok || sharing}
+						disabled={!files?.ok || sharing || working}
 						data-testid="scan-export"
 					>
 						{files ? (shares ? t.share : t.save) : t.making}
