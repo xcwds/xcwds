@@ -145,9 +145,9 @@ type Context = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
 
 /**
  * A photo (a camera photo's `blob`, or an image file) as upright RGBA pixels for `findPage` and
- * `app.scanner.scan`, scaled down to `max` on its longer side (`OPEN_MAX` by default). Resolves with `null` where the
- * browser can't decode it or has no canvas to draw it on. Rejects with a `RangeError` for a bad
- * `max`.
+ * `app.scanner.scan`, scaled down to `max` on its longer side (`OPEN_MAX` by default). Resolves
+ * with `null` where the browser can't decode it or has no canvas to draw it on. Rejects with a
+ * `RangeError` for a bad `max`.
  */
 export async function readPhoto(
 	photo: Blob,
