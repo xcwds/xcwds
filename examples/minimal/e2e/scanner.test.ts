@@ -68,6 +68,9 @@ test('crops a photo with the corner handles and keeps the page', async ({ page }
 	const step = Math.max(1, Math.round(Math.min(far.x, far.y) / 100));
 	await topLeft.focus();
 	await page.keyboard.press('ArrowRight');
+	await expect(page.getByTestId('crop-moved')).toHaveText(
+		/^Top left corner: \d+% across, 0% down$/
+	);
 	await page.keyboard.press('Shift+ArrowDown');
 	await page.keyboard.press('ArrowLeft');
 	await page.keyboard.press('ArrowLeft');

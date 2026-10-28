@@ -18,6 +18,7 @@
 	import {
 		CORNERS,
 		cropProblem,
+		describePoint,
 		moveCorner,
 		nudge,
 		readPhoto,
@@ -66,6 +67,7 @@
 	let {
 		photo,
 		retake,
+		max,
 		filter = $bindable('original'),
 		onDone,
 		onCancel,
@@ -76,6 +78,8 @@
 		photo: Blob;
 		/** The id of a page to replace, keeping its place, instead of adding one. */
 		retake?: string;
+		/** The longer side to open the photo at, at most: `OPEN_MAX` (4096 px) by default. */
+		max?: number;
 		/** The filter chosen, `original` by default; bind it to keep the choice between pages. */
 		filter?: Filter;
 		/** Called once the page is saved. */
@@ -98,24 +102,36 @@
 	let quad = $state.raw<Quad>();
 	let saving = $state(false);
 	let message = $state('');
+	/** Where a keyboard move put a corner, for screen readers. */
+	let moved = $state('');
 	let canvas: HTMLCanvasElement | undefined = $state();
 	let frame: HTMLDivElement | undefined = $state();
 
 	// Opens each photo given; a newer one replaces a photo still opening.
 	$effect(() => {
 		const given = photo;
+		const largest = max;
 		let current = true;
 		pixels = undefined;
 		start = undefined;
 		quad = undefined;
 		message = '';
-		void readPhoto(given).then((read) => {
-			if (!current) return;
-			pixels = read;
-			if (!read) return;
-			start = startCorners(read);
-			quad = start.quad;
-		});
+		moved = '';
+		readPhoto(given, largest === undefined ? {} : { max: largest }).then(
+			(read) => {
+				if (!current) return;
+				pixels = read;
+				if (!read) return;
+				start = startCorners(read);
+				quad = start.quad;
+			},
+			(e: unknown) => {
+				// A bad `max`.
+				if (!current) return;
+				pixels = null;
+				message = e instanceof Error ? e.message : String(e);
+			}
+		);
 		return () => {
 			current = false;
 		};
@@ -165,6 +181,7 @@
 		if (!next) return;
 		event.preventDefault();
 		quad = next;
+		moved = `${CORNERS[index]} ${t.corner}: ${describePoint(next[index]!, size)}`;
 	}
 
 	function reset() {
@@ -205,7 +222,7 @@
 	{:else if pixels === undefined}
 		<p aria-live="polite">{t.loading}</p>
 	{:else if pixels === null}
-		<p class="text-sm text-red-700 dark:text-red-400" role="alert">{READ_ERROR}</p>
+		<p class="text-sm text-red-700 dark:text-red-400" role="alert">{message || READ_ERROR}</p>
 	{:else}
 		<p id="{uid}-found" aria-live="polite" data-found={start?.found}>
 			{start?.found ? t.found : t.notFound}
@@ -253,6 +270,7 @@
 			</div>
 		</div>
 		<p id="{uid}-hint" class="text-sm text-(--xcwds-shell-muted)">{t.hint}</p>
+		<p class="sr-only" aria-live="polite" data-testid="crop-moved">{moved}</p>
 		<p id="{uid}-status" class="text-sm text-red-700 dark:text-red-400" aria-live="polite">
 			{problem || message}
 		</p>

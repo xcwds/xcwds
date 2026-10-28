@@ -29,6 +29,16 @@ export function clamp(point: Point, size: Size): Point {
 	};
 }
 
+/**
+ * Where `point` is in a photo of `size`, for a screen reader: "12% across, 30% down" (from the
+ * top left).
+ */
+export function describePoint(point: Point, size: Size): string {
+	const across = Math.round((point.x / size.width) * 100);
+	const down = Math.round((point.y / size.height) * 100);
+	return `${across}% across, ${down}% down`;
+}
+
 /** `quad` with the corner at `index` (0 to 3) moved to `point`, kept inside the photo. */
 export function moveCorner(quad: Quad, index: number, point: Point, size: Size): Quad {
 	if (!(Number.isInteger(index) && index >= 0 && index < 4))
@@ -101,8 +111,17 @@ export function cropProblem(quad: Quad): string {
 
 export const READ_ERROR = 'This browser couldn’t open the photo.';
 
+/**
+ * The longer side a photo opens at by default, in pixels: within the canvas iOS Safari allows
+ * (about 16.7 megapixels), and still about 350 dpi on an A4 page.
+ */
+export const OPEN_MAX = 4096;
+
 export interface ReadOptions {
-	/** The longer side to open it at, at most; larger photos are scaled down. Default `MAX_SIDE`. */
+	/**
+	 * The longer side to open it at, at most; larger photos are scaled down. Default `OPEN_MAX`,
+	 * at most `MAX_SIDE`.
+	 */
 	max?: number;
 }
 
@@ -126,7 +145,7 @@ type Context = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
 
 /**
  * A photo (a camera photo's `blob`, or an image file) as upright RGBA pixels for `findPage` and
- * `app.scanner.scan`, scaled down to `max` on its longer side. Resolves with `null` where the
+ * `app.scanner.scan`, scaled down to `max` on its longer side (`OPEN_MAX` by default). Resolves with `null` where the
  * browser can't decode it or has no canvas to draw it on. Rejects with a `RangeError` for a bad
  * `max`.
  */
@@ -135,7 +154,7 @@ export async function readPhoto(
 	options: ReadOptions = {},
 	env: ReadEnv = {}
 ): Promise<Pixels | null> {
-	const max = options.max ?? MAX_SIDE;
+	const max = options.max ?? OPEN_MAX;
 	if (!(Number.isInteger(max) && max >= 1 && max <= MAX_SIDE))
 		throw new RangeError(
 			`The largest side must be a whole number of pixels from 1 to ${MAX_SIDE}.`

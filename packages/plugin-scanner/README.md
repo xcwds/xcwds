@@ -64,13 +64,15 @@ Closing the app stops the Worker; a page it was still making resolves with an er
 `<Crop>` shows the photo (`photo`, a camera photo's `blob` or an image file) with four corner
 handles. They start on the page `findPage` finds, or on the photo's corners when it finds none,
 and a line above the photo says which. Drag a handle, or focus it and use the arrow keys (1% of
-the photo's shorter side a press, 10% with Shift); each is a 44 px button named for its corner.
+the photo's shorter side a press, 10% with Shift); each is a 44 px button named for its corner,
+and a keyboard move tells screen readers where the corner went.
 Corners that cross say so beside the photo, and Add page waits until they make a page. Reset
 corners puts them back where they started. The filter (Original, Greyscale, Black & white) is a
 choice under the photo; bind `filter` to keep it between pages. Add page calls `app.scanner.scan`
 and then `onDone({ id, paper })`; an error from it shows beside the button. Pass `retake` (a page's
 id) to replace that page instead (the button says Replace page), `onCancel` for a Cancel button,
-`scanner` to use another scanner than `app.scanner`, and `text` to change any wording. Import
+`max` to open the photo smaller than 4096 px, `scanner` to use another scanner than
+`app.scanner`, and `text` to change any wording. Import
 `@xcwds/plugin-scanner/styles.css` after Tailwind and `@xcwds/plugin-shell/styles.css`, so
 Tailwind sees its classes.
 
@@ -89,13 +91,14 @@ Tailwind sees its classes.
   60 ms on a 9-megapixel photo in Node, in plain JavaScript, with no OpenCV.
 
 - **`@xcwds/plugin-scanner/crop`.** What the crop screen does between a photo and `scan`.
-  `readPhoto(blob, { max })` opens a photo as upright pixels (scaled down to `max` on its longer
-  side, `MAX_SIDE` by default), or gives `null` where the browser can't decode or draw it.
-  `moveCorner(quad, index, point, size)` moves one corner, kept inside the photo; `toPhoto(client,
-rect, size)` turns a pointer's position on screen into the photo's pixels; `nudge(quad, index,
-key, size, shift)` moves a corner one `keyStep` for an arrow key (`null` for any other key); and
-  `cropProblem(quad)` says what's wrong with corners that don't make a page (`''` when they do).
-  `CORNERS` names the corners in a `Quad`'s order.
+  `readPhoto(blob, { max })` opens a photo as upright pixels, scaled down to `max` on its longer
+  side (`OPEN_MAX`, 4096 px, by default: within the canvas iOS Safari allows, and still about
+  350 dpi on A4), or gives `null` where the browser can't decode or draw it. `moveCorner` moves
+  one corner, kept inside the photo. `toPhoto` turns a pointer's position on screen into the
+  photo's pixels. `nudge` moves a corner one `keyStep` for an arrow key (`null` for any other
+  key), and `describePoint` says where it went for a screen reader ("12% across, 30% down").
+  `cropProblem(quad)` says what's wrong with corners that don't make a page (`''` when they do),
+  and `CORNERS` names the corners in a `Quad`'s order.
 - **`@xcwds/plugin-scanner/geometry`.** `homography(from, to)` is the projective transform that
   maps one quad's corners onto another's (`null` when three corners are on one line), and
   `project(m, point)` applies it. A `Quad` lists a page's corners clockwise from the top left;

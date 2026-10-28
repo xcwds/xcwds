@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	CORNERS,
 	CROSSED,
+	OPEN_MAX,
 	clamp,
 	cropProblem,
+	describePoint,
 	keyStep,
 	moveCorner,
 	nudge,
@@ -48,6 +50,11 @@ describe('corner handles', () => {
 		const rect = { left: 100, top: 20, width: 200, height: 150 };
 		expect(toPhoto({ x: 150, y: 95 }, rect, size)).toEqual({ x: 100, y: 150 });
 		expect(toPhoto({ x: 0, y: 500 }, rect, size)).toEqual({ x: 0, y: 300 });
+	});
+
+	it('describes a corner’s place for a screen reader', () => {
+		expect(describePoint({ x: 48, y: 90 }, size)).toBe('12% across, 30% down');
+		expect(describePoint({ x: 400, y: 0 }, size)).toBe('100% across, 0% down');
 	});
 
 	it('steps 1% of the shorter side, or 10% with Shift', () => {
@@ -104,6 +111,17 @@ describe('readPhoto', () => {
 		expect(env.createImageBitmap).toHaveBeenCalledWith(photo, { imageOrientation: 'from-image' });
 		expect(drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 40, 30);
 		expect(close).toHaveBeenCalled();
+	});
+
+	it('opens a big photo at OPEN_MAX unless told otherwise', async () => {
+		expect(OPEN_MAX).toBe(4096);
+		const { env } = fakeEnv({ width: 8000, height: 6000 });
+		expect(await readPhoto(new Blob(), {}, env)).toMatchObject({ width: 4096, height: 3072 });
+		const larger = fakeEnv({ width: 8000, height: 6000 });
+		expect(await readPhoto(new Blob(), { max: 8000 }, larger.env)).toMatchObject({
+			width: 8000,
+			height: 6000
+		});
 	});
 
 	it('scales a large photo down to max', async () => {
