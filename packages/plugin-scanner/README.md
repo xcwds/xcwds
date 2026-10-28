@@ -5,9 +5,9 @@ make it readable and export the pages as one PDF, without the cloud scanning app
 Nothing is sent anywhere. **Work in progress**
 ([#151](https://github.com/xcwds/xcwds/issues/151)): not published yet.
 
-So far it holds the plugin entry, the crop screen, the image and PDF code it's built on, the
-Worker that straightens, filters and encodes a page, the store that keeps a scan's pages between
-visits, and sharing or saving the finished scan. The page list comes next.
+So far it holds the plugin entry, the crop screen, the page list with Export, the image and PDF
+code it's built on, the Worker that straightens, filters and encodes a page, the store that keeps
+a scan's pages between visits, and sharing or saving the finished scan.
 
 ## The plugin
 
@@ -75,6 +75,31 @@ id) to replace that page instead (the button says Replace page), `onCancel` for 
 `app.scanner`, and `text` to change any wording. Import
 `@xcwds/plugin-scanner/styles.css` after Tailwind and `@xcwds/plugin-shell/styles.css`, so
 Tailwind sees its classes.
+
+## The page list
+
+```svelte
+<script>
+	import Pages from '@xcwds/plugin-scanner/Pages.svelte';
+
+	let retake = $state();
+</script>
+
+<Pages onRetake={(id) => (retake = id)} />
+```
+
+`<Pages>` lists the scan in progress, in order, each page with its image and Up, Down and Delete
+buttons (named "Up page 2" and so on for screen readers). Delete offers Undo for a few seconds,
+which puts the page back where it was. Pass `onRetake` for a Retake button: it's called with the
+page's id, to hand to `<Crop>` as `retake` with the new photo. Export picks PDF (on A4 or Letter)
+or one image per page, and its button says Share where the share sheet takes the files and Save
+(downloads) where it doesn't. The files are made as the pages or the choices change, so the tap
+goes straight to the share sheet, as Safari requires; their names come from when the earliest page
+was saved. The first time a scan leaves the app it says that wherever it goes may keep it. Start
+over deletes every page after a second tap. Bind `format` (`pdf` or `images`) and `paper` (`a4` or
+`letter`) to keep the choices; `<Crop>`'s `onDone` gives the paper a page was snapped to, a good
+default. Pass `scanner` to use another scanner than `app.scanner`, and `text` to change any
+wording. While `app.lock` is locked, it renders nothing and holds no image.
 
 ## The modules
 
@@ -161,7 +186,8 @@ Tailwind sees its classes.
   or a saved page can't be read. `shareFiles(files)` hands them to the share sheet in one go where
   the browser can share them (`canShareFiles(files)`; `canSharePdf()` to label the button Share
   or Save), and otherwise downloads each. It resolves with `shared`, `saved`, `cancelled` (the sheet was dismissed) or
-  `failed`, and never rejects. Safari opens the share sheet only straight from a tap, and reading
+  `failed`, and never rejects. `scanFiles(pages, { format, paper, scannedAt })` makes either, and
+  `scannedAt(list)` is when the earliest page in `pages.list()` was saved, for the file names. Safari opens the share sheet only straight from a tap, and reading
   every page takes a moment, so make the files first (when the pages change, or when an Export
   panel opens) and call `shareFiles` from the tap. `SHARE_MESSAGES.outside` is the note to show
   the first time a scan leaves the app: wherever it goes may keep or back it up.

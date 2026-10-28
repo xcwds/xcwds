@@ -26,6 +26,11 @@
 			"svelte": "./dist/Crop.svelte",
 			"default": "./dist/Crop.svelte"
 		},
+		"./Pages.svelte": {
+			"types": "./dist/Pages.svelte.d.ts",
+			"svelte": "./dist/Pages.svelte",
+			"default": "./dist/Pages.svelte"
+		},
 		"./client": {
 			"types": "./dist/client.d.ts",
 			"default": "./dist/client.js"
