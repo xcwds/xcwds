@@ -1,7 +1,7 @@
 /**
  * `@xcwds/plugin-scanner/warp`: straighten a photographed page into a rectangle. This is the plain
  * JavaScript path, which works anywhere (a Worker, a browser without WebGL, Node in tests); a
- * WebGL path comes with the crop screen. Pure functions, safe to import anywhere.
+ * WebGL path is still to come (#151). Pure functions, safe to import anywhere.
  */
 import { MAX_SIDE, homography, rectangle, type Quad } from './geometry.js';
 

@@ -5,9 +5,9 @@ make it readable and export the pages as one PDF, without the cloud scanning app
 Nothing is sent anywhere. **Work in progress**
 ([#151](https://github.com/xcwds/xcwds/issues/151)): not published yet.
 
-So far it holds the plugin entry, the image and PDF code it's built on, the Worker that
-straightens, filters and encodes a page, the store that keeps a scan's pages between visits, and
-sharing or saving the finished scan. The crop screen and the page list come next.
+So far it holds the plugin entry, the crop screen, the image and PDF code it's built on, the
+Worker that straightens, filters and encodes a page, the store that keeps a scan's pages between
+visits, and sharing or saving the finished scan. The page list comes next.
 
 ## The plugin
 
@@ -38,6 +38,44 @@ The page gets `app.scanner`:
 
 Closing the app stops the Worker; a page it was still making resolves with an error.
 
+## The crop screen
+
+```svelte
+<script>
+	import Camera from '@xcwds/plugin-camera/Camera.svelte';
+	import Crop from '@xcwds/plugin-scanner/Crop.svelte';
+
+	let photo = $state();
+	let filter = $state('original');
+</script>
+
+{#if photo}
+	<Crop
+		{photo}
+		bind:filter
+		onDone={() => (photo = undefined)}
+		onCancel={() => (photo = undefined)}
+	/>
+{:else}
+	<Camera onCapture={(p) => (photo = p.blob)} />
+{/if}
+```
+
+`<Crop>` shows the photo (`photo`, a camera photo's `blob` or an image file) with four corner
+handles. They start on the page `findPage` finds, or on the photo's corners when it finds none,
+and a line above the photo says which. Drag a handle, or focus it and use the arrow keys (1% of
+the photo's shorter side a press, 10% with Shift); each is a 44 px button named for its corner,
+and a keyboard move tells screen readers where the corner went.
+Corners that cross say so beside the photo, and Add page waits until they make a page. Reset
+corners puts them back where they started. The filter (Original, Greyscale, Black & white) is a
+choice under the photo; bind `filter` to keep it between pages. Add page calls `app.scanner.scan`
+and then `onDone({ id, paper })`; an error from it shows beside the button. Pass `retake` (a page's
+id) to replace that page instead (the button says Replace page), `onCancel` for a Cancel button,
+`max` to open the photo smaller than 4096 px, `scanner` to use another scanner than
+`app.scanner`, and `text` to change any wording. Import
+`@xcwds/plugin-scanner/styles.css` after Tailwind and `@xcwds/plugin-shell/styles.css`, so
+Tailwind sees its classes.
+
 ## The modules
 
 - **`@xcwds/plugin-scanner/corners`.** `findPage(pixels)` finds the corners of a page in a photo,
@@ -52,6 +90,15 @@ Closing the app stops the Worker; a page it was still making resolves with an er
   (a white page on a white desk). It looks for a page lighter than what it's on. It takes about
   60 ms on a 9-megapixel photo in Node, in plain JavaScript, with no OpenCV.
 
+- **`@xcwds/plugin-scanner/crop`.** What the crop screen does between a photo and `scan`.
+  `readPhoto(blob, { max })` opens a photo as upright pixels, scaled down to `max` on its longer
+  side (`OPEN_MAX`, 4096 px, by default: within the canvas iOS Safari allows, and still about
+  350 dpi on A4), or gives `null` where the browser can't decode or draw it. `moveCorner` moves
+  one corner, kept inside the photo. `toPhoto` turns a pointer's position on screen into the
+  photo's pixels. `nudge` moves a corner one `keyStep` for an arrow key (`null` for any other
+  key), and `describePoint` says where it went for a screen reader ("12% across, 30% down").
+  `cropProblem(quad)` says what's wrong with corners that don't make a page (`''` when they do),
+  and `CORNERS` names the corners in a `Quad`'s order.
 - **`@xcwds/plugin-scanner/geometry`.** `homography(from, to)` is the projective transform that
   maps one quad's corners onto another's (`null` when three corners are on one line), and
   `project(m, point)` applies it. A `Quad` lists a page's corners clockwise from the top left;
@@ -119,8 +166,8 @@ Closing the app stops the Worker; a page it was still making resolves with an er
   panel opens) and call `shareFiles` from the tap. `SHARE_MESSAGES.outside` is the note to show
   the first time a scan leaves the app: wherever it goes may keep or back it up.
 
-The image and PDF modules are pure functions that use no browser APIs, and `pages`, `process`,
-`encode` and `share` reach the browser only when a method is called. None makes a network request, and all
+The image and PDF modules are pure functions that use no browser APIs, and `crop`, `pages`,
+`process`, `encode` and `share` reach the browser only when a method is called. None makes a network request, and all
 are safe to import anywhere.
 
 ## What it won't do

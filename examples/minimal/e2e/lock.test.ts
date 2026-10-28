@@ -292,9 +292,9 @@ test('forgot passcode clears only what the lock protects', async ({ page }) => {
 	const forgot = page.getByTestId('lock-forgot');
 	await forgot.getByRole('button', { name: 'Forgot passcode?' }).click();
 	// The camera's photos are personal too (#146), and so are private apps (#160), their builder
-	// drafts (#161) and voice memos (#150).
+	// drafts (#161), voice memos (#150) and scanned pages (#151).
 	await expect(page.getByTestId('lock-forgot-groups')).toHaveText(
-		'Your private apps, Your private apps: unsaved changes, Your private apps: data, Journal, Photos, Photos (thumbnails), Recordings, Recordings (in progress)'
+		'Your private apps, Your private apps: unsaved changes, Your private apps: data, Journal, Photos, Photos (thumbnails), Recordings, Recordings (in progress), Scanned pages'
 	);
 	await forgot.getByRole('button', { name: 'Reset the lock' }).click();
 	await forgot.getByRole('button', { name: 'Clear and reset' }).click();

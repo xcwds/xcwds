@@ -55,6 +55,7 @@ for (const { name, dir, base } of targets) {
 				/Camera/,
 				/QR code/,
 				/Voice memos/,
+				/Scanner/,
 				// Only the base-path build has a Notion relay, and so the Notion tool.
 				...(base ? [/Notion/] : []),
 				/Journal/
@@ -124,9 +125,9 @@ test.describe('at the root', () => {
 		await gotoHydrated(page, url('/apps'));
 		const other = await context.newPage();
 		await gotoHydrated(other, url('/utils'));
-		await expect(toolLinks(other)).toHaveCount(9);
+		await expect(toolLinks(other)).toHaveCount(10);
 		await toggle(page, 'Kitchen').click();
-		await expect(toolLinks(other)).toHaveCount(7);
+		await expect(toolLinks(other)).toHaveCount(8);
 
 		await gotoHydrated(other, url('/settings'));
 		const link = other.getByTestId('apps-link');

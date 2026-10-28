@@ -42,6 +42,7 @@ for (const { name, dir, base } of targets) {
 				/Camera/,
 				/QR code/,
 				/Voice memos/,
+				/Scanner/,
 				// Only the base-path build has a Notion relay, and so the Notion tool.
 				...(base ? [/Notion/] : []),
 				/Journal/

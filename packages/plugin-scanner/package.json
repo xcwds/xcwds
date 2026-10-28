@@ -6,6 +6,8 @@
 	"license": "MIT",
 	"type": "module",
 	"sideEffects": [
+		"**/*.svelte",
+		"**/*.css",
 		"**/*.worker.js"
 	],
 	"repository": {
@@ -19,6 +21,11 @@
 			"types": "./dist/index.d.ts",
 			"default": "./dist/index.js"
 		},
+		"./Crop.svelte": {
+			"types": "./dist/Crop.svelte.d.ts",
+			"svelte": "./dist/Crop.svelte",
+			"default": "./dist/Crop.svelte"
+		},
 		"./client": {
 			"types": "./dist/client.d.ts",
 			"default": "./dist/client.js"
@@ -26,6 +33,10 @@
 		"./corners": {
 			"types": "./dist/corners.d.ts",
 			"default": "./dist/corners.js"
+		},
+		"./crop": {
+			"types": "./dist/crop.d.ts",
+			"default": "./dist/crop.js"
 		},
 		"./encode": {
 			"types": "./dist/encode.d.ts",
@@ -59,6 +70,7 @@
 			"types": "./dist/warp.d.ts",
 			"default": "./dist/warp.js"
 		},
+		"./styles.css": "./dist/styles.css",
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -66,17 +78,26 @@
 		"!dist/**/*.test.*"
 	],
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json",
-		"check": "tsc -p tsconfig.json --noEmit",
+		"build": "svelte-package -i src -o dist",
+		"check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
 		"publint": "publint"
 	},
 	"peerDependencies": {
-		"@xcwds/core": "workspace:^"
+		"@xcwds/core": "workspace:^",
+		"@xcwds/sveltekit": "workspace:^",
+		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
+		"@sveltejs/kit": "^3.1.0",
+		"@sveltejs/package": "^3.0.0",
+		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@xcwds/core": "workspace:^",
+		"@xcwds/sveltekit": "workspace:^",
 		"@xcwds/testing": "workspace:*",
+		"svelte": "^5.57.2",
+		"svelte-check": "^4.3.4",
 		"typescript": "~6.0.3",
+		"vite": "^8.3.4",
 		"vitest": "^5.0.0"
 	},
 	"keywords": [

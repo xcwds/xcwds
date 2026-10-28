@@ -23,6 +23,7 @@
 		"@xcwds/plugin-offline": "workspace:*",
 		"@xcwds/plugin-qr": "workspace:*",
 		"@xcwds/plugin-recorder": "workspace:*",
+		"@xcwds/plugin-scanner": "workspace:*",
 		"@xcwds/plugin-settings": "workspace:*",
 		"@xcwds/plugin-share": "workspace:*",
 		"@xcwds/plugin-shell": "workspace:*",
