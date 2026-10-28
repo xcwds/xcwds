@@ -4,6 +4,7 @@ import blocks from '@xcwds/plugin-blocks';
 import camera from '@xcwds/plugin-camera';
 import qr from '@xcwds/plugin-qr';
 import recorder from '@xcwds/plugin-recorder';
+import scanner from '@xcwds/plugin-scanner';
 import changelog from '@xcwds/plugin-changelog';
 import install from '@xcwds/plugin-install';
 import lock from '@xcwds/plugin-lock';
@@ -87,6 +88,12 @@ export default defineConfig({
 					name: 'Voice memos',
 					blurb: 'Recordings kept here.'
 				},
+				{
+					path: '/utils/scanner',
+					emoji: '📄',
+					name: 'Scanner',
+					blurb: 'Paper pages, straightened.'
+				},
 				// Only in the base-path build, which has a Notion relay (NOTION_RELAY in `build:base`).
 				...(process.env.NOTION_RELAY
 					? [{ path: '/utils/notion', emoji: '🗒️', name: 'Notion', blurb: 'Pages kept here.' }]
@@ -149,6 +156,8 @@ export default defineConfig({
 		// Voice memos as `app.recorder` and `app.recordings`; /utils/recorder shows `<Recorder>` and
 		// `<Recordings>`.
 		recorder(),
+		// Scanned pages as `app.scanner` (#151); /utils/scanner crops a `<Camera>` photo with `<Crop>`.
+		scanner(),
 		// Notion pages downloaded through the relay as `app.notion` (#106); /utils/notion uses it, and
 		// /utils/notion/view shows one copy (`<NotionView>`), whose to-dos can be ticked and notes
 		// added (`writes`, #109). Only the base-path build sets a relay, so the root build still
