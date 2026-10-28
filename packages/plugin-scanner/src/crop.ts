@@ -4,6 +4,7 @@
  * arrow key, kept inside the photo. Safe to import during prerender: browser APIs are reached
  * only when a photo is opened.
  */
+import { encodeJpeg, type EncodeOptions } from './encode.js';
 import { MAX_SIDE, isConvex, type Point, type Quad } from './geometry.js';
 import type { Pixels } from './warp.js';
 
@@ -185,4 +186,28 @@ export async function readPhoto(
 	} finally {
 		bitmap.close();
 	}
+}
+
+/** The longer side of a page's thumbnail in the page list, in pixels. */
+export const THUMB_MAX = 240;
+
+/** What `thumbnail` uses; the real browser APIs unless a test passes its own. */
+export interface ThumbnailEnv extends ReadEnv {
+	encode?: (pixels: Pixels, options: EncodeOptions) => Promise<Blob | null>;
+}
+
+/**
+ * A small JPEG of a finished page for the page list, at most `max` (`THUMB_MAX`) on its longer
+ * side, so a long scan never keeps full-size pages decoded on screen. Open one at a time: each
+ * is decoded at full size while it's scaled down. Resolves with `null` where the browser can't
+ * make one, and rejects with a `RangeError` for a bad `max`.
+ */
+export async function thumbnail(
+	page: Blob,
+	{ max = THUMB_MAX }: ReadOptions = {},
+	env: ThumbnailEnv = {}
+): Promise<Blob | null> {
+	const pixels = await readPhoto(page, { max }, env);
+	if (!pixels) return null;
+	return (env.encode ?? encodeJpeg)(pixels, { quality: 0.8 });
 }

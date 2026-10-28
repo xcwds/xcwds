@@ -107,6 +107,38 @@ export async function scanImages(
 	return { ok: true, files };
 }
 
+/** What a scan leaves the app as: one PDF, or one JPEG per page. */
+export type ScanFormat = 'pdf' | 'images';
+
+export interface ScanFilesOptions extends ScanPdfOptions {
+	/** Default `pdf`. */
+	format?: ScanFormat;
+}
+
+/**
+ * The scan as `format` asks: `scanPdf` (with `paper`) or `scanImages`. Rejects with a
+ * `RangeError` for another `format`, or for a `paper` that isn't `a4` or `letter`.
+ */
+export async function scanFiles(
+	pages: Pick<Pages, 'jpegs'>,
+	{ format = 'pdf', ...options }: ScanFilesOptions = {}
+): Promise<FilesResult> {
+	if (format === 'pdf') return scanPdf(pages, options);
+	if (format === 'images') {
+		return scanImages(pages, options);
+	}
+	throw new RangeError(`A scan's format must be pdf or images, not ${String(format)}.`);
+}
+
+/**
+ * When a scan was made, for its file names: when its first page still there was last saved (a move
+ * or a retake saves a page again), or now when it has no pages.
+ */
+export function scannedAt(pages: readonly { saved: number }[]): number {
+	const times = pages.map((p) => p.saved).filter(Number.isFinite);
+	return times.length ? Math.min(...times) : Date.now();
+}
+
 const nav = (env: ShareEnv) =>
 	env.navigator ?? (typeof navigator === 'undefined' ? undefined : navigator);
 

@@ -5,8 +5,10 @@ import {
 	canShareFiles,
 	canSharePdf,
 	fileName,
+	scanFiles,
 	scanImages,
 	scanPdf,
+	scannedAt as firstSaved,
 	shareFiles,
 	type ShareEnv
 } from './share.js';
@@ -144,6 +146,58 @@ describe('scanImages', () => {
 			ok: false,
 			error: "Page 1 couldn't be read. Retake it or delete it, then try again."
 		});
+	});
+});
+
+describe('scanFiles', () => {
+	it('makes a PDF by default, on the paper asked for', async () => {
+		const pages = pagesOf(jpegBytes(), jpegBytes());
+		const pdf = await scanFiles(pages, { scannedAt });
+		if (!pdf.ok) throw new Error(pdf.error);
+		expect(pdf.files.map((f) => f.name)).toEqual(['scan-20261027-090142.pdf']);
+		expect(await text(pdf.files[0]!)).toContain('/MediaBox [0 0 595.28 841.89]');
+		const letter = await scanFiles(pages, { format: 'pdf', paper: 'letter', scannedAt });
+		if (!letter.ok) throw new Error(letter.error);
+		expect(await text(letter.files[0]!)).toContain('/MediaBox [0 0 612 792]');
+	});
+
+	it('makes one image per page, whatever the paper', async () => {
+		const images = await scanFiles(pagesOf(jpegBytes(), jpegBytes()), {
+			format: 'images',
+			paper: 'letter',
+			scannedAt
+		});
+		if (!images.ok) throw new Error(images.error);
+		expect(images.files.map((f) => f.name)).toEqual([
+			'scan-20261027-090142-1.jpg',
+			'scan-20261027-090142-2.jpg'
+		]);
+	});
+
+	it('says when there are no pages, and refuses an unknown format or paper', async () => {
+		expect(await scanFiles(pagesOf(), { format: 'images' })).toEqual({
+			ok: false,
+			error: SHARE_MESSAGES.empty
+		});
+		await expect(scanFiles(pagesOf(jpegBytes()), { format: 'zip' as never })).rejects.toThrow(
+			/format must be pdf or images/
+		);
+		await expect(scanFiles(pagesOf(jpegBytes()), { paper: 'a5' as never })).rejects.toThrow(
+			RangeError
+		);
+	});
+});
+
+describe('scannedAt', () => {
+	it('is when the earliest page still there was saved, or now with none', () => {
+		expect(firstSaved([{ saved: 300 }, { saved: 100 }, { saved: 200 }])).toBe(100);
+		expect(firstSaved([{ saved: Number.NaN }, { saved: 50 }])).toBe(50);
+		vi.useFakeTimers({ now: 1234 });
+		try {
+			expect(firstSaved([])).toBe(1234);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 
