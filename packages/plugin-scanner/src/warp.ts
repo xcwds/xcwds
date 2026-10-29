@@ -1,9 +1,9 @@
 /**
  * `@xcwds/plugin-scanner/warp`: straighten a photographed page into a rectangle. This is the plain
- * JavaScript path, which works anywhere (a Worker, a browser without WebGL, Node in tests); a
- * WebGL path is still to come (#151). Pure functions, safe to import anywhere.
+ * JavaScript path, which works anywhere (a Worker, a browser without WebGL, Node in tests);
+ * `./warp-gl` does the same on the GPU where it can. Pure functions, safe to import anywhere.
  */
-import { MAX_SIDE, homography, rectangle, type Quad } from './geometry.js';
+import { MAX_SIDE, homography, rectangle, type Matrix, type Quad } from './geometry.js';
 
 export { MAX_SIDE };
 
@@ -15,13 +15,14 @@ export interface Pixels {
 }
 
 /**
- * The part of `source` inside `quad` (corners clockwise from the top left, in `source`'s pixels),
- * stretched onto a `width` × `height` rectangle with bilinear sampling. Points of the quad outside
- * the image take the colour of its nearest edge. Throws a `RangeError` for a size that isn't a
- * whole number from 1 to `MAX_SIDE`, a source without pixels, or a quad with three corners on one
- * line.
+ * The checks `warp` makes, and the homography it samples with: from a point of the
+ * `width` × `height` output to the point of `source` it shows. Throws as `warp` does.
  */
-export function warp(source: Pixels, quad: Quad, size: { width: number; height: number }): Pixels {
+export function warpMatrix(
+	source: Pixels,
+	quad: Quad,
+	size: { width: number; height: number }
+): Matrix {
 	const { width, height } = size;
 	for (const side of [width, height])
 		if (!Number.isInteger(side) || side < 1 || side > MAX_SIDE)
@@ -36,6 +37,19 @@ export function warp(source: Pixels, quad: Quad, size: { width: number; height: 
 		throw new RangeError('The source pixels don’t match its width and height.');
 	const m = homography(rectangle(width, height), quad);
 	if (!m) throw new RangeError('The corners don’t make a page: three of them are on one line.');
+	return m;
+}
+
+/**
+ * The part of `source` inside `quad` (corners clockwise from the top left, in `source`'s pixels),
+ * stretched onto a `width` × `height` rectangle with bilinear sampling. Points of the quad outside
+ * the image take the colour of its nearest edge. Throws a `RangeError` for a size that isn't a
+ * whole number from 1 to `MAX_SIDE`, a source without pixels, or a quad with three corners on one
+ * line.
+ */
+export function warp(source: Pixels, quad: Quad, size: { width: number; height: number }): Pixels {
+	const m = warpMatrix(source, quad, size);
+	const { width, height } = size;
 	const out = new Uint8ClampedArray(width * height * 4);
 	const src = source.data;
 	const maxX = source.width - 1;
@@ -70,4 +84,28 @@ export function warp(source: Pixels, quad: Quad, size: { width: number; height: 
 		}
 	}
 	return { width, height, data: out };
+}
+
+/**
+ * The colour `warp` gives output pixel (`x`, `y`), from `warpMatrix`'s `m`: the same sampling for
+ * one pixel, as unrounded RGBA. `./warp-gl` checks the GPU's page against it.
+ */
+export function sampleAt(source: Pixels, m: Matrix, x: number, y: number): number[] {
+	const cx = x + 0.5;
+	const cy = y + 0.5;
+	const w = m[6] * cx + m[7] * cy + m[8];
+	const maxX = source.width - 1;
+	const maxY = source.height - 1;
+	const sx = Math.min(Math.max((m[0] * cx + m[1] * cy + m[2]) / w - 0.5, 0), maxX);
+	const sy = Math.min(Math.max((m[3] * cx + m[4] * cy + m[5]) / w - 0.5, 0), maxY);
+	const x0 = Math.floor(sx);
+	const y0 = Math.floor(sy);
+	const x1 = Math.min(x0 + 1, maxX);
+	const y1 = Math.min(y0 + 1, maxY);
+	const at = (px: number, py: number, k: number) => source.data[(py * source.width + px) * 4 + k]!;
+	return [0, 1, 2, 3].map((k) => {
+		const top = at(x0, y0, k) + (at(x1, y0, k) - at(x0, y0, k)) * (sx - x0);
+		const bottom = at(x0, y1, k) + (at(x1, y1, k) - at(x0, y1, k)) * (sx - x0);
+		return top + (bottom - top) * (sy - y0);
+	});
 }

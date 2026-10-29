@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { homography, project, rectangle, type Quad } from './geometry.js';
-import { MAX_SIDE, warp, type Pixels } from './warp.js';
+import { MAX_SIDE, sampleAt, warp, warpMatrix, type Pixels } from './warp.js';
 
 function image(width: number, height: number, colour: (x: number, y: number) => number[]): Pixels {
 	const data = new Uint8ClampedArray(width * height * 4);
@@ -79,6 +79,24 @@ describe('warp', () => {
 		);
 		expect(at(out, 0, 0)).toEqual([255, 0, 0, 255]);
 		expect(at(out, 3, 3)).toEqual([0, 0, 255, 255]);
+	});
+
+	it('samples each pixel as sampleAt does, from warpMatrix', () => {
+		const source = image(9, 7, (x, y) => [(x * 53 + y * 17) % 256, x * 28, y * 36, 200 + x]);
+		const quad: Quad = [
+			{ x: -1.5, y: 0.25 },
+			{ x: 8, y: 1 },
+			{ x: 9.5, y: 7.5 },
+			{ x: 0.5, y: 6 }
+		];
+		const size = { width: 13, height: 11 };
+		const out = warp(source, quad, size);
+		const m = warpMatrix(source, quad, size);
+		for (let y = 0; y < size.height; y++)
+			for (let x = 0; x < size.width; x++)
+				expect(at(out, x, y), `${x}, ${y}`).toEqual([
+					...new Uint8ClampedArray(sampleAt(source, m, x, y))
+				]);
 	});
 
 	it('refuses bad sizes, mismatched pixels and flat quads', () => {

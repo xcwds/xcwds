@@ -75,6 +75,10 @@
 			"types": "./dist/warp.d.ts",
 			"default": "./dist/warp.js"
 		},
+		"./warp-gl": {
+			"types": "./dist/warp-gl.d.ts",
+			"default": "./dist/warp-gl.js"
+		},
 		"./styles.css": "./dist/styles.css",
 		"./package.json": "./package.json"
 	},
