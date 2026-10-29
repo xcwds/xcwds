@@ -4,8 +4,8 @@
  * page to within a shade, and it gives `null` wherever it can't run, for `warp` to do the work
  * instead. Safe to import anywhere: the GPU is reached only when a page is warped.
  */
-import type { Quad } from './geometry.js';
-import { warpMatrix, type Pixels } from './warp.js';
+import type { Matrix, Quad } from './geometry.js';
+import { sampleAt, warpMatrix, type Pixels } from './warp.js';
 
 export interface WarpGlOptions {
 	/**
@@ -57,7 +57,8 @@ function defaultCanvas(): OffscreenCanvas | HTMLCanvasElement | null {
 /**
  * `warp(source, quad, size)` on the GPU: the same straightened page, or `null` where WebGL 2
  * isn't available, the photo or page is larger than this GPU's textures, or the GPU fails (the
- * context is lost, a shader doesn't compile). Throws the `RangeError`s `warp` throws, before
+ * context is lost, a shader doesn't compile, or the page it drew doesn't match `warp`'s at the
+ * pixels checked). Throws the `RangeError`s `warp` throws, before
  * anything reaches the GPU.
  */
 export function warpGl(
@@ -92,7 +93,7 @@ export function warpGl(
 function draw(
 	gl: WebGL2RenderingContext,
 	source: Pixels,
-	m: readonly number[],
+	m: Matrix,
 	width: number,
 	height: number
 ): Pixels | null {
@@ -139,7 +140,7 @@ function draw(
 	);
 	gl.uniform1i(gl.getUniformLocation(program, 'source'), 0);
 	// `m` is in row order; WebGL 2 transposes it into GLSL's column order.
-	gl.uniformMatrix3fv(gl.getUniformLocation(program, 'toSource'), true, m as number[]);
+	gl.uniformMatrix3fv(gl.getUniformLocation(program, 'toSource'), true, [...m]);
 	const row = gl.getUniformLocation(program, 'row');
 
 	// Each strip is drawn into its own texture, row 0 at the bottom of the framebuffer, which is
@@ -173,7 +174,39 @@ function draw(
 		);
 	}
 	if (gl.getError() !== gl.NO_ERROR || gl.isContextLost()) return null;
-	return { width, height, data: out };
+	const page = { width, height, data: out };
+	return looksRight(source, m, page) ? page : null;
+}
+
+/** How many of the GPU's pixels are checked against `sampleAt`, and how far one may be off. */
+const SPOT_CHECKS = 32;
+const SPOT_TOLERANCE = 2;
+
+/**
+ * Whether the GPU's page matches `warp`'s at the corners, the centre and a spread of pixels in
+ * between: a driver that runs the shader but computes wrongly (a broken `highp` on some phones)
+ * gives no error, and its page would otherwise pass for a scan.
+ */
+function looksRight(source: Pixels, m: Matrix, page: Pixels): boolean {
+	const { width, height } = page;
+	const points: [number, number][] = [
+		[0, 0],
+		[width - 1, 0],
+		[0, height - 1],
+		[width - 1, height - 1],
+		[width >> 1, height >> 1]
+	];
+	// The rest spread evenly over the page (a golden-ratio sequence), the same ones every time.
+	for (let i = 1; points.length < SPOT_CHECKS; i++)
+		points.push([
+			Math.floor(((i * 0.618034) % 1) * width),
+			Math.floor(((i * 0.414214) % 1) * height)
+		]);
+	return points.every(([x, y]) => {
+		const expected = sampleAt(source, m, x, y);
+		const at = (y * width + x) * 4;
+		return expected.every((v, k) => Math.abs(page.data[at + k]! - v) <= SPOT_TOLERANCE);
+	});
 }
 
 function link(gl: WebGL2RenderingContext): WebGLProgram | null {

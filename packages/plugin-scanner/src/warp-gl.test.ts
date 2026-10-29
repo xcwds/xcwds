@@ -3,7 +3,7 @@
 // compared with `warp`'s in examples/minimal/e2e/scanner-warp.test.ts.
 import { describe, expect, it, vi } from 'vitest';
 import { rectangle, type Quad } from './geometry.js';
-import { MAX_SIDE, type Pixels } from './warp.js';
+import { MAX_SIDE, warp, type Pixels } from './warp.js';
 import { STRIP_PIXELS, warpGl } from './warp-gl.js';
 
 function image(width: number, height: number): Pixels {
@@ -140,39 +140,83 @@ describe('warpGl', () => {
 		}
 	});
 
+	/** A photo whose every pixel differs from its neighbours, so a misplaced row shows. */
+	const busy = () => {
+		const photo = image(16, 16);
+		for (let i = 0; i < photo.data.length; i++) photo.data[i] = (i * 37) % 256;
+		return photo;
+	};
+
+	/** A stand-in GPU that draws each strip right: `warp`'s rows from the strip's top down. */
+	function drawsRight(expected: Pixels) {
+		let top = 0;
+		const reads: number[][] = [];
+		const fake = fakeGl({
+			uniform1f: (_location: unknown, value: number) => (top = value),
+			readPixels: (...args: unknown[]) => {
+				const [x, y, w, h, , , view] = args as [number, number, number, number, 0, 0, Uint8Array];
+				reads.push([x, y, w, h]);
+				const row = expected.width * 4;
+				view.set(expected.data.subarray(top * row, (top + h) * row));
+			}
+		});
+		return { ...fake, reads };
+	}
+
 	it('draws the page in strips and reads each into its own rows', () => {
 		const width = 8192;
 		const height = 1100;
 		const rows = STRIP_PIXELS / width;
-		let strip = 0;
-		const fake = fakeGl({
-			readPixels: (...args: unknown[]) => {
-				const [x, y, w, h, , , view] = args as [number, number, number, number, 0, 0, Uint8Array];
-				expect([x, y, w]).toEqual([0, 0, width]);
-				expect(view.length).toBe(h * width * 4);
-				view.fill(++strip);
-			}
-		});
-		const out = warpGl(image(4, 4), quad, { width, height }, fake)!;
+		const photo = busy();
+		const expected = warp(photo, rectangle(16, 16), { width, height });
+		const fake = drawsRight(expected);
+		const out = warpGl(photo, rectangle(16, 16), { width, height }, fake)!;
 		expect(out).toMatchObject({ width, height });
-		const tops = fake.calls.filter((c) => c.name === 'uniform1f').map((c) => c.args[1]);
-		expect(tops).toEqual([0, rows, rows * 2]);
-		const viewports = fake.calls.filter((c) => c.name === 'viewport').map((c) => c.args);
-		expect(viewports).toEqual([
+		expect(fake.reads).toEqual([
 			[0, 0, width, rows],
 			[0, 0, width, rows],
 			[0, 0, width, height - rows * 2]
 		]);
+		const viewports = fake.calls.filter((c) => c.name === 'viewport').map((c) => c.args);
+		expect(viewports).toEqual(fake.reads);
 		// Each strip landed in its own rows, top first, and every row was read.
-		const rowValue = (y: number) => out.data[y * width * 4]!;
-		expect([rowValue(0), rowValue(rows - 1), rowValue(rows), rowValue(height - 1)]).toEqual([
-			1, 1, 2, 3
-		]);
-		expect(out.data.includes(0)).toBe(false);
+		let wrong = 0;
+		for (let i = 0; i < out.data.length; i++) if (out.data[i] !== expected.data[i]) wrong++;
+		expect(wrong).toBe(0);
 		// The homography goes over in row order, for WebGL 2 to transpose.
 		const matrix = fake.calls.find((c) => c.name === 'uniformMatrix3fv')!;
 		expect(matrix.args[1]).toBe(true);
 		expect(fake.loseContext).toHaveBeenCalledOnce();
+	});
+
+	it('gives null when the page the GPU drew is wrong where it is checked', () => {
+		const photo = busy();
+		const page = { width: 300, height: 200 };
+		const quad: Quad = [
+			{ x: 1, y: 2 },
+			{ x: 15, y: 0.5 },
+			{ x: 14, y: 15 },
+			{ x: 0, y: 13 }
+		];
+		const expected = warp(photo, quad, page);
+		// Right, then off by a shade or two everywhere: still the page.
+		expect(warpGl(photo, quad, page, drawsRight(expected))).not.toBeNull();
+		const close = { ...expected, data: expected.data.map((v, i) => v + (i % 2 ? 1 : -1)) };
+		expect(warpGl(photo, quad, page, drawsRight(close))).not.toBeNull();
+		// Wrong: blank, rows upside down, or wrong in one spot that's checked (the centre).
+		const blank = { ...expected, data: new Uint8ClampedArray(expected.data.length) };
+		const flipped = { ...expected, data: new Uint8ClampedArray(expected.data.length) };
+		const row = page.width * 4;
+		for (let y = 0; y < page.height; y++)
+			flipped.data.set(expected.data.subarray(y * row, (y + 1) * row), (page.height - 1 - y) * row);
+		const spot = { ...expected, data: expected.data.slice() };
+		const centre = ((page.height >> 1) * page.width + (page.width >> 1)) * 4;
+		spot.data[centre] = spot.data[centre]! > 127 ? 0 : 255;
+		for (const wrong of [blank, flipped, spot]) {
+			const fake = drawsRight(wrong);
+			expect(warpGl(photo, quad, page, fake)).toBeNull();
+			expect(fake.loseContext).toHaveBeenCalledOnce();
+		}
 	});
 
 	it('draws a small page in one strip', () => {

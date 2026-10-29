@@ -150,13 +150,16 @@ wording. While `app.lock` is locked, it renders nothing and holds no image.
 - **`@xcwds/plugin-scanner/warp`.** `warp(pixels, quad, size)` straightens the part of an image
   inside `quad` onto a rectangle, with bilinear sampling. It takes and returns RGBA pixels shaped
   like `ImageData`, in plain JavaScript, so it runs in a Worker or without WebGL.
-  `warpMatrix(pixels, quad, size)` makes the same checks and gives the homography it samples with.
+  `warpMatrix(pixels, quad, size)` makes the same checks and gives the homography it samples with,
+  and `sampleAt(pixels, m, x, y)` gives the colour of one output pixel.
 - **`@xcwds/plugin-scanner/warp-gl`.** `warpGl(pixels, quad, size, { canvas })` does what `warp`
   does on the GPU, with WebGL 2 on an `OffscreenCanvas` (in a Worker too) or a `<canvas>`. It
   samples the same way, so the page matches `warp`'s to within one shade in 255, and draws it in
   strips of at most `STRIP_PIXELS` (4 megapixels), so the GPU never holds the whole page at once.
   It throws what `warp` throws, before reaching the GPU, and gives `null` where it can't run: no
-  WebGL 2, a photo or page larger than this GPU's textures, or a GPU that fails. Each call makes
+  WebGL 2, a photo or page larger than this GPU's textures, or a GPU that fails, including one
+  that draws without an error but wrongly: 32 of its pixels are checked against `sampleAt`, and
+  one more than 2 shades off means `null`. Each call makes
   its own WebGL context and gives it back when done.
 - **`@xcwds/plugin-scanner/filters`.** `applyFilter(pixels, filter)` with `original`, `greyscale`
   or `bw`. Black & white is an adaptive threshold (`threshold(pixels, { radius, offset })`): each

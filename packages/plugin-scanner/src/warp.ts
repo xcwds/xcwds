@@ -85,3 +85,27 @@ export function warp(source: Pixels, quad: Quad, size: { width: number; height: 
 	}
 	return { width, height, data: out };
 }
+
+/**
+ * The colour `warp` gives output pixel (`x`, `y`), from `warpMatrix`'s `m`: the same sampling for
+ * one pixel, as unrounded RGBA. `./warp-gl` checks the GPU's page against it.
+ */
+export function sampleAt(source: Pixels, m: Matrix, x: number, y: number): number[] {
+	const cx = x + 0.5;
+	const cy = y + 0.5;
+	const w = m[6] * cx + m[7] * cy + m[8];
+	const maxX = source.width - 1;
+	const maxY = source.height - 1;
+	const sx = Math.min(Math.max((m[0] * cx + m[1] * cy + m[2]) / w - 0.5, 0), maxX);
+	const sy = Math.min(Math.max((m[3] * cx + m[4] * cy + m[5]) / w - 0.5, 0), maxY);
+	const x0 = Math.floor(sx);
+	const y0 = Math.floor(sy);
+	const x1 = Math.min(x0 + 1, maxX);
+	const y1 = Math.min(y0 + 1, maxY);
+	const at = (px: number, py: number, k: number) => source.data[(py * source.width + px) * 4 + k]!;
+	return [0, 1, 2, 3].map((k) => {
+		const top = at(x0, y0, k) + (at(x1, y0, k) - at(x0, y0, k)) * (sx - x0);
+		const bottom = at(x0, y1, k) + (at(x1, y1, k) - at(x0, y1, k)) * (sx - x0);
+		return top + (bottom - top) * (sy - y0);
+	});
+}
