@@ -17,6 +17,7 @@ import {
 } from './geometry.js';
 import { FILTERS, applyFilter, type Filter } from './filters.js';
 import { warp, type Pixels } from './warp.js';
+import { warpGl } from './warp-gl.js';
 import { frameSize, startCorners, type FindPageOptions, type StartCorners } from './corners.js';
 import { ENCODE_ERROR, encodeJpeg, jpegQuality, type EncodeOptions } from './encode.js';
 
@@ -34,7 +35,8 @@ export interface ProcessedPage extends Pixels {
 
 /**
  * The part of `source` inside `quad` (its corners clockwise from the top left, in `source`'s
- * pixels), straightened to the size `pageSize` gives it and passed through `filter`. Throws a
+ * pixels), straightened to the size `pageSize` gives it (by `warpGl` on the GPU where it can,
+ * else by `warp`) and passed through `filter`. Throws a
  * `RangeError` for corners that don't make a page (not convex, or not numbers), an unknown
  * filter, a `max` that isn't a whole number from 1 to `MAX_SIDE`, or pixels that don't match
  * their size.
@@ -45,7 +47,8 @@ export function processPage(
 	options: ProcessOptions = {}
 ): ProcessedPage {
 	const { width, height, paper, filter } = pagePlan(source, quad, options);
-	const straight = warp(source, quad, { width, height });
+	// On the GPU where there's one to use, else in plain JavaScript: the same page either way.
+	const straight = warpGl(source, quad, { width, height }) ?? warp(source, quad, { width, height });
 	// Original keeps the warped pixels: `applyFilter` would copy a page of up to MAX_SIDE².
 	const page = filter === 'original' ? straight : applyFilter(straight, filter);
 	return { ...page, paper };

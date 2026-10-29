@@ -6,7 +6,8 @@ Nothing is sent anywhere. **Work in progress**
 ([#151](https://github.com/xcwds/xcwds/issues/151)): not published yet.
 
 So far it holds the plugin entry, the crop screen, the page list with Export, the image and PDF
-code it's built on, the Worker that straightens, filters and encodes a page, the store that keeps
+code it's built on, the Worker that straightens (on the GPU where it can), filters and encodes a
+page, the store that keeps
 a scan's pages between visits, and sharing or saving the finished scan.
 
 ## The plugin
@@ -149,6 +150,14 @@ wording. While `app.lock` is locked, it renders nothing and holds no image.
 - **`@xcwds/plugin-scanner/warp`.** `warp(pixels, quad, size)` straightens the part of an image
   inside `quad` onto a rectangle, with bilinear sampling. It takes and returns RGBA pixels shaped
   like `ImageData`, in plain JavaScript, so it runs in a Worker or without WebGL.
+  `warpMatrix(pixels, quad, size)` makes the same checks and gives the homography it samples with.
+- **`@xcwds/plugin-scanner/warp-gl`.** `warpGl(pixels, quad, size, { canvas })` does what `warp`
+  does on the GPU, with WebGL 2 on an `OffscreenCanvas` (in a Worker too) or a `<canvas>`. It
+  samples the same way, so the page matches `warp`'s to within one shade in 255, and draws it in
+  strips of at most `STRIP_PIXELS` (4 megapixels), so the GPU never holds the whole page at once.
+  It throws what `warp` throws, before reaching the GPU, and gives `null` where it can't run: no
+  WebGL 2, a photo or page larger than this GPU's textures, or a GPU that fails. Each call makes
+  its own WebGL context and gives it back when done.
 - **`@xcwds/plugin-scanner/filters`.** `applyFilter(pixels, filter)` with `original`, `greyscale`
   or `bw`. Black & white is an adaptive threshold (`threshold(pixels, { radius, offset })`): each
   pixel is compared with the area around it, so a shadow across the page doesn't turn it black.
@@ -171,7 +180,8 @@ wording. While `app.lock` is locked, it renders nothing and holds no image.
   closes in between, the newer copy wins and the next `list()` deletes the other.
 - **`@xcwds/plugin-scanner/process`.** `processPage(pixels, quad, { filter, max })` makes the
   finished page from a photo and the page's corners: sized by `pageSize` (at most `max` pixels on
-  its longer side, `MAX_SIDE` by default), straightened by `warp` and passed through the filter.
+  its longer side, `MAX_SIDE` by default), straightened by `warpGl` on the GPU, or by `warp`
+  where it gives `null`, and passed through the filter.
   It throws a `RangeError` for corners that don't make a page, an unknown filter, a bad `max` or
   pixels that don't match their size. `createProcessor()` does the same in a Worker, started on
   first use and kept until `close()`, so a large photo never holds up the page:
@@ -209,7 +219,7 @@ wording. While `app.lock` is locked, it renders nothing and holds no image.
   the first time a scan leaves the app: wherever it goes may keep or back it up.
 
 The image and PDF modules are pure functions that use no browser APIs, and `crop`, `pages`,
-`process`, `encode` and `share` reach the browser only when a method is called. None makes a network request, and all
+`process`, `encode`, `share` and `warp-gl` reach the browser only when a method is called. None makes a network request, and all
 are safe to import anywhere.
 
 ## What it won't do
