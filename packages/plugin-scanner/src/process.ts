@@ -2,8 +2,9 @@
  * `@xcwds/plugin-scanner/process`: turn a photo and the page's corners into the finished page,
  * straightened and filtered. `processPage` does it where it's called; `createProcessor()` does it
  * in a Worker, so a 12-megapixel photo never holds up the page, and on the page where a Worker
- * can't start. Its `finish` also encodes the page as the JPEG the pages store keeps. Safe to
- * import during prerender: browser APIs are reached only when a page is processed.
+ * can't start. Its `finish` also encodes the page as the JPEG the pages store keeps, and its
+ * `startCorners` finds the page in a photo there too. Safe to import during prerender: browser
+ * APIs are reached only when a page is processed.
  */
 import {
 	MAX_SIDE,
@@ -16,6 +17,7 @@ import {
 } from './geometry.js';
 import { FILTERS, applyFilter, type Filter } from './filters.js';
 import { warp, type Pixels } from './warp.js';
+import { frameSize, startCorners, type FindPageOptions, type StartCorners } from './corners.js';
 import { ENCODE_ERROR, encodeJpeg, jpegQuality, type EncodeOptions } from './encode.js';
 
 export interface ProcessOptions {
@@ -82,9 +84,10 @@ function pagePlan(
 	return { ...pageSize(quad, { max }), filter };
 }
 
-/** What the page sends the Worker. */
+/** What the page sends the Worker to make a page. */
 export interface ProcessRequest extends Pixels {
 	id: number;
+	kind?: 'page';
 	quad: Quad;
 	filter?: Filter;
 	max?: number;
@@ -100,21 +103,56 @@ export type ProcessResponse =
 	| ({ id: number; ok: true; jpeg?: Blob } & ProcessedPage)
 	| { id: number; ok: false; error: string };
 
+/** What the page sends the Worker to find the page in a photo. */
+export interface CornersRequest extends Pixels, FindPageOptions {
+	id: number;
+	kind: 'corners';
+}
+
+/** What the Worker answers: `startCorners` of the photo. */
+export type CornersResponse =
+	| ({ id: number; ok: true; kind: 'corners' } & StartCorners)
+	| { id: number; ok: false; error: string };
+
+export type WorkerRequest = ProcessRequest | CornersRequest;
+export type WorkerResponse = ProcessResponse | CornersResponse;
+
+const failed = (id: number, e: unknown, fallback: string) => ({
+	response: { id, ok: false as const, error: e instanceof Error ? e.message : fallback },
+	transfer: []
+});
+
 /**
  * The Worker's answer to `request`, with the buffers to transfer back. The Worker
  * (`process.worker.ts`) is only this; tests call it directly.
  */
-export async function answer(request: ProcessRequest): Promise<{
-	response: ProcessResponse;
-	transfer: ArrayBuffer[];
-}> {
+export async function answer(
+	request: ProcessRequest
+): Promise<{ response: ProcessResponse; transfer: ArrayBuffer[] }>;
+export async function answer(
+	request: CornersRequest
+): Promise<{ response: CornersResponse; transfer: ArrayBuffer[] }>;
+export async function answer(
+	request: WorkerRequest
+): Promise<{ response: WorkerResponse; transfer: ArrayBuffer[] }>;
+export async function answer(
+	request: WorkerRequest
+): Promise<{ response: WorkerResponse; transfer: ArrayBuffer[] }> {
+	if (request.kind === 'corners') {
+		const { id, size } = request;
+		try {
+			const found = startCorners(request, size === undefined ? {} : { size });
+			return { response: { id, ok: true, kind: 'corners', ...found }, transfer: [] };
+		} catch (e) {
+			return failed(id, e, 'The page couldn’t be found.');
+		}
+	}
 	const { id, quad, filter, max, jpeg: quality } = request;
 	let page: ProcessedPage;
 	try {
 		page = processPage(request, quad, { filter, max });
 	} catch (e) {
-		const error = e instanceof Error ? e.message : 'The page couldn’t be processed.';
-		return { response: { id, ok: false, error }, transfer: [] };
+		return failed(id, e, 'The page couldn’t be processed.');
 	}
 	let jpeg: Blob | null = null;
 	if (quality !== undefined) jpeg = await encodeJpeg(page, { quality }).catch(() => null);
@@ -126,8 +164,8 @@ export async function answer(request: ProcessRequest): Promise<{
 
 /** The part of a Worker the processor uses, so tests can pass a stand-in. */
 export interface WorkerLike {
-	postMessage(message: ProcessRequest, transfer: Transferable[]): void;
-	onmessage: ((event: MessageEvent<ProcessResponse>) => void) | null;
+	postMessage(message: WorkerRequest, transfer: Transferable[]): void;
+	onmessage: ((event: MessageEvent<WorkerResponse>) => void) | null;
 	onerror: ((event: ErrorEvent) => void) | null;
 	terminate(): void;
 }
@@ -159,6 +197,12 @@ export interface Processor {
 		quad: Quad,
 		options?: ProcessOptions & EncodeOptions
 	): Promise<FinishedPage>;
+	/**
+	 * `startCorners(source, options)` in the Worker: the page's corners in the photo, or the whole
+	 * photo when it finds none. `source` is copied over, as for `process`. Rejects with a
+	 * `RangeError` as `findPage` throws, and with an `Error` once the processor is closed.
+	 */
+	startCorners(source: Pixels, options?: FindPageOptions): Promise<StartCorners>;
 	close(): void;
 }
 
@@ -189,10 +233,8 @@ export function createProcessor(options: ProcessorOptions = {}): Processor {
 	let closed = false;
 	let next = 0;
 	type Done = ProcessedPage & { jpeg?: Blob };
-	const waiting = new Map<
-		number,
-		{ resolve(page: Done): void; reject(e: Error): void; fallback(): void }
-	>();
+	type Answered = Extract<WorkerResponse, { ok: true }>;
+	const waiting = new Map<number, { settle(response: WorkerResponse): void; fallback(): void }>();
 
 	function launch(): WorkerLike | null {
 		let w: WorkerLike | null;
@@ -208,10 +250,7 @@ export function createProcessor(options: ProcessorOptions = {}): Processor {
 			const job = waiting.get(response.id);
 			if (!job) return;
 			waiting.delete(response.id);
-			if (response.ok) {
-				const { width, height, data, paper, jpeg } = response;
-				job.resolve({ width, height, data, paper, ...(jpeg ? { jpeg } : {}) });
-			} else job.reject(new RangeError(response.error));
+			job.settle(response);
 		};
 		started.onerror = (event) => {
 			event.preventDefault();
@@ -225,8 +264,39 @@ export function createProcessor(options: ProcessorOptions = {}): Processor {
 		return started;
 	}
 
-	const onPage = (source: Pixels, quad: Quad, opts: ProcessOptions) =>
-		new Promise<ProcessedPage>((resolve) => resolve(processPage(source, quad, opts)));
+	const attempt = <T>(work: () => T) => new Promise<T>((resolve) => resolve(work()));
+
+	/**
+	 * Sends the Worker the request `message` makes (called only once there's a Worker, so the
+	 * photo is copied only then) and resolves with `read` of its answer; does `onPage` here
+	 * instead where there's no Worker, it fails, or the request can't be sent.
+	 */
+	function send<T>(
+		message: (id: number) => { request: WorkerRequest; transfer: ArrayBuffer[] },
+		read: (response: Answered) => T,
+		onPage: () => T
+	): Promise<T> {
+		if (closed) return Promise.reject(new Error(CLOSED));
+		if (worker === undefined) worker = launch();
+		const w = worker;
+		if (!w) return attempt(onPage);
+		return new Promise<T>((resolve, reject) => {
+			const id = next++;
+			const here = () => attempt(onPage).then(resolve, reject);
+			waiting.set(id, {
+				settle: (response) =>
+					response.ok ? resolve(read(response)) : reject(new RangeError(response.error)),
+				fallback: () => (closed ? reject(new Error(CLOSED)) : void here())
+			});
+			try {
+				const { request, transfer } = message(id);
+				w.postMessage(request, transfer);
+			} catch {
+				waiting.delete(id);
+				void here();
+			}
+		});
+	}
 
 	/** `process`, with the Worker also encoding a JPEG at `quality` when it's given. */
 	function run(source: Pixels, quad: Quad, opts: ProcessOptions, quality?: number): Promise<Done> {
@@ -237,38 +307,28 @@ export function createProcessor(options: ProcessorOptions = {}): Processor {
 		} catch (e) {
 			return Promise.reject(e as Error);
 		}
-		if (worker === undefined) worker = launch();
-		const w = worker;
-		if (!w) return onPage(source, quad, opts);
-		return new Promise<Done>((resolve, reject) => {
-			const id = next++;
-			waiting.set(id, {
-				resolve,
-				reject,
-				fallback: () => {
-					if (closed) reject(new Error(CLOSED));
-					else onPage(source, quad, opts).then(resolve, reject);
-				}
-			});
-			// A copy goes over, so the page keeps its pixels for another crop or if the Worker fails.
-			const data = source.data.slice();
-			const request: ProcessRequest = {
-				id,
-				width: source.width,
-				height: source.height,
-				data,
-				quad: quad.map(({ x, y }) => ({ x, y })) as unknown as Quad,
-				filter: opts.filter,
-				max: opts.max,
-				...(quality === undefined ? {} : { jpeg: quality })
-			};
-			try {
-				w.postMessage(request, [data.buffer]);
-			} catch {
-				waiting.delete(id);
-				onPage(source, quad, opts).then(resolve, reject);
-			}
-		});
+		return send(
+			(id) => {
+				// A copy goes over, so the page keeps its pixels for another crop or if the Worker fails.
+				const data = source.data.slice();
+				const request: ProcessRequest = {
+					id,
+					width: source.width,
+					height: source.height,
+					data,
+					quad: quad.map(({ x, y }) => ({ x, y })) as unknown as Quad,
+					filter: opts.filter,
+					max: opts.max,
+					...(quality === undefined ? {} : { jpeg: quality })
+				};
+				return { request, transfer: [data.buffer] };
+			},
+			(response) => {
+				const { width, height, data, paper, jpeg } = response as Extract<Answered, ProcessedPage>;
+				return { width, height, data, paper, ...(jpeg ? { jpeg } : {}) };
+			},
+			() => processPage(source, quad, opts)
+		);
 	}
 
 	return {
@@ -286,13 +346,41 @@ export function createProcessor(options: ProcessorOptions = {}): Processor {
 			const { width, height, paper } = page;
 			return { blob, width, height, filter: opts.filter ?? 'original', paper };
 		},
+		startCorners(source, opts = {}) {
+			if (closed) return Promise.reject(new Error(CLOSED));
+			try {
+				frameSize(source, opts);
+			} catch (e) {
+				return Promise.reject(e as Error);
+			}
+			const size = opts.size;
+			return send(
+				(id) => {
+					const data = source.data.slice();
+					const request: CornersRequest = {
+						id,
+						kind: 'corners',
+						width: source.width,
+						height: source.height,
+						data,
+						...(size === undefined ? {} : { size })
+					};
+					return { request, transfer: [data.buffer] };
+				},
+				(response) => {
+					const { quad, found } = response as Extract<Answered, StartCorners>;
+					return { quad, found };
+				},
+				() => startCorners(source, opts)
+			);
+		},
 		close() {
 			closed = true;
 			worker?.terminate();
 			worker = null;
 			const jobs = [...waiting.values()];
 			waiting.clear();
-			for (const job of jobs) job.reject(new Error(CLOSED));
+			for (const job of jobs) job.fallback();
 		}
 	};
 }

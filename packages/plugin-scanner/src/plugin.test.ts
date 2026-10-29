@@ -134,6 +134,26 @@ describe('app.scanner', () => {
 		await app.close();
 	});
 
+	it('finds the page in a photo, or starts from the whole photo', async () => {
+		const app = await buildTestApp({ plugins: [[onPage(), {}]] });
+		const scanner = app.scanner!;
+		// A white photo has no page on anything.
+		expect(await scanner.startCorners(photo)).toEqual({ quad: whole, found: false });
+		const desk = new Uint8ClampedArray(60 * 80 * 4);
+		for (let y = 0; y < 80; y++)
+			for (let x = 0; x < 60; x++)
+				desk.set(
+					x > 10 && x < 50 && y > 8 && y < 70 ? [230, 220, 210, 255] : [40, 60, 80, 255],
+					(y * 60 + x) * 4
+				);
+		const found = await scanner.startCorners({ width: 60, height: 80, data: desk });
+		expect(found.found).toBe(true);
+		await expect(scanner.startCorners({ ...photo, width: 31 })).rejects.toThrow(RangeError);
+		// Finding corners saves nothing, so it holds no update back.
+		expect(scanner.busy).toBe(false);
+		await app.close();
+	});
+
 	it('stops the Worker when the app closes', async () => {
 		const terminate = vi.fn();
 		const worker = {
