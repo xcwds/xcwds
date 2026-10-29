@@ -24,7 +24,7 @@
 		"@changesets/cli": "^3.0.3",
 		"@eslint/compat": "^2.0.0",
 		"@eslint/js": "^10.0.0",
-		"@types/node": "^24",
+		"@types/node": "^26.0.0",
 		"eslint": "^10.0.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.13.1",
