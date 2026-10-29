@@ -159,8 +159,8 @@ wording. While `app.lock` is locked, it renders nothing and holds no image.
   It throws what `warp` throws, before reaching the GPU, and gives `null` where it can't run: no
   WebGL 2, a photo or page larger than this GPU's textures, or a GPU that fails, including one
   that draws without an error but wrongly: 32 of its pixels are checked against `sampleAt`, and
-  one more than 2 shades off means `null`. Each call makes
-  its own WebGL context and gives it back when done.
+  one more than 2 shades off means `null`. Each call makes its own WebGL context and gives it
+  back when done.
 - **`@xcwds/plugin-scanner/filters`.** `applyFilter(pixels, filter)` with `original`, `greyscale`
   or `bw`. Black & white is an adaptive threshold (`threshold(pixels, { radius, offset })`): each
   pixel is compared with the area around it, so a shadow across the page doesn't turn it black.

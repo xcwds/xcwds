@@ -58,8 +58,7 @@ function defaultCanvas(): OffscreenCanvas | HTMLCanvasElement | null {
  * `warp(source, quad, size)` on the GPU: the same straightened page, or `null` where WebGL 2
  * isn't available, the photo or page is larger than this GPU's textures, or the GPU fails (the
  * context is lost, a shader doesn't compile, or the page it drew doesn't match `warp`'s at the
- * pixels checked). Throws the `RangeError`s `warp` throws, before
- * anything reaches the GPU.
+ * pixels checked). Throws the `RangeError`s `warp` throws, before anything reaches the GPU.
  */
 export function warpGl(
 	source: Pixels,
@@ -196,7 +195,8 @@ function looksRight(source: Pixels, m: Matrix, page: Pixels): boolean {
 		[width - 1, height - 1],
 		[width >> 1, height >> 1]
 	];
-	// The rest spread evenly over the page (a golden-ratio sequence), the same ones every time.
+	// The rest spread evenly over the page (steps of the golden ratio across and √2 down), the
+	// same ones every time.
 	for (let i = 1; points.length < SPOT_CHECKS; i++)
 		points.push([
 			Math.floor(((i * 0.618034) % 1) * width),
