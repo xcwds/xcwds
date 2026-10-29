@@ -117,9 +117,10 @@ wording. While `app.lock` is locked, it renders nothing and holds no image.
   as a page; `startCorners(pixels)` gives `{ quad, found }`, with the whole photo when it found
   none; `frameSize(pixels, { size })` is the frame size it would search, and throws what `findPage`
   throws for pixels that don't match their size or a bad `size`. It shrinks the photo to a
-  small greyscale frame (`size`, 256 px on the longer side by default, 1024 at most), splits page from background by brightness (Otsu's threshold), takes the largest bright
-  region and the four corners that cover most of its outline, then straightens each side with a
-  line fitted through the outline, so rounded or dog-eared corners land where the sides meet. It
+  small greyscale frame (`size`, 256 px on the longer side by default, 1024 at most), splits
+  page from background by brightness (Otsu's threshold), takes the largest bright region and the
+  four corners that cover most of its outline, then straightens each side with a line fitted
+  through the outline, so rounded or dog-eared corners land where the sides meet. It
   finds nothing when the region is under 8% or over 95% of the photo, isn't four-cornered (a
   plate), has corners sharper than 35° or flatter than 145°, or barely differs from what it's on
   (a white page on a white desk). It looks for a page lighter than what it's on. It takes about
