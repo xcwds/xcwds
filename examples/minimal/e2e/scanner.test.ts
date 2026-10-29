@@ -53,6 +53,10 @@ test('crops a photo with the corner handles and keeps the page', async ({ page }
 	await takePhoto(page);
 	// The fake camera's picture has no page in it, so the handles start on the photo's corners.
 	await expect(page.getByText('Couldn’t find the page.')).toBeVisible();
+	// It looked in the processing Worker, started for that before any page was made.
+	expect(page.workers().map((worker) => new URL(worker.url()).pathname)).toContainEqual(
+		expect.stringMatching(/process\.worker[^/]*\.js$/)
+	);
 	const topLeft = corner(page, 'Top left');
 	const bottomRight = corner(page, 'Bottom right');
 	expect(await at(topLeft)).toEqual({ x: 0, y: 0 });

@@ -44,6 +44,25 @@ const MAX_SIZE = 1024;
  * pixels that don't match their width and height.
  */
 export function findPage(pixels: Pixels, options: FindPageOptions = {}): Quad | null {
+	const { width, height } = pixels;
+	const frame = shrink(pixels, frameSize(pixels, options));
+	const split = otsu(frame.luma);
+	if (!split) return null;
+	const quad = fitPage(frame, split.threshold);
+	if (!quad) return null;
+	// Back to the photo's pixels, kept inside it.
+	return quad.map((p) => ({
+		x: Math.min(Math.max(p.x * frame.step, 0), width),
+		y: Math.min(Math.max(p.y * frame.step, 0), height)
+	})) as unknown as Quad;
+}
+
+/**
+ * The longer side of the frame `findPage` searches, from `options`. Throws the `RangeError`
+ * `findPage` throws for pixels that don't match their size or a bad `size`, so the processor can
+ * refuse a bad request before copying a photo to its Worker.
+ */
+export function frameSize(pixels: Pixels, options: FindPageOptions = {}): number {
 	const { width, height, data } = pixels;
 	if (
 		!Number.isInteger(width) ||
@@ -56,16 +75,7 @@ export function findPage(pixels: Pixels, options: FindPageOptions = {}): Quad | 
 	const size = options.size ?? 256;
 	if (!(Number.isInteger(size) && size >= 16 && size <= MAX_SIZE))
 		throw new RangeError(`The size must be a whole number of pixels from 16 to ${MAX_SIZE}.`);
-	const frame = shrink(pixels, size);
-	const split = otsu(frame.luma);
-	if (!split) return null;
-	const quad = fitPage(frame, split.threshold);
-	if (!quad) return null;
-	// Back to the photo's pixels, kept inside it.
-	return quad.map((p) => ({
-		x: Math.min(Math.max(p.x * frame.step, 0), width),
-		y: Math.min(Math.max(p.y * frame.step, 0), height)
-	})) as unknown as Quad;
+	return size;
 }
 
 /** Where the crop screen starts: the page `findPage` finds, or else the whole photo. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findPage, startCorners } from './corners.js';
+import { findPage, frameSize, startCorners } from './corners.js';
 import { homography, isConvex, project, rectangle, type Quad } from './geometry.js';
 import type { Pixels } from './warp.js';
 
@@ -299,11 +299,17 @@ describe('findPage', () => {
 			{ width: 5, height: 4, data: new Uint8ClampedArray(64) },
 			{ width: 0, height: 0, data: new Uint8ClampedArray(0) },
 			{ width: 2.5, height: 4, data: new Uint8ClampedArray(40) }
-		])
+		]) {
 			expect(() => findPage(bad)).toThrow(RangeError);
+			expect(() => frameSize(bad)).toThrow(RangeError);
+		}
 		const ok = { width: 4, height: 4, data: new Uint8ClampedArray(64) };
-		for (const size of [0, 8, 20.5, 1025, 1e6, NaN])
+		for (const size of [0, 8, 20.5, 1025, 1e6, NaN]) {
 			expect(() => findPage(ok, { size })).toThrow(RangeError);
+			expect(() => frameSize(ok, { size })).toThrow(RangeError);
+		}
+		expect(frameSize(ok)).toBe(256);
+		expect(frameSize(ok, { size: 1024 })).toBe(1024);
 	});
 });
 
