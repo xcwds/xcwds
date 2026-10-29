@@ -7,14 +7,13 @@
 	 * <Crop photo={photo.blob} onDone={() => (photo = undefined)} />
 	 * ```
 	 *
-	 * The handles start on the page `findPage` finds, or on the photo's corners when it finds
-	 * none, and say which. Drag a handle, or focus it and use the arrow keys (Shift for bigger
+	 * The handles start on the page `findPage` finds (in the scanner's Worker), or on the photo's
+	 * corners when it finds none, and say which. Drag a handle, or focus it and use the arrow keys (Shift for bigger
 	 * steps). Corners that cross say so beside the photo, and Add page waits until they make a page.
 	 * Pass `retake` to replace that page instead of adding one.
 	 */
 	import { useApp } from '@xcwds/sveltekit';
 	import type { Scanner } from './client.js';
-	import { startCorners } from './corners.js';
 	import {
 		CORNERS,
 		cropProblem,
@@ -26,11 +25,12 @@
 		toPhoto
 	} from './crop.js';
 	import type { Filter } from './filters.js';
-	import type { Paper, Quad } from './geometry.js';
+	import { rectangle, type Paper, type Quad } from './geometry.js';
 	import type { Pixels } from './warp.js';
 
 	type Text = {
 		loading: string;
+		finding: string;
 		found: string;
 		notFound: string;
 		hint: string;
@@ -48,6 +48,7 @@
 	};
 	const defaults: Text = {
 		loading: 'Opening the photo…',
+		finding: 'Looking for the page…',
 		found: 'Found the page. Move the corners if they’re off.',
 		notFound: 'Couldn’t find the page. Move the corners to its corners.',
 		hint: 'Drag, or use the arrow keys; Shift moves further.',
@@ -107,10 +108,11 @@
 	let canvas: HTMLCanvasElement | undefined = $state();
 	let frame: HTMLDivElement | undefined = $state();
 
-	// Opens each photo given; a newer one replaces a photo still opening.
+	// Opens each photo given and finds the page in it; a newer one replaces a photo still opening.
 	$effect(() => {
 		const given = photo;
 		const largest = max;
+		const finder = scanner;
 		let current = true;
 		pixels = undefined;
 		start = undefined;
@@ -121,9 +123,17 @@
 			(read) => {
 				if (!current) return;
 				pixels = read;
-				if (!read) return;
-				start = startCorners(read);
-				quad = start.quad;
+				if (!read || !finder) return;
+				// Only a closed scanner rejects: then the handles start on the whole photo.
+				const whole = { quad: rectangle(read.width, read.height), found: false };
+				finder
+					.startCorners(read)
+					.catch(() => whole)
+					.then((found) => {
+						if (!current) return;
+						start = found;
+						quad = found.quad;
+					});
 			},
 			(e: unknown) => {
 				// A bad `max`.
@@ -225,7 +235,7 @@
 		<p class="text-sm text-red-700 dark:text-red-400" role="alert">{message || READ_ERROR}</p>
 	{:else}
 		<p id="{uid}-found" aria-live="polite" data-found={start?.found}>
-			{start?.found ? t.found : t.notFound}
+			{!start ? t.finding : start.found ? t.found : t.notFound}
 		</p>
 		<!-- Room around the photo so a handle on its edge stays whole and inside the page. -->
 		<div class="px-5 py-5">

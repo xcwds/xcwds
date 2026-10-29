@@ -3,6 +3,8 @@
  * app's blob store (`app:scanner:pages`, or the `collection` option's key: personal, so a lock's
  * reset clears it, and out of backups), and looks after it whatever page is showing:
  *
+ * - **Finding the page.** `startCorners(photo)` finds the page's corners in a photo in the
+ *   processing Worker, where the crop screen's handles start.
  * - **Making a page.** `scan(photo, corners)` straightens, filters and encodes the page in the
  *   processing Worker, then adds it to the scan (or replaces a page, with `retake`).
  * - **Updates wait.** From the tap until the page is saved, an `onBeforeReload` reason holds app
@@ -12,6 +14,7 @@
  * Imported at prerender too, so it only touches browser globals when a method is called.
  */
 import { definePlugin } from '@xcwds/core';
+import type { FindPageOptions, StartCorners } from './corners.js';
 import type { EncodeOptions } from './encode.js';
 import type { Paper, Quad } from './geometry.js';
 import { CORE, NAME, resolveOptions, type ScannerPluginOptions } from './options.js';
@@ -19,6 +22,7 @@ import { createPages, type Pages, type PagesEnv } from './pages.js';
 import { createProcessor, type ProcessOptions, type ProcessorOptions } from './process.js';
 import type { Pixels } from './warp.js';
 
+export type { FindPageOptions, StartCorners } from './corners.js';
 export type { Filter } from './filters.js';
 export type { Paper, Point, Quad } from './geometry.js';
 export type { PageResult, Pages, ScanPage } from './pages.js';
@@ -37,6 +41,13 @@ export type ScanResult =
 export interface Scanner {
 	/** The scan in progress: its pages, kept between visits. */
 	readonly pages: Pages;
+	/**
+	 * The page's corners in `photo` (clockwise from the top left, in its pixels) and `found: true`,
+	 * or the whole photo and `found: false` when no page stands out. Found in the processing Worker,
+	 * so a large photo doesn't hold up the page; `photo` is copied, so it stays usable. Rejects with
+	 * a `RangeError` for pixels that don't match their size or a bad `size`.
+	 */
+	startCorners(photo: Pixels, options?: FindPageOptions): Promise<StartCorners>;
 	/** True from a `scan` call until its page is saved (or failed). */
 	readonly busy: boolean;
 	/**
@@ -116,6 +127,7 @@ export function scannerPlugin(env: ScannerPluginEnv = {}) {
 						busy(-1);
 					}
 				},
+				startCorners: (photo, options) => processor.startCorners(photo, options),
 				onChange(listener) {
 					listeners.add(listener);
 					return () => void listeners.delete(listener);

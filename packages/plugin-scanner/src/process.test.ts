@@ -5,11 +5,12 @@ import {
 	answer,
 	createProcessor,
 	processPage,
-	type ProcessRequest,
-	type ProcessResponse,
-	type WorkerLike
+	type WorkerLike,
+	type WorkerRequest,
+	type WorkerResponse
 } from './process.js';
 import { warp, type Pixels } from './warp.js';
+import { startCorners } from './corners.js';
 import { ENCODE_ERROR, JPEG_QUALITY, encodeJpeg } from './encode.js';
 
 // The real filters, watched, to see which pages skip them.
@@ -99,6 +100,26 @@ describe('processPage', () => {
 });
 
 describe('answer', () => {
+	it('answers a corners request with `startCorners` of the photo', async () => {
+		const { response, transfer } = await answer({ id: 1, kind: 'corners', ...photo });
+		expect(response).toEqual({ id: 1, ok: true, kind: 'corners', ...startCorners(photo) });
+		expect(response.ok && response.found).toBe(true);
+		expect(transfer).toEqual([]);
+		const small = await answer({ id: 2, kind: 'corners', ...photo, size: 16 });
+		expect(small.response).toEqual({
+			id: 2,
+			ok: true,
+			kind: 'corners',
+			...startCorners(photo, { size: 16 })
+		});
+		const bad = await answer({ id: 9, kind: 'corners', ...photo, width: 61 });
+		expect(bad.response).toEqual({
+			id: 9,
+			ok: false,
+			error: 'The pixels don’t match their width and height.'
+		});
+	});
+
 	it('answers with the page and hands its buffer back', async () => {
 		const { response, transfer } = await answer({ id: 3, ...photo, quad: corners, filter: 'bw' });
 		expect(response).toMatchObject({
@@ -144,13 +165,13 @@ describe('answer', () => {
 
 /** A Worker that runs `answer` as the real one does, structured-cloning both ways. */
 class FakeWorker implements WorkerLike {
-	onmessage: ((event: MessageEvent<ProcessResponse>) => void) | null = null;
+	onmessage: ((event: MessageEvent<WorkerResponse>) => void) | null = null;
 	onerror: ((event: ErrorEvent) => void) | null = null;
-	requests: ProcessRequest[] = [];
+	requests: WorkerRequest[] = [];
 	terminated = false;
 	/** Answer on its own, or wait for `reply()`/`fail()`. */
 	constructor(private auto = true) {}
-	postMessage(message: ProcessRequest, transfer: Transferable[]) {
+	postMessage(message: WorkerRequest, transfer: Transferable[]) {
 		const request = structuredClone(message, { transfer });
 		this.requests.push(request);
 		if (this.auto) setTimeout(() => this.reply(request));
@@ -272,6 +293,75 @@ describe('createProcessor', () => {
 		await expect(waiting).rejects.toThrow('closed');
 		await worker.reply(worker.requests[0]);
 		await expect(processor.process(photo, corners)).rejects.toThrow('closed');
+		expect(worker.requests).toHaveLength(1);
+	});
+});
+
+describe('startCorners', () => {
+	it('finds the page in the same Worker as the pages, and keeps the source', async () => {
+		const worker = new FakeWorker();
+		const start = vi.fn(() => worker);
+		const processor = createProcessor({ worker: start });
+		const before = photo.data.slice();
+		expect(await processor.startCorners(photo)).toEqual(startCorners(photo));
+		expect(await processor.startCorners(photo, { size: 16 })).toEqual(
+			startCorners(photo, { size: 16 })
+		);
+		await processor.process(photo, corners);
+		expect(start).toHaveBeenCalledTimes(1);
+		expect(worker.requests.map((r) => [r.id, r.kind])).toEqual([
+			[0, 'corners'],
+			[1, 'corners'],
+			[2, undefined]
+		]);
+		expect(worker.requests[1]).toMatchObject({ size: 16 });
+		expect(worker.requests[0]).not.toHaveProperty('size');
+		expect(photo.data).toEqual(before);
+	});
+
+	it('says when it finds no page, with the whole photo', async () => {
+		const blank = image(40, 30, () => [128, 128, 128, 255]);
+		const processor = createProcessor({ worker: () => new FakeWorker() });
+		expect(await processor.startCorners(blank)).toEqual({
+			quad: rectangle(40, 30),
+			found: false
+		});
+	});
+
+	it('refuses bad pixels or a bad size on the page, before starting anything', async () => {
+		const start = vi.fn(() => new FakeWorker());
+		const processor = createProcessor({ worker: start });
+		await expect(processor.startCorners({ ...photo, height: 3 })).rejects.toThrow(RangeError);
+		for (const size of [8, 2048, 1.5])
+			await expect(processor.startCorners(photo, { size })).rejects.toThrow(RangeError);
+		expect(start).not.toHaveBeenCalled();
+	});
+
+	it('finds the page on the page when the Worker can’t start, fails or can’t be sent to', async () => {
+		const none = createProcessor({ worker: () => null });
+		expect(await none.startCorners(photo)).toEqual(startCorners(photo));
+
+		const worker = new FakeWorker(false);
+		const failing = createProcessor({ worker: () => worker });
+		const waiting = failing.startCorners(photo);
+		worker.fail();
+		expect(await waiting).toEqual(startCorners(photo));
+
+		const refusing = new FakeWorker();
+		refusing.postMessage = () => {
+			throw new DOMException('no', 'DataCloneError');
+		};
+		const unsent = createProcessor({ worker: () => refusing });
+		expect(await unsent.startCorners(photo)).toEqual(startCorners(photo));
+	});
+
+	it('rejects what’s waiting, and anything after, once closed', async () => {
+		const worker = new FakeWorker(false);
+		const processor = createProcessor({ worker: () => worker });
+		const waiting = processor.startCorners(photo);
+		processor.close();
+		await expect(waiting).rejects.toThrow('closed');
+		await expect(processor.startCorners(photo)).rejects.toThrow('closed');
 		expect(worker.requests).toHaveLength(1);
 	});
 });

@@ -32,11 +32,17 @@ The page gets `app.scanner`:
   `letter` or `null`), or `{ ok: false, error }` with a message to show when the browser can't
   make a JPEG of the page or it can't be saved. It rejects with a `RangeError` for a request that
   can't be met, such as corners that don't make a page, so check `isConvex` first.
+- **`startCorners(photo, { size })`** finds the page in a photo in the processing Worker, so a
+  large photo doesn't hold up the page while the crop screen opens. It resolves with
+  `{ quad, found }`: the page's corners and `found: true`, or the whole photo and `found: false`
+  when nothing stands out as a page (see `findPage` below). The photo is copied, as for `scan`. It
+  rejects with a `RangeError` for pixels that don't match their size or a bad `size`.
 - **`busy`** is true from a `scan` call until its page is saved, and `onChange(listener)` says
   when it changes. Meanwhile an `onBeforeReload` reason ("page being scanned") holds app updates
   back, so an update never drops a page halfway.
 
-Closing the app stops the Worker; a page it was still making resolves with an error.
+Closing the app stops the Worker; a page it was still making resolves with an error, and corners
+it was still finding reject.
 
 ## The crop screen
 
@@ -62,8 +68,8 @@ Closing the app stops the Worker; a page it was still making resolves with an er
 ```
 
 `<Crop>` shows the photo (`photo`, a camera photo's `blob` or an image file) with four corner
-handles. They start on the page `findPage` finds, or on the photo's corners when it finds none,
-and a line above the photo says which. Drag a handle, or focus it and use the arrow keys (1% of
+handles. They start on the page `app.scanner.startCorners` finds, or on the photo's corners when
+it finds none, and a line above the photo says which (and "Looking for the page…" until then). Drag a handle, or focus it and use the arrow keys (1% of
 the photo's shorter side a press, 10% with Shift); each is a 44 px button named for its corner,
 and a keyboard move tells screen readers where the corner went.
 Corners that cross say so beside the photo, and Add page waits until they make a page. Reset
@@ -108,7 +114,8 @@ wording. While `app.lock` is locked, it renders nothing and holds no image.
 - **`@xcwds/plugin-scanner/corners`.** `findPage(pixels)` finds the corners of a page in a photo,
   where the crop screen's handles start, or returns `null` when nothing in it stands out clearly
   as a page; `startCorners(pixels)` gives `{ quad, found }`, with the whole photo when it found
-  none. It shrinks the photo to a small greyscale frame (`size`, 256 px on the longer side by
+  none; `frameSize(pixels, { size })` is the frame size it would search, and throws what `findPage`
+  throws for pixels that don't match their size or a bad `size`. It shrinks the photo to a small greyscale frame (`size`, 256 px on the longer side by
   default, 1024 at most), splits page from background by brightness (Otsu's threshold), takes the largest bright
   region and the four corners that cover most of its outline, then straightens each side with a
   line fitted through the outline, so rounded or dog-eared corners land where the sides meet. It
@@ -176,6 +183,8 @@ wording. While `app.lock` is locked, it renders nothing and holds no image.
   otherwise, and resolves with `{ blob, width, height, filter, paper }`, which the pages store's
   `add` and `retake` take as they are. It rejects with a `RangeError` for a bad `quality` too, and
   with `ENCODE_ERROR` when the browser can't make a JPEG of the page.
+  `startCorners(pixels, { size })` runs `startCorners` from `./corners` in the same Worker (and
+  on the page where it can't), copying the pixels over too.
 - **`@xcwds/plugin-scanner/encode`.** `encodeJpeg(pixels, { quality })` encodes a finished page
   as a JPEG `Blob` (`quality` from 0 to 1, `JPEG_QUALITY`, 0.9, by default) on an
   `OffscreenCanvas`, else a `<canvas>`, and gives `null` where neither can make a JPEG (no canvas,
