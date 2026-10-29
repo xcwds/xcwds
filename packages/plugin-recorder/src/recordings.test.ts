@@ -312,7 +312,8 @@ describe('recordings', () => {
 			await first.recordings.begin(TYPE, 0).append(new Blob(['maybe still going']), 3000);
 			const second = setup(backend, env);
 			expect(await second.recordings.recover()).toEqual([]);
-			clock += STALE_AFTER + 1;
+			// Chunks are stamped with the real clock, a few ms after `clock` was read.
+			clock = Date.now() + STALE_AFTER + 1;
 			expect(await second.recordings.recover()).toHaveLength(1);
 		});
 
