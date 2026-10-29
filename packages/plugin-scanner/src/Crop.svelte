@@ -8,8 +8,9 @@
 	 * ```
 	 *
 	 * The handles start on the page `findPage` finds (in the scanner's Worker), or on the photo's
-	 * corners when it finds none, and say which. Drag a handle, or focus it and use the arrow keys (Shift for bigger
-	 * steps). Corners that cross say so beside the photo, and Add page waits until they make a page.
+	 * corners when it finds none, and say which. Drag a handle, or focus it and use the arrow keys
+	 * (Shift for bigger steps). Corners that cross say so beside the photo, and Add page waits until
+	 * they make a page.
 	 * Pass `retake` to replace that page instead of adding one.
 	 */
 	import { useApp } from '@xcwds/sveltekit';

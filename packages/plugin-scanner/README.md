@@ -69,9 +69,10 @@ it was still finding reject.
 
 `<Crop>` shows the photo (`photo`, a camera photo's `blob` or an image file) with four corner
 handles. They start on the page `app.scanner.startCorners` finds, or on the photo's corners when
-it finds none, and a line above the photo says which (and "Looking for the page…" until then). Drag a handle, or focus it and use the arrow keys (1% of
-the photo's shorter side a press, 10% with Shift); each is a 44 px button named for its corner,
-and a keyboard move tells screen readers where the corner went.
+it finds none, and a line above the photo says which (and "Looking for the page…" until then).
+Drag a handle, or focus it and use the arrow keys (1% of the photo's shorter side a press, 10%
+with Shift); each is a 44 px button named for its corner, and a keyboard move tells screen
+readers where the corner went.
 Corners that cross say so beside the photo, and Add page waits until they make a page. Reset
 corners puts them back where they started. The filter (Original, Greyscale, Black & white) is a
 choice under the photo; bind `filter` to keep it between pages. Add page calls `app.scanner.scan`
@@ -115,8 +116,8 @@ wording. While `app.lock` is locked, it renders nothing and holds no image.
   where the crop screen's handles start, or returns `null` when nothing in it stands out clearly
   as a page; `startCorners(pixels)` gives `{ quad, found }`, with the whole photo when it found
   none; `frameSize(pixels, { size })` is the frame size it would search, and throws what `findPage`
-  throws for pixels that don't match their size or a bad `size`. It shrinks the photo to a small greyscale frame (`size`, 256 px on the longer side by
-  default, 1024 at most), splits page from background by brightness (Otsu's threshold), takes the largest bright
+  throws for pixels that don't match their size or a bad `size`. It shrinks the photo to a
+  small greyscale frame (`size`, 256 px on the longer side by default, 1024 at most), splits page from background by brightness (Otsu's threshold), takes the largest bright
   region and the four corners that cover most of its outline, then straightens each side with a
   line fitted through the outline, so rounded or dog-eared corners land where the sides meet. It
   finds nothing when the region is under 8% or over 95% of the photo, isn't four-cornered (a
