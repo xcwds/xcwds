@@ -1,5 +1,11 @@
 # @xcwds/plugin-camera
 
+## 0.5.1
+
+### Patch Changes
+
+- ddd132e: `capture()` takes the viewfinder's frame when `ImageCapture.takePhoto()` gives no Blob, as the older draft that Firefox's `dom.imagecapture.enabled` turns on does, instead of relying on `createImageBitmap` to reject.
+
 ## 0.5.0
 
 ### Minor Changes
