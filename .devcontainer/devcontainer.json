@@ -1,0 +1,25 @@
+{
+	"$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.schema.json",
+	"name": "xcwds",
+	"build": { "dockerfile": "Dockerfile" },
+	"remoteUser": "node",
+	// Chromium needs more shared memory than Docker's 64 MB default.
+	"runArgs": ["--shm-size=1g"],
+	"postCreateCommand": "pnpm install --frozen-lockfile && pnpm --filter @xcwds/example-minimal exec playwright install --with-deps chromium",
+	"forwardPorts": [5173, 4173],
+	"portsAttributes": {
+		"5173": { "label": "vite dev" },
+		"4173": { "label": "vite preview" }
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"svelte.svelte-vscode",
+				"dbaeumer.vscode-eslint",
+				"esbenp.prettier-vscode",
+				"bradlc.vscode-tailwindcss",
+				"ms-playwright.playwright"
+			]
+		}
+	}
+}

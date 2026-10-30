@@ -1,6 +1,8 @@
 # Contributing
 
-Requirements: Node 24 (`.tool-versions`, or `mise install`) and pnpm (`corepack enable`).
+Requirements: Node (the version in `.tool-versions`, or `mise install`) and pnpm (`corepack enable`).
+Or open the repo in its dev container (`.devcontainer/`, e.g. VS Code's "Reopen in Container"),
+which has both plus Playwright's Chromium, isolated from your machine.
 
 ```sh
 pnpm install
