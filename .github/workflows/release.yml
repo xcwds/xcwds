@@ -60,7 +60,8 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .tool-versions
-          cache: pnpm
+          # No `cache: pnpm`: this job publishes, so it installs from the registry rather than restore a
+          # store another run on main (like the agent workflows) could have saved.
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
