@@ -13,6 +13,7 @@
 		"format": "prettier --write .",
 		"test:unit": "vitest",
 		"test:e2e": "pnpm --filter \"./examples/*\" --filter \"!./examples/starter\" --filter ./site test:e2e",
+		"test:firefox": "pnpm --filter @xcwds/example-minimal test:firefox",
 		"test": "pnpm test:unit --run && pnpm test:e2e",
 		"publint": "pnpm --filter \"./packages/*\" --filter ./examples/plugin-tally publint",
 		"changeset": "changeset",
