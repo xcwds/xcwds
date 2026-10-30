@@ -2,13 +2,11 @@
 
 Scan paper documents to a PDF on the device in an @xcwds app: photograph a page, straighten it,
 make it readable and export the pages as one PDF, without the cloud scanning apps phones suggest.
-Nothing is sent anywhere. **Work in progress**
-([#151](https://github.com/xcwds/xcwds/issues/151)): not published yet.
+Nothing is sent anywhere.
 
-So far it holds the plugin entry, the crop screen, the page list with Export, the image and PDF
-code it's built on, the Worker that straightens (on the GPU where it can), filters and encodes a
-page, the store that keeps
-a scan's pages between visits, and sharing or saving the finished scan.
+It holds the plugin entry, the crop screen, the page list with Export, the image and PDF code it's
+built on, the Worker that straightens (on the GPU where it can), filters and encodes a page, the
+store that keeps a scan's pages between visits, and sharing or saving the finished scan.
 
 ## The plugin
 

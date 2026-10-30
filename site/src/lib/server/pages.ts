@@ -66,7 +66,11 @@ export const PACKAGES = [
 	'plugin-lock',
 	'plugin-camera',
 	'plugin-qr',
-	'plugin-blocks'
+	'plugin-blocks',
+	'plugin-vault',
+	'plugin-recorder',
+	'plugin-scanner',
+	'plugin-notion'
 ];
 
 const read = (file: string) => readFileSync(join(ROOT, file), 'utf8');

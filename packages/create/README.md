@@ -75,16 +75,14 @@ you what to add by hand. It then runs your package manager's install (`--no-inst
 
 ## In this repository
 
-The catalog also knows plugins that aren't on npm yet: `notion`
-([`@xcwds/plugin-notion`](../plugin-notion), which writes `/notion` and `/notion/view` and a
-`relay` placeholder the build refuses until you set your relay's origin). They're listed and
+A plugin in the catalog that isn't on npm yet (still private in this repository) is listed and
 added only in an app that depends on the workspace; anywhere else `xcwds add` and
-`npm create @xcwds` say they aren't published yet.
+`npm create @xcwds` say it isn't published yet. None is private at the moment.
 
 `pnpm test:starter` generates the `tools` template into `examples/starter` (git-ignored) with
 `--workspace`, which depends on these packages with `workspace:*` instead of npm, adds `share`,
-`changelog`, `qr`, `blocks` and `notion` with `xcwds add` (setting the Notion relay to a stand-in
-origin), and runs the app's own check, lint, unit and e2e tests. CI runs it on
+`changelog`, `qr`, `blocks`, `notion`, `recorder`, `scanner` and `vault` with `xcwds add`
+(setting the Notion relay to a stand-in origin), and runs the app's own check, lint, unit and e2e tests. CI runs it on
 every pull request. Versions in generated apps come from this monorepo when the package builds
 (`scripts/versions.js`), so every release republishes this package too: `pnpm version-packages`
 first runs `scripts/release-create.js`, which adds a patch changeset for `@xcwds/create` whenever

@@ -127,6 +127,34 @@ describe('appFiles', () => {
 		expect(pkg.dependencies['@xcwds/plugin-qr']).toMatch(/^\^\d/);
 	});
 
+	it('wires up the recorder, the scanner (bringing the camera) and the vault (after the lock)', async () => {
+		expect(withRequirements(['scanner'])).toEqual(['shell', 'camera', 'scanner']);
+		expect(withRequirements(['vault'])).toEqual(['shell', 'lock', 'vault']);
+		const files = appFiles({
+			name: 'Box',
+			plugins: withRequirements(['recorder', 'scanner', 'vault'])
+		});
+		const rc = files.get('.prettierrc')!;
+		for (const [path, content] of files)
+			expect(await formatted(path, content, rc), path).toBe(true);
+		const config = files.get('xcwds.config.ts')!;
+		for (const id of ['recorder', 'scanner', 'vault'])
+			expect(config).toContain(`import ${id} from '@xcwds/plugin-${id}';`);
+		expect(config).toMatch(/\t\tlock\(\),\n\t\tvault\(\),\n/);
+		expect(config).toContain("\t{ path: '/recorder', label: 'Recorder', emoji: '🎙️' }");
+		expect(config).toContain("\t{ path: '/scanner', label: 'Scanner', emoji: '📄' }");
+		const css = files.get('src/xcwds.css')!;
+		expect(css).toContain("@import '@xcwds/plugin-recorder/styles.css';");
+		expect(css).toContain("@import '@xcwds/plugin-scanner/styles.css';");
+		expect(files.get('src/routes/recorder/+page.svelte')).toContain(
+			'<Recorder />\n\t<Recordings />'
+		);
+		expect(files.get('src/routes/scanner/+page.svelte')).toContain('<Pages bind:paper');
+		const pkg = JSON.parse(files.get('package.json')!);
+		for (const id of ['recorder', 'scanner', 'vault'])
+			expect(pkg.dependencies[`@xcwds/plugin-${id}`]).toMatch(/^\^\d/);
+	});
+
 	it('wires up your apps (blocks), kept out of Share', () => {
 		const files = appFiles({ name: 'Box', plugins: withRequirements(['share', 'blocks']) });
 		const config = files.get('xcwds.config.ts')!;
@@ -174,15 +202,10 @@ describe('appFiles', () => {
 		);
 	});
 
-	// @xcwds/plugin-notion is private until its first release; then these flip.
-	it('offers unpublished plugins only inside this repository', () => {
-		expect(isPublished('notion')).toBe(false);
-		expect(offered(false)).not.toContain('notion');
-		expect(offered(false)).toContain('blocks');
+	it('offers every plugin, published ones outside this repository too', () => {
+		expect(isPublished('notion')).toBe(true);
+		expect(offered(false)).toContain('notion');
 		expect(offered(true)).toContain('notion');
-		expect(() => appFiles({ name: 'Box', plugins: ['notion'] })).toThrow(
-			"@xcwds/plugin-notion isn't published yet"
-		);
 	});
 
 	it('depends on the workspace for this repository CI, and quotes names safely', () => {
@@ -270,13 +293,7 @@ describe('addPlugins', () => {
 		);
 	});
 
-	it('adds Notion and says to set its relay, but only once the package is published', () => {
-		writeApp(root, appFiles({ name: 'Box', plugins: TEMPLATES.minimal }));
-		const pkgFile = join(root, 'package.json');
-		const before = readFileSync(pkgFile, 'utf8');
-		expect(() => addPlugins(root, ['notion'])).toThrow("isn't published yet");
-		expect(readFileSync(pkgFile, 'utf8')).toBe(before);
-
+	it('adds Notion and says to set its relay', () => {
 		const app = join(root, 'workspace-app');
 		writeApp(app, appFiles({ name: 'Box', plugins: TEMPLATES.minimal, workspace: true }));
 		const result = addPlugins(app, ['notion']);

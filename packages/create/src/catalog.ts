@@ -57,8 +57,11 @@ export const PLUGIN_IDS = [
 	'share',
 	'changelog',
 	'lock',
+	'vault',
 	'camera',
 	'qr',
+	'recorder',
+	'scanner',
 	'blocks',
 	'notion'
 ] as const;
@@ -139,6 +142,15 @@ export const CATALOG: Record<PluginId, PluginInfo> = {
 				)
 			}
 		]
+	},
+	vault: {
+		id: 'vault',
+		package: '@xcwds/plugin-vault',
+		recommended: false,
+		summary: "Sensitive data and backups encrypted with the lock's passcode",
+		// The build fails unless the lock comes first, which catalog order gives it.
+		requires: ['lock'],
+		call: 'vault()'
 	},
 	settings: {
 		id: 'settings',
@@ -261,6 +273,36 @@ export const changelog: ChangelogEntry[] = [
 		css: '@xcwds/plugin-qr/styles.css',
 		section: { path: '/qr', label: 'QR', emoji: '🔳' },
 		files: () => [{ path: 'src/routes/qr/+page.svelte', content: QR }]
+	},
+	recorder: {
+		id: 'recorder',
+		package: '@xcwds/plugin-recorder',
+		recommended: false,
+		summary: 'Voice recordings kept on the device, the microphone on only while recording',
+		requires: ['shell'],
+		call: 'recorder()',
+		css: '@xcwds/plugin-recorder/styles.css',
+		section: { path: '/recorder', label: 'Recorder', emoji: '🎙️' },
+		files: () => [
+			{
+				path: 'src/routes/recorder/+page.svelte',
+				content: page(
+					'<main class="page-narrow flex flex-col gap-6 pt-2 pb-6">\n\t<Recorder />\n\t<Recordings />\n</main>',
+					"\timport Recorder from '@xcwds/plugin-recorder/Recorder.svelte';\n\timport Recordings from '@xcwds/plugin-recorder/Recordings.svelte';"
+				)
+			}
+		]
+	},
+	scanner: {
+		id: 'scanner',
+		package: '@xcwds/plugin-scanner',
+		recommended: false,
+		summary: 'Scan paper documents to a PDF on the device',
+		requires: ['camera'],
+		call: 'scanner()',
+		css: '@xcwds/plugin-scanner/styles.css',
+		section: { path: '/scanner', label: 'Scanner', emoji: '📄' },
+		files: () => [{ path: 'src/routes/scanner/+page.svelte', content: SCANNER }]
 	},
 	blocks: {
 		id: 'blocks',
@@ -422,6 +464,50 @@ const QR = `<script lang="ts">
 	</label>
 	{#if text}
 		<QrCode value={text} class="w-64 max-w-full self-center rounded-xl" />
+	{/if}
+</main>
+`;
+
+const SCANNER = `<script lang="ts">
+	// Pages are photographed, straightened and filtered on the device, and kept in the app
+	// (\`app.scanner.pages\`) until you export them as a PDF or images.
+	import Camera from '@xcwds/plugin-camera/Camera.svelte';
+	import type { Photo } from '@xcwds/plugin-camera/client';
+	import Crop from '@xcwds/plugin-scanner/Crop.svelte';
+	import Pages from '@xcwds/plugin-scanner/Pages.svelte';
+	import type { Filter, Paper } from '@xcwds/plugin-scanner/client';
+
+	// The photo being cropped; the camera shows again once its page is added or it's cancelled.
+	let photo = $state<Blob>();
+	let filter = $state<Filter>('original');
+	/** The page a Retake replaces, until its photo is cropped or cancelled. */
+	let retake = $state<string>();
+	let paper = $state<Paper>('a4');
+
+	const done = (page?: { paper: Paper | null }) => {
+		// A page that's the shape of Letter suggests the scan is on Letter.
+		if (page?.paper) paper = page.paper;
+		photo = undefined;
+		retake = undefined;
+	};
+</script>
+
+<main class="page-narrow flex flex-col gap-4 pt-2 pb-6">
+	{#if photo}
+		<Crop {photo} {retake} bind:filter onDone={done} onCancel={() => done()} />
+	{:else}
+		{#if retake}
+			<p class="flex flex-wrap items-center gap-3">
+				Take the page again.
+				<button
+					type="button"
+					class="min-h-11 rounded-xl bg-(--xcwds-shell-card) px-4 font-medium"
+					onclick={() => (retake = undefined)}>Cancel retake</button
+				>
+			</p>
+		{/if}
+		<Camera onCapture={(p: Photo) => void (photo = p.blob)} />
+		<Pages bind:paper onRetake={(id) => (retake = id)} />
 	{/if}
 </main>
 `;
