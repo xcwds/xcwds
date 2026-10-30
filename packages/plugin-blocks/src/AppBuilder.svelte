@@ -84,6 +84,11 @@
 			void go(blocks.editPathOf(found), true);
 			return;
 		}
+		if (!found && id && !personal && blocks.lockedCount()) {
+			// Maybe one of the private apps the vault keeps sealed: its page asks for the passcode.
+			void go(blocks.editPathOf({ id, private: true }), true);
+			return;
+		}
 		missing = !!id && !found;
 		before = found;
 		const start = found ? (JSON.parse(JSON.stringify(found)) as AppDefinition) : blankApp();

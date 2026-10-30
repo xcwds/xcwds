@@ -119,14 +119,22 @@ async function setUpLock(page: Page, { scope = '', auto = '' } = {}) {
 	await lock.getByLabel('Same again').fill(CODE);
 	await lock.getByRole('button', { name: 'Save passcode' }).click();
 	await expect(page.getByTestId('lock-status')).toHaveText('The passcode lock is on and unlocked.');
-	// This build has no vault, and Settings says so.
+	// This build has the vault, and Settings says so.
 	await expect(page.getByTestId('lock-encryption')).toContainText(
-		"it doesn't encrypt what's saved"
+		'is encrypted on this device with the passcode'
 	);
 	if (scope) await lock.getByRole('radio', { name: scope }).check();
 	if (auto) await lock.getByRole('radio', { name: auto }).check();
 	return lock;
 }
+
+/** Whether the journal is saved, sealed by the vault: stored, and nowhere readable. */
+const journalSealed = (page: Page, text: string) =>
+	page.evaluate((text) => {
+		const all = { ...localStorage };
+		const sealed = Object.keys(all).some((k) => k.includes(':sealed:') && k.endsWith('journal'));
+		return sealed && !JSON.stringify(all).includes(text);
+	}, text);
 
 /**
  * Opens the Journal in the app. Once a passcode is set every page load starts locked, so these
@@ -189,9 +197,7 @@ test('every reload starts locked, and nothing of the page shows before the unloc
 	await openJournal(page);
 	await page.getByLabel('Entry').fill('dear diary');
 	// Saved (persist writes on change).
-	await expect
-		.poll(() => page.evaluate(() => localStorage.getItem('app:hello:journal')))
-		.toBe('"dear diary"');
+	await expect.poll(() => journalSealed(page, 'dear diary')).toBe(true);
 
 	// Hidden from the first paint: record what the page looked like before any app code ran.
 	await page.addInitScript(() => {
@@ -283,9 +289,7 @@ test('forgot passcode clears only what the lock protects', async ({ page }) => {
 	await page.getByTestId('count').click();
 	await openJournal(page);
 	await page.getByLabel('Entry').fill('dear diary');
-	await expect
-		.poll(() => page.evaluate(() => localStorage.getItem('app:hello:journal')))
-		.toBe('"dear diary"');
+	await expect.poll(() => journalSealed(page, 'dear diary')).toBe(true);
 	await page.reload();
 	await expect(page).toHaveURL(/\/unlock$/);
 
@@ -302,6 +306,7 @@ test('forgot passcode clears only what the lock protects', async ({ page }) => {
 	await expect(page.getByLabel('Entry')).toHaveValue('');
 	const saved = await page.evaluate(() => ({ ...localStorage }));
 	expect(saved['app:hello:journal']).toBeUndefined();
+	expect(Object.keys(saved).filter((k) => k.includes(':sealed:'))).toEqual([]);
 	expect(saved['app:lock:verifier']).toBeUndefined();
 	expect(saved['app:hello:count']).toBe('1');
 });

@@ -38,6 +38,15 @@ It declares `network: false`. Its build entry adds five pages to the route regis
 app, and the builder at `<path>/edit` and `<path>/private-edit`. The private ones are private
 routes, so `@xcwds/plugin-lock` locks them, its cover applies and Share skips them.
 
+With `@xcwds/plugin-vault` as well, private apps, their data and their drafts are encrypted with
+the passcode and can't be read while the app is locked. Your apps then shows one card, "2 private
+apps, locked", and Utils one private tool, "Private apps", where the apps would be. Both lead to
+the unlock screen and from there back to Your apps. A link to one of them on the normal page asks
+for the passcode too. Only their number is kept outside the encryption, in
+`app:blocks:private-count` (on this device only, never in backups), and only while the vault is
+on. The private builder draft is sealed like the apps, so New app starts empty until the app is
+unlocked.
+
 ### The pages
 
 Add each page's route file, and the components' styles after Tailwind and the shell's:

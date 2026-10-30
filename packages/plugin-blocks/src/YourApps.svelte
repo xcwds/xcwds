@@ -9,17 +9,18 @@
 	 * ```
 	 *
 	 * Adding a template saves a copy with a new id and opens it. Under the list: how much storage
-	 * your apps take up, with a warning near the browser's limit.
+	 * your apps take up, with a warning near the browser's limit. While `@xcwds/plugin-vault` has
+	 * private apps sealed (the app is locked), one card says how many and opens the unlock screen.
 	 */
 	import { useApp } from '@xcwds/sveltekit';
 	import { onMount } from 'svelte';
-	import type {} from './client.js';
 	import type { AppDefinition } from './format.js';
+	import type {} from './client.js';
 	import { go, href } from './navigate.js';
 	import ShareDesign from './ShareDesign.svelte';
 	import type { AppSummary, Removed, Usage } from './store.js';
 	import { button, card, muted, primary } from './ui.js';
-	import { sizeText } from './view.js';
+	import { lockedText, sizeText } from './view.js';
 
 	const app = useApp();
 	const blocks = app.blocks;
@@ -32,6 +33,8 @@
 	/** Undefined until listed, so the prerendered page matches the first render. */
 	let list = $state.raw<AppSummary[]>();
 	let usage = $state.raw<Usage>();
+	/** Private apps the vault keeps sealed while locked: only their number is known. */
+	let sealed = $state(0);
 	let error = $state('');
 	/** While `app.lock` is locked, a private app's design isn't shared (its name still shows). */
 	let locked = $state(true);
@@ -43,6 +46,7 @@
 		const load = () => {
 			list = blocks.list();
 			usage = blocks.usage();
+			sealed = blocks.lockedCount();
 		};
 		load();
 		const stop = blocks.onChange(load);
@@ -98,7 +102,7 @@
 					>Add from a file</a
 				>
 			</div>
-			{#if list && !list.length}
+			{#if list && !list.length && !sealed}
 				<p class={muted} data-testid="your-apps-empty">
 					No apps yet. Make one, or add one from a template below.
 				</p>
@@ -132,6 +136,21 @@
 							>
 						</li>
 					{/each}
+					{#if sealed}
+						<li class="flex">
+							<a
+								href={href(`${blocks.path}/private`)}
+								class="flex min-w-48 flex-1 items-center gap-3 rounded-xl bg-(--xcwds-shell-card) px-4 py-3 hover:bg-(--xcwds-shell-hover-bg)"
+								data-testid="your-apps-locked"
+							>
+								<span aria-hidden="true" class="text-2xl">🔒</span>
+								<span class="flex flex-col">
+									<span class="font-medium">{lockedText(sealed)}</span>
+									<span class={muted}>Unlock to open them</span>
+								</span>
+							</a>
+						</li>
+					{/if}
 				</ul>
 			{/if}
 			{#if usage && list?.length}

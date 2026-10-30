@@ -1,7 +1,9 @@
 import { memoryStorage, pluginMeta } from '@xcwds/core';
+import lockClient from '@xcwds/plugin-lock/client';
 import toolsFactory from '@xcwds/plugin-tools';
 import toolsClient from '@xcwds/plugin-tools/client';
-import { buildTestApp, type Importer } from '@xcwds/testing';
+import vaultClient from '@xcwds/plugin-vault/client';
+import { buildTestApp, sharedStorage, type Importer } from '@xcwds/testing';
 import { describe, expect, it } from 'vitest';
 import client, { DEFAULT_EMOJI, NEAR_LIMIT } from './client.js';
 import type { AppData } from './data.js';
@@ -374,5 +376,95 @@ describe('your apps as tools', () => {
 		const app = await buildTestApp({ plugins: [[client, {}]] });
 		expect(app.blocks!.addFromTemplate(water).ok).toBe(true);
 		expect(app.blocks!.list()).toHaveLength(1);
+	});
+});
+
+describe('with the vault (#265)', () => {
+	/** An app with tools, the lock, the vault and Your apps. */
+	const sealedApp = (storage = sharedStorage(memoryStorage())) =>
+		buildTestApp(
+			{
+				plugins: [
+					[toolsClient, tools],
+					[lockClient, {}],
+					[vaultClient, {}],
+					[client, { app: 'yours' }]
+				]
+			},
+			{ storage }
+		);
+	const COUNT = 'app:blocks:private-count';
+	const count = (app: Awaited<ReturnType<typeof sealedApp>>) =>
+		app.sharedStorage.backing.get(COUNT) ?? undefined;
+	const placeholder = (app: Awaited<ReturnType<typeof sealedApp>>) =>
+		app.tools!.all().filter((t) => t.path === '/my-apps/private');
+
+	it('keeps no count without a passcode, or without the vault', async () => {
+		const app = await sealedApp();
+		app.blocks!.addFromTemplate(mood);
+		expect(count(app)).toBeUndefined();
+		expect(app.blocks!.lockedCount()).toBe(0);
+		const plain = await withTools();
+		plain.blocks!.addFromTemplate(mood);
+		expect(has(plain, COUNT)).toBe(false);
+	});
+
+	it('counts private apps while they can be read, and shows only the count while sealed', async () => {
+		const app = await sealedApp();
+		const blocks = app.blocks!;
+		const first = blocks.addFromTemplate(mood);
+		blocks.addFromTemplate(water);
+		expect(await app.lock!.setUp('123456', 'digits')).toBeUndefined();
+		// Setting the passcode reloads storage, which counts what's there.
+		expect(count(app)).toBe('1');
+		const second = blocks.addFromTemplate({ ...mood, name: 'Sleep' });
+		expect(count(app)).toBe('2');
+		expect(blocks.lockedCount()).toBe(0);
+		expect(placeholder(app)).toEqual([]);
+
+		app.lock!.lock();
+		expect(blocks.list().map((a) => a.name)).toEqual(['Water']);
+		expect(blocks.lockedCount()).toBe(2);
+		expect(count(app)).toBe('2');
+		expect(placeholder(app)).toMatchObject([
+			{ name: 'Private apps', emoji: '🔒', blurb: '2 private apps, locked.', private: true }
+		]);
+		expect(app.tools!.all().map((t) => t.name)).not.toContain('Mood');
+
+		// A new start is locked too, and knows the count.
+		const next = await app.openTab();
+		expect(next.blocks!.lockedCount()).toBe(2);
+
+		expect(await app.lock!.unlock('123456')).toBe('ok');
+		expect(blocks.lockedCount()).toBe(0);
+		expect(placeholder(app)).toEqual([]);
+		expect(blocks.list().map((a) => a.name)).toEqual(['Water', 'Mood', 'Sleep']);
+
+		// Removing one, or making it normal, counts down; the last one removes the count.
+		expect(blocks.remove(second.ok ? second.app.id : '').ok).toBe(true);
+		expect(count(app)).toBe('1');
+		const made = first.ok ? first.app : undefined;
+		expect(blocks.save({ ...made, private: false }).ok).toBe(true);
+		expect(count(app)).toBeUndefined();
+		app.lock!.lock();
+		expect(blocks.lockedCount()).toBe(0);
+		expect(placeholder(app)).toEqual([]);
+	});
+
+	it('drops the count when the lock is turned off or reset', async () => {
+		const app = await sealedApp();
+		app.blocks!.addFromTemplate(mood);
+		expect(await app.lock!.setUp('123456', 'digits')).toBeUndefined();
+		expect(count(app)).toBe('1');
+		expect(await app.lock!.turnOff('123456')).toBe('ok');
+		expect(count(app)).toBeUndefined();
+
+		expect(await app.lock!.setUp('123456', 'digits')).toBeUndefined();
+		expect(count(app)).toBe('1');
+		app.lock!.lock();
+		app.lock!.reset();
+		expect(app.blocks!.list()).toEqual([]);
+		expect(count(app)).toBeUndefined();
+		expect(app.blocks!.lockedCount()).toBe(0);
 	});
 });
