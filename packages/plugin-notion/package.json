@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-notion",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "Notion pages saved on the device in @xcwds apps, read through a stateless relay.",
 	"license": "MIT",
 	"type": "module",
