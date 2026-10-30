@@ -3,7 +3,9 @@
  * apps (`app:blocks:apps`, backed up) and one for private ones (`app:blocks:private-apps`,
  * personal); each app's data has its own key (`app:blocks:data:<id>`, or
  * `app:blocks:private:<id>` for a private app). Every write checks its result, and a failed one
- * leaves what was saved as it was.
+ * leaves what was saved as it was. With `@xcwds/plugin-vault`, the private ones are sealed while
+ * the app is locked, so only their number (`app:blocks:private-count`, outside the sealed group,
+ * #265) says they're there.
  */
 import type { Entry, PrefixEntry, StorageScope } from '@xcwds/core';
 import { emptyData, parseData, type AppData } from './data.js';
@@ -50,6 +52,11 @@ export interface Blocks {
 	readonly templates: readonly AppDefinition[];
 	/** Your apps, normal ones first, each list in the order it was saved. */
 	list(): AppSummary[];
+	/**
+	 * How many private apps are sealed away: with `@xcwds/plugin-vault` on and the app locked,
+	 * they can't be read (or listed) until it's unlocked. 0 otherwise.
+	 */
+	lockedCount(): number;
 	get(id: string): AppDefinition | undefined;
 	/** The page that runs an app. */
 	pathOf(app: Pick<AppDefinition, 'id' | 'private'>): string;
@@ -120,7 +127,23 @@ export interface BlocksEntries {
 	privateData: PrefixEntry<AppData>;
 	draft: Entry<Draft>;
 	privateDraft: Entry<Draft>;
+	privateCount: Entry<number>;
 }
+
+/** What the store needs of `app.vault` (from `@xcwds/plugin-vault`, if the app has it). */
+export type VaultLike = { readonly state: { readonly enabled: boolean; readonly locked: boolean } };
+
+/** The store, with what only the plugin itself calls. */
+export interface BlocksStore extends Blocks {
+	/**
+	 * Brings the private-app count up to date while the private list can be read, and drops it
+	 * when there's no vault: the plugin calls it on boot and on every change.
+	 */
+	keepCount(): void;
+}
+
+const parseCount = (raw: unknown): number | undefined =>
+	typeof raw === 'number' && Number.isInteger(raw) && raw > 0 ? raw : undefined;
 
 /** Registers the plugin's storage entries in its namespace (once, in the plugin's setup). */
 export function registerEntries(storage: StorageScope): BlocksEntries {
@@ -153,6 +176,14 @@ export function registerEntries(storage: StorageScope): BlocksEntries {
 			backup: false,
 			parse: parseDraft
 		}),
+		// How many private apps there are, for while the vault has them sealed (#265): its group
+		// isn't sensitive, so it's never sealed, and it's this device's, never backed up.
+		privateCount: storage.entry('private-count', {
+			label: 'Your private apps: how many',
+			group: 'blocks',
+			backup: false,
+			parse: parseCount
+		}),
 		privateData: storage.entry('private', {
 			label: 'Your private apps: data',
 			group: 'blocks-private',
@@ -166,9 +197,14 @@ export function registerEntries(storage: StorageScope): BlocksEntries {
 export function createBlocks(
 	storage: StorageScope,
 	entries: BlocksEntries,
-	options: { path: string; templates: readonly AppDefinition[] }
-): Blocks {
+	options: {
+		path: string;
+		templates: readonly AppDefinition[];
+		vault?: () => VaultLike | undefined;
+	}
+): BlocksStore {
 	const { path, templates } = options;
+	const vaultState = () => options.vault?.()?.state;
 	const listeners = new Set<() => void>();
 	/** Storage only reports other tabs' changes; this tab's own saves are announced here. */
 	const changed = (saved: boolean) => {
@@ -249,9 +285,25 @@ export function createBlocks(
 		return { ok: true, app };
 	}
 
+	function keepCount() {
+		const state = vaultState();
+		// Sealed, the private list reads as empty: what's saved is the last count that could be read.
+		if (state?.enabled && state.locked) return;
+		const count = state?.enabled ? read(true).length : 0;
+		const saved = storage.read(entries.privateCount);
+		if (count === (saved ?? 0)) return;
+		if (count) storage.saveResult(entries.privateCount, storage.write(entries.privateCount, count));
+		else storage.remove(entries.privateCount);
+	}
+
 	return {
 		path,
 		templates,
+		keepCount,
+		lockedCount() {
+			const state = vaultState();
+			return state?.enabled && state.locked ? (storage.read(entries.privateCount) ?? 0) : 0;
+		},
 		list() {
 			const normal = read(false);
 			const personal = read(true);
@@ -331,7 +383,7 @@ export function createBlocks(
 			return storage.saveResult(keep, storage.write(keep, draft));
 		},
 		onChange(listener) {
-			const keys = [entries.apps.key, entries.privateApps.key];
+			const keys = [entries.apps.key, entries.privateApps.key, entries.privateCount.key];
 			const prefixes = [entries.data.key, entries.privateData.key];
 			listeners.add(listener);
 			const stop = storage.onChange((key) => {

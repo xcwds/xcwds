@@ -404,9 +404,15 @@ importers:
       '@xcwds/core':
         specifier: workspace:^
         version: link:../core
+      '@xcwds/plugin-lock':
+        specifier: workspace:^
+        version: link:../plugin-lock
       '@xcwds/plugin-tools':
         specifier: workspace:^
         version: link:../plugin-tools
+      '@xcwds/plugin-vault':
+        specifier: workspace:^
+        version: link:../plugin-vault
       '@xcwds/sveltekit':
         specifier: workspace:^
         version: link:../sveltekit

@@ -3,14 +3,24 @@
  * (`app:blocks:…`). With `@xcwds/plugin-tools`, each app is also a tool (in the `app` option's
  * catalog app, if given), so it can be pinned on Home and shows in Recently used, private ones
  * never; the tools follow your apps as they're added, renamed, turned private or removed, here
- * or in another tab. Imported at prerender too, so it only touches browser globals when called.
+ * or in another tab. With `@xcwds/plugin-vault`, private apps can't be read while the app is
+ * locked, so one private tool (`<path>/private`, 🔒) stands in for them until it's unlocked
+ * (#265). Imported at prerender too, so it only touches browser globals when called.
  */
 import { definePlugin } from '@xcwds/core';
 import { CORE, NAME, resolveOptions, type BlocksPluginOptions } from './options.js';
-import { createBlocks, registerEntries, type AppSummary, type Blocks } from './store.js';
+import {
+	createBlocks,
+	registerEntries,
+	type AppSummary,
+	type Blocks,
+	type VaultLike
+} from './store.js';
+import { lockedText } from './view.js';
 
 export type { AppSummary, Blocks, Removed, Saved, Usage } from './store.js';
 export { NEAR_LIMIT } from './store.js';
+export { lockedText } from './view.js';
 export type { BlocksPluginOptions } from './options.js';
 
 declare module '@xcwds/core' {
@@ -41,7 +51,11 @@ export const DEFAULT_EMOJI = '🧩';
 export default definePlugin(
 	(app, input: BlocksPluginOptions) => {
 		const options = resolveOptions(input);
-		const blocks = createBlocks(app.storage, registerEntries(app.storage), options);
+		const store = createBlocks(app.storage, registerEntries(app.storage), {
+			...options,
+			vault: () => (app as { vault?: VaultLike }).vault
+		});
+		const blocks: Blocks = store;
 		app.decorate('blocks', blocks);
 
 		/** The tools this plugin added, by path, with what they showed. */
@@ -55,9 +69,23 @@ export default definePlugin(
 			...(options.app ? { app: options.app } : {})
 		});
 		function sync() {
+			store.keepCount();
 			const tools = (app as { tools?: ToolsLike }).tools;
 			if (!tools) return;
 			const now = new Map(blocks.list().map((a) => [a.path, toolOf(a)]));
+			const locked = blocks.lockedCount();
+			if (locked) {
+				// The lock's guard sends it to the unlock screen, then back to Your apps.
+				const path = `${options.path}/private`;
+				now.set(path, {
+					path,
+					name: 'Private apps',
+					emoji: '🔒',
+					blurb: `${lockedText(locked)}.`,
+					private: true,
+					...(options.app ? { app: options.app } : {})
+				});
+			}
 			for (const [path, shown] of added) {
 				const next = now.get(path);
 				if (next && JSON.stringify(next) === shown) continue;

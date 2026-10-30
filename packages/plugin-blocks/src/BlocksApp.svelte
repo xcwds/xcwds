@@ -9,7 +9,9 @@
 	 * ```
 	 *
 	 * The app's id is in the fragment, so it never reaches a server. An app opened on the wrong
-	 * one of the two pages goes to the right one; an id that isn't on this device says so. The
+	 * one of the two pages goes to the right one; an id that isn't on this device says so, and the
+	 * private page with no id (where Your apps sends you to unlock sealed private apps, #265) goes
+	 * back to Your apps once unlocked. The
 	 * header shows the app's name (`app.shell.setTitle`; a private page's `<title>` stays the
 	 * route's). While `app.lock` is locked, a private app shows nothing.
 	 */
@@ -49,10 +51,19 @@
 		} catch {
 			// A malformed fragment names no app.
 		}
+		if (!id && personal && !locked) {
+			void go(blocks.path, true);
+			return;
+		}
 		const found = id ? blocks.get(id) : undefined;
 		if (found && found.private !== personal) {
 			// On the wrong page: the private one locks, and the normal one would leave it in history.
 			void go(blocks.pathOf(found), true);
+			return;
+		}
+		if (!found && id && !personal && blocks.lockedCount()) {
+			// Maybe one of the private apps the vault keeps sealed: its page asks for the passcode.
+			void go(blocks.pathOf({ id, private: true }), true);
 			return;
 		}
 		definition = found;
