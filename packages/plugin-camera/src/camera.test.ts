@@ -312,6 +312,22 @@ describe('createCamera', () => {
 			expect(await camera.capture(video)).toMatchObject({ ok: true, photo: { width: 1920 } });
 		});
 
+		it("falls back to the viewfinder frame when takePhoto returns no Blob (Firefox's draft)", async () => {
+			stubCanvas();
+			const env = fakeEnv();
+			env.ImageCapture = class {
+				takePhoto() {
+					return undefined as unknown as Promise<Blob>;
+				}
+			};
+			env.createImageBitmap = vi.fn(async () => bitmapOf(1920, 1080) as unknown as ImageBitmap);
+			const camera = createCamera({}, env);
+			await camera.start();
+			expect(await camera.capture(video)).toMatchObject({ ok: true, photo: { width: 1920 } });
+			expect(env.createImageBitmap).toHaveBeenCalledTimes(1);
+			expect(env.createImageBitmap).toHaveBeenCalledWith(video, undefined);
+		});
+
 		it('crops a digitally zoomed photo to what the viewfinder showed', async () => {
 			const drawn = stubCanvas();
 			const env = fakeEnv(() => fakeTrack({}, { width: 4000, height: 3000 }));
