@@ -1,5 +1,11 @@
 # @xcwds/create
 
+## 0.3.6
+
+### Patch Changes
+
+- bf2a590: `npm create @xcwds` and `xcwds add` know `vault` (brings the lock), `recorder` and `scanner` (brings the camera), and offer `notion` outside this repository now that it's published.
+
 ## 0.3.5
 
 ### Patch Changes
