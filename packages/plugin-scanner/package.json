@@ -1,6 +1,6 @@
 {
 	"name": "@xcwds/plugin-scanner",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "Scan paper documents to a PDF on the device in @xcwds apps, without a cloud scanning app.",
 	"license": "MIT",
 	"type": "module",
