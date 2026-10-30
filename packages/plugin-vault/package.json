@@ -1,8 +1,7 @@
 {
 	"name": "@xcwds/plugin-vault",
 	"version": "0.0.0",
-	"private": true,
-	"description": "Encryption at rest for the sensitive storage groups of @xcwds apps that use @xcwds/plugin-lock, with the lock's passcode. Work in progress (#79), not published yet.",
+	"description": "Encryption at rest for the sensitive storage groups of @xcwds apps that use @xcwds/plugin-lock, with the lock's passcode.",
 	"license": "MIT",
 	"type": "module",
 	"sideEffects": false,

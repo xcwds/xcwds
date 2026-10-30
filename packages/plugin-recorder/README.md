@@ -1,8 +1,7 @@
 # @xcwds/plugin-recorder
 
 Voice recordings kept on the device in an @xcwds app: the microphone is on only while recording,
-nothing is sent anywhere, and nothing goes into another app's library. **Work in progress**
-([#150](https://github.com/xcwds/xcwds/issues/150)): not published yet.
+nothing is sent anywhere, and nothing goes into another app's library.
 
 ```ts
 // xcwds.config.ts

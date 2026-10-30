@@ -1,8 +1,7 @@
 {
 	"name": "@xcwds/plugin-recorder",
 	"version": "0.0.0",
-	"private": true,
-	"description": "Voice recordings kept on the device in @xcwds apps, with the microphone on only while recording. Work in progress (#150), not published yet.",
+	"description": "Voice recordings kept on the device in @xcwds apps, with the microphone on only while recording.",
 	"license": "MIT",
 	"type": "module",
 	"sideEffects": [

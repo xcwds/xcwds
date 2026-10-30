@@ -1,7 +1,7 @@
 // What CI runs to prove the starter works (#23): generates the tools template into
 // examples/starter (git-ignored, inside the workspace so it uses these packages, not npm), adds
-// six plugins with `xcwds add` (qr brings camera), sets the Notion relay as its README asks,
-// installs, then runs the app's own check, lint, unit and e2e.
+// eight plugins with `xcwds add` (qr and scanner bring camera, vault brings lock), sets the Notion
+// relay as its README asks, installs, then runs the app's own check, lint, unit and e2e.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +39,9 @@ run(
 		'qr',
 		'blocks',
 		'notion',
+		'recorder',
+		'scanner',
+		'vault',
 		'--no-install'
 	],
 	app

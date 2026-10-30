@@ -1,10 +1,8 @@
 # @xcwds/plugin-notion
 
-Notion pages saved on the device in @xcwds apps, read offline. **Work in progress**
-([#102](https://github.com/xcwds/xcwds/issues/102)): not published yet, and not a plugin you can
-install yet.
+Notion pages saved on the device in @xcwds apps, read offline.
 
-So far it holds:
+It holds:
 
 - [The relay](relay/README.md): a stateless Cloudflare Worker that lets a static app reach the
   Notion API, which sends no CORS headers. It holds no token and stores nothing; the person's own
