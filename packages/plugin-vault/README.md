@@ -1,8 +1,7 @@
 # @xcwds/plugin-vault
 
 Encryption at rest for the sensitive storage groups of an @xcwds app that uses
-[`@xcwds/plugin-lock`](../plugin-lock). **Work in progress** ([#79](https://github.com/xcwds/xcwds/issues/79)):
-not published yet.
+[`@xcwds/plugin-lock`](../plugin-lock).
 
 ```ts
 import lock from '@xcwds/plugin-lock';

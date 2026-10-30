@@ -12,10 +12,6 @@
 		"@xcwds-example/plugin-hello",
 		"xcwds-plugin-tally",
 		"@xcwds/site",
-		"@xcwds-site/plugin-pages",
-		"@xcwds/plugin-vault",
-		"@xcwds/plugin-recorder",
-		"@xcwds/plugin-notion",
-		"@xcwds/plugin-scanner"
+		"@xcwds-site/plugin-pages"
 	]
 }
