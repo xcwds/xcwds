@@ -386,8 +386,11 @@ export function createCamera(options: CameraOptions = {}, env: CameraEnv = {}): 
 					(globalThis as { ImageCapture?: CameraEnv['ImageCapture'] }).ImageCapture;
 				if (Capture) {
 					try {
-						const still = await new Capture(t).takePhoto();
-						frame = await bitmap(still, { imageOrientation: 'from-image' });
+						const still: unknown = await new Capture(t).takePhoto();
+						// Firefox's `dom.imagecapture.enabled` draft returns nothing (its photo
+						// comes in an event): use the viewfinder's frame then too.
+						if (still instanceof Blob)
+							frame = await bitmap(still, { imageOrientation: 'from-image' });
 					} catch {
 						// Not every camera supports full-resolution stills: use the viewfinder's frame.
 					}

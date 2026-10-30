@@ -12,6 +12,7 @@ pnpm lint           # prettier + eslint
 pnpm test:unit --run
 pnpm test:e2e       # builds examples/minimal and site/ at the root and under a base path, then runs Playwright
 pnpm test:starter   # generates an app with npm create @xcwds into examples/starter and tests it
+pnpm test:firefox   # checks docs/camera.md's Firefox cells in an installed Firefox (FIREFOX_PATH)
 ```
 
 Before pushing, run `pnpm build && pnpm check && pnpm lint && pnpm publint && pnpm test:unit --run`
@@ -20,6 +21,9 @@ anything a generated app uses, including `packages/create`).
 
 - Playwright needs Chromium: `pnpm --filter @xcwds/example-minimal exec playwright install chromium`,
   or point `CHROMIUM_PATH` at a Chromium binary you already have.
+- `pnpm test:firefox` isn't part of the pre-push checks or CI. Run it when you change a
+  Firefox cell of `docs/camera.md` or the probes behind it, in your own Firefox
+  (`FIREFOX_PATH=/usr/bin/firefox`; without it Playwright looks for `/snap/bin/firefox` on Linux).
 - e2e tests use `@xcwds/testing/playwright` (its config preset, `gotoHydrated`, the GitHub
   Pages-like server, the tap-target audit) and block service workers unless a test opts in with
   `test.use({ serviceWorkers: 'allow' })`.

@@ -9,7 +9,8 @@
 		"build:base": "BASE_PATH=/sub BUILD_DIR=build-sub HELLO_ORIGIN=https://greetings.example NOTION_RELAY=https://notion-relay.example SHARE_FILES=1 vite build",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
-		"test:e2e": "vite build && pnpm build:base && playwright test"
+		"test:e2e": "vite build && pnpm build:base && playwright test",
+		"test:firefox": "vite build && playwright test -c playwright.firefox.config.ts"
 	},
 	"dependencies": {
 		"@xcwds-example/plugin-hello": "workspace:*",
