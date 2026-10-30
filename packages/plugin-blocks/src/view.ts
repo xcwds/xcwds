@@ -126,6 +126,11 @@ export function chartPoints(
 	});
 }
 
+/** What stands in for private apps while `@xcwds/plugin-vault` has them sealed (#265). */
+export function lockedText(count: number): string {
+	return `${count} private ${count === 1 ? 'app' : 'apps'}, locked`;
+}
+
 /** A size for people: "512 bytes", "4.2 KB", "1.5 MB" (1 KB = 1000, as phones count). */
 export function sizeText(size: number): string {
 	if (size < 1000) return `${size} ${size === 1 ? 'byte' : 'bytes'}`;

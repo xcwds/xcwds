@@ -21,6 +21,16 @@ test.beforeAll(async () => {
 });
 test.afterAll(() => server.close());
 
+/** Everything in `localStorage`, for checking what the vault keeps sealed. */
+const stored = (page: Page) => page.evaluate(() => JSON.stringify({ ...localStorage }));
+
+/** Unlocks from the unlock screen. */
+async function unlock(page: Page) {
+	const screen = page.getByTestId('unlock');
+	await screen.getByLabel('Passcode').fill('246810');
+	await screen.getByRole('button', { name: 'Unlock' }).click();
+}
+
 /** Adds a template from Your apps, which opens it; returns its id. */
 async function add(page: Page, name: string): Promise<string> {
 	await gotoHydrated(page, url('/my-apps'));
@@ -243,7 +253,10 @@ test("an app that isn't here says so; deleting one from the list can be undone",
 	await expect(page.getByTestId('your-apps').getByRole('link')).toHaveText([/Water/]);
 });
 
-test('a private app waits behind the passcode lock', async ({ page }) => {
+test('a private app waits behind the passcode lock, sealed by the vault (#265)', async ({
+	page
+}) => {
+	const id = await add(page, 'Mood');
 	await add(page, 'Mood');
 	await gotoHydrated(page, url('/settings'));
 	const lock = page.getByTestId('passcode-lock');
@@ -253,16 +266,34 @@ test('a private app waits behind the passcode lock', async ({ page }) => {
 	await lock.getByRole('button', { name: 'Save passcode' }).click();
 	await lock.getByRole('button', { name: 'Lock now' }).click();
 
-	// Links only: every page load starts locked.
+	// Links only: every page load starts locked. Sealed, the apps are only a number, in Utils and
+	// in Your apps, and nothing of them is stored readable.
+	expect(await stored(page)).not.toContain('Mood');
 	await page.getByRole('link', { name: /Utils/ }).first().click();
+	await expect(page.getByRole('link', { name: /Private apps/ })).toContainText(
+		'2 private apps, locked'
+	);
+	await expect(page.locator('main')).not.toContainText('Mood');
 	await page.getByTestId('your-apps-link').click();
-	await page.getByRole('link', { name: /Mood/ }).click();
+	await expect(page.getByTestId('your-apps')).not.toContainText('Mood');
+	await expect(page.getByTestId('your-apps-locked')).toContainText('2 private apps, locked');
+	expect(await auditTapTargets(page)).toEqual([]);
+	await page.getByTestId('your-apps-locked').click();
 	await expect(page).toHaveURL(/\/unlock$/);
 	await expect(page.getByTestId('blocks-app')).toHaveCount(0);
-	const screen = page.getByTestId('unlock');
-	await screen.getByLabel('Passcode').fill('246810');
-	await screen.getByRole('button', { name: 'Unlock' }).click();
+	await unlock(page);
+	// Back to Your apps, which lists them now.
+	await expect(page).toHaveURL(url('/my-apps'));
+	await expect(page.getByTestId('your-apps-locked')).toHaveCount(0);
+	await page.getByRole('link', { name: /Mood/ }).first().click();
 	await expect(page).toHaveURL(/\/my-apps\/private#/);
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Mood$/);
+
+	// A link to one on the normal page (a reload starts locked) asks for the passcode too.
+	await gotoHydrated(page, url(`/my-apps/app#${id}`));
+	await expect(page).toHaveURL(/\/unlock$/);
+	await unlock(page);
+	await expect(page).toHaveURL(url(`/my-apps/private#${id}`));
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Mood$/);
 });
 
@@ -496,16 +527,23 @@ test("a private app's unsaved draft only comes back behind the lock", async ({ p
 	await lock.getByRole('button', { name: 'Save passcode' }).click();
 	await lock.getByRole('button', { name: 'Lock now' }).click();
 
-	// The page for new apps isn't locked, so the draft goes to the private one, which is.
+	// Sealed with the private apps (#265): the page for new apps starts empty, and nothing of the
+	// draft is stored readable.
+	expect(await stored(page)).not.toContain('Secret plan');
 	await page.getByRole('link', { name: /Utils/ }).first().click();
 	await page.getByTestId('your-apps-link').click();
 	await page.getByRole('link', { name: 'New app' }).click();
-	await expect(page).toHaveURL(/\/unlock$/);
+	await expect(page).toHaveURL(url('/my-apps/edit'));
+	await expect(builder.getByLabel('Name')).toHaveValue('');
+	await expect(page.getByTestId('builder-restored')).toHaveCount(0);
 	await expect(page.getByText('Secret plan')).toHaveCount(0);
-	const screen = page.getByTestId('unlock');
-	await screen.getByLabel('Passcode').fill('246810');
-	await screen.getByRole('button', { name: 'Unlock' }).click();
-	await expect(page).toHaveURL(url('/my-apps/private-edit'));
+	// Unlocked, the page for new apps brings it back.
+	await page.locator('header [data-shell-back]').click();
+	await page.getByTestId('your-apps-locked').click();
+	await unlock(page);
+	await expect(page).toHaveURL(url('/my-apps'));
+	await page.getByRole('link', { name: 'New app' }).click();
+	await expect(page).toHaveURL(url('/my-apps/edit'));
 	await expect(page.getByTestId('builder-restored')).toBeVisible();
 	await expect(builder.getByLabel('Name')).toHaveValue('Secret plan');
 
@@ -519,8 +557,7 @@ test("a private app's unsaved draft only comes back behind the lock", async ({ p
 		await expect(page, path).toHaveURL(/\/unlock$/);
 		await expect(page.getByTestId('blocks-app')).toHaveCount(0);
 		await expect(page.getByTestId('builder')).toHaveCount(0);
-		await screen.getByLabel('Passcode').fill('246810');
-		await screen.getByRole('button', { name: 'Unlock' }).click();
+		await unlock(page);
 		await expect(page, path).toHaveURL(url(unlocked));
 	}
 });
@@ -544,19 +581,18 @@ test('a draft held back by the lock is kept, and comes back once unlocked', asyn
 	await lock.getByRole('button', { name: 'Save passcode' }).click();
 	await lock.getByRole('button', { name: 'Lock now' }).click();
 
-	// Locked, Water's builder shows Water as saved, and keeps the draft.
+	// Locked, Water's builder shows Water as saved, and the draft is kept, sealed (#265).
 	await gotoHydrated(page, url(`/my-apps/edit#${water}`));
 	await expect(builder.getByLabel('Name')).toHaveValue('Water');
 	await expect(page.getByTestId('builder-restored')).toHaveCount(0);
-	expect(await page.evaluate(() => localStorage.getItem('app:blocks:private-draft'))).toContain(
-		'Private water'
-	);
+	expect(await stored(page)).not.toContain('Private water');
 
-	// Unlocked (opening a private app asks), it comes back.
+	// Unlocked (from Your apps), it comes back.
 	await page.locator('header [data-shell-back]').click();
+	await page.getByTestId('your-apps-locked').click();
+	await unlock(page);
+	await expect(page).toHaveURL(url('/my-apps'));
 	await page.getByRole('link', { name: /Mood/ }).click();
-	await page.getByTestId('unlock').getByLabel('Passcode').fill('246810');
-	await page.getByTestId('unlock').getByRole('button', { name: 'Unlock' }).click();
 	await expect(page).toHaveURL(url(`/my-apps/private#${mood}`));
 	await page.locator('header [data-shell-back]').click();
 	await expect(page).toHaveURL(url('/my-apps'));
@@ -715,14 +751,14 @@ test("a locked private app's design can't be shared", async ({ page }) => {
 
 	await gotoHydrated(page, url('/my-apps'));
 	await expect(page.getByRole('button', { name: 'Share design of Water' })).toBeVisible();
-	await expect(page.getByTestId('your-apps')).toContainText('Mood');
+	// Sealed by the vault, it isn't listed at all, only counted (#265).
+	await expect(page.getByTestId('your-apps')).not.toContainText('Mood');
+	await expect(page.getByTestId('your-apps-locked')).toContainText('1 private app, locked');
 	await expect(page.getByRole('button', { name: 'Share design of Mood' })).toHaveCount(0);
 
-	// Unlocked (opening it asks), it can be shared.
-	await page.getByRole('link', { name: /Mood/ }).click();
-	await page.getByTestId('unlock').getByLabel('Passcode').fill('246810');
-	await page.getByTestId('unlock').getByRole('button', { name: 'Unlock' }).click();
-	await page.locator('header [data-shell-back]').click();
+	// Unlocked, it can be shared.
+	await page.getByTestId('your-apps-locked').click();
+	await unlock(page);
 	await expect(page).toHaveURL(url('/my-apps'));
 	await expect(page.getByRole('button', { name: 'Share design of Mood' })).toBeVisible();
 });

@@ -1,6 +1,7 @@
-// @xcwds/plugin-vault (#79, #149) in examples/minimal's base-path build (the only one with the
-// vault): with a passcode set, photos are sealed in IndexedDB, unreadable while the app is
-// locked, and shown again once it's unlocked; backups carry sensitive data only encrypted.
+// @xcwds/plugin-vault (#79, #149) in examples/minimal's base-path build (the root build has it
+// too since #265, for lock.test.ts and blocks.test.ts): with a passcode set, photos are sealed in
+// IndexedDB, unreadable while the app is locked, and shown again once it's unlocked; backups carry
+// sensitive data only encrypted.
 import { expect, test, type Page } from '@playwright/test';
 import { gotoHydrated, serveStatic, type StaticServer } from '@xcwds/testing/playwright';
 import { readFile } from 'node:fs/promises';

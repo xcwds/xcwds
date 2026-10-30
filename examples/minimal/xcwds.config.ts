@@ -145,10 +145,10 @@ export default defineConfig({
 		// A passcode lock for private pages (the Journal), with its unlock screen at /unlock; a cover
 		// in the app switcher and no spellcheck in their fields.
 		lock(),
-		// Sensitive data (the Journal, photos, recordings) encrypted with the lock's passcode (#79,
-		// #149). Only in the base-path build (VAULT in `build:base`) for now, where e2e/vault.test.ts
-		// runs: the root build's lock tests read what's saved as plaintext.
-		...(process.env.VAULT ? [vault()] : []),
+		// Sensitive data (the Journal, photos, recordings, private apps) encrypted with the lock's
+		// passcode (#79, #149); while locked, Your apps shows only how many private apps there are
+		// (#265).
+		vault(),
 		// The camera as `app.camera`, off while hidden or locked; /utils/camera shows `<Camera>`.
 		camera({ maxSide: 2048 }),
 		// QR codes made and read on the device; /utils/qr shows `<QrScanner>` and `<QrCode>`.
