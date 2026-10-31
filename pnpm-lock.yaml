@@ -162,6 +162,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@sveltejs/package>chokidar': ^5.0.0
+
 importers:
 
   .:
@@ -2017,10 +2020,6 @@ packages:
     resolution: {integrity: sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw==}
     engines: {node: '>= 20.19.0'}
 
-  chokidar@6.0.0:
-    resolution: {integrity: sha512-Ec2Z7wpcKBiMpR7DxteoqS/sq5G5d2A4fpxzPv6+fD7xNNdrTghn7L11YwV5EN1B3i72Erc3XVT5FkWIDx90+A==}
-    engines: {node: '>= 22.22'}
-
   clsx@2.1.1:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
     engines: {node: '>=6'}
@@ -3331,7 +3330,7 @@ snapshots:
   '@sveltejs/package@3.0.2(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)':
     dependencies:
       '@sveltejs/load-config': 0.2.3
-      chokidar: 6.0.0
+      chokidar: 5.0.0
       svelte: 5.57.3(@typescript-eslint/types@8.72.1)
       svelte2tsx: 0.7.61(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)
     optionalDependencies:
@@ -3575,10 +3574,6 @@ snapshots:
       readdirp: 4.1.2
 
   chokidar@5.0.0:
-    dependencies:
-      readdirp: 5.1.1
-
-  chokidar@6.0.0:
     dependencies:
       readdirp: 5.1.1
 
