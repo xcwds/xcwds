@@ -8,3 +8,8 @@ allowBuilds:
   esbuild: true
 engineStrict: true
 dedupePeerDependents: false
+overrides:
+  # chokidar 6 needs Node 22.22, above our engines floor (22.18) that the node-22 CI job installs
+  # with; @sveltejs/package 3.0.2 only uses it for `svelte-package --watch`. Drop this when the
+  # floor moves to 22.22.
+  '@sveltejs/package>chokidar': ^5.0.0
