@@ -59,7 +59,7 @@ jobs:
           && github.event.issue.pull_request == null
           && contains(fromJSON('["refinement requested","answered in comments"]'), github.event.label.name))
       ))
-    uses: xcwds/xcwds/.github/workflows/agent.yml@main
+    uses: xcwds/xcwds/.github/workflows/agent.yml@ad94f275ae336b7c9ad07e7e53e6a87a2f5a58ea # main
     with:
       prompt: .github/agents/labeling.md
       repos: both

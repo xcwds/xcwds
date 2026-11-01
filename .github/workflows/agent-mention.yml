@@ -48,7 +48,7 @@ jobs:
           && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
       )
     # From main, never from the PR's branch: a review event would otherwise run the branch's copy.
-    uses: xcwds/xcwds/.github/workflows/agent.yml@main
+    uses: xcwds/xcwds/.github/workflows/agent.yml@ad94f275ae336b7c9ad07e7e53e6a87a2f5a58ea # main
     with:
       prompt: .github/agents/mention.md
       repos: xcwds

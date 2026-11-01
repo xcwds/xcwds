@@ -59,7 +59,7 @@ jobs:
       !cancelled() && !failure()
       && (github.event_name == 'workflow_dispatch'
         || (github.event_name == 'schedule' && vars.AGENT_RENOVATE == 'on'))
-    uses: xcwds/xcwds/.github/workflows/agent.yml@main
+    uses: xcwds/xcwds/.github/workflows/agent.yml@ad94f275ae336b7c9ad07e7e53e6a87a2f5a58ea # main
     with:
       prompt: .github/agents/renovate.md
       repos: ${{ github.event_name == 'workflow_dispatch' && inputs.repo || 'both' }}
