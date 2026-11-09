@@ -77,7 +77,7 @@ jobs:
     concurrency:
       group: agent-pr-${{ github.event.repository.name }}-${{ needs.gate.outputs.pr }}
       cancel-in-progress: false
-    uses: xcwds/xcwds/.github/workflows/agent.yml@main
+    uses: xcwds/xcwds/.github/workflows/agent.yml@15d0e02d8b8c9a89bf4e47e4e14c04dca8d60e25 # main
     with:
       prompt: .github/agents/followup.md
       repos: ${{ github.event.repository.name }}
