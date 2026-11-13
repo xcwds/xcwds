@@ -1,5 +1,5 @@
 # Keep the Node version in step with .tool-versions (Renovate updates both).
-FROM node:26.13.0-bookworm
+FROM node:26.13.1-bookworm
 
 # sudo lets `playwright install --with-deps` add Chromium's system libraries as the node user.
 RUN apt-get update \
