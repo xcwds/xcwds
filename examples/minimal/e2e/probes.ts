@@ -1,6 +1,7 @@
 // The probes behind docs/camera.md's ✅ cells (#143), shared by the Chromium checks in
-// camera-support.test.ts and the Firefox ones in e2e-firefox/. Each runs in the page through
-// `page.evaluate`, so it must not use anything from outside its own body.
+// camera-support.test.ts and camera-switch.test.ts and the Firefox ones in e2e-firefox/. Each
+// runs in the page through `page.evaluate`, so it must not use anything from outside its own
+// body.
 
 /** What @xcwds/plugin-camera relies on, from the browser's (fake) camera. */
 export async function probeCamera() {
@@ -108,5 +109,38 @@ export async function probeRecorder() {
 		wakeLock: 'wakeLock' in navigator,
 		locks: 'locks' in navigator,
 		share: typeof navigator.share === 'function'
+	};
+}
+
+/**
+ * Whether a second camera opens without a new prompt: the first camera, then another one by
+ * `deviceId`. Run it with the camera permission granted and no fake prompt UI, so a camera the
+ * grant doesn't cover is refused rather than allowed (#143). Each result is `opened` or the
+ * error's name.
+ */
+export async function probeSwitch() {
+	let id = '';
+	const open = async (video: MediaTrackConstraints | true) => {
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({ video });
+			id = stream.getVideoTracks()[0]!.getSettings().deviceId ?? '';
+			for (const track of stream.getTracks()) track.stop();
+			return 'opened';
+		} catch (e) {
+			return (e as Error).name;
+		}
+	};
+	const first = await open(true);
+	const firstId = id;
+	const cameras = (await navigator.mediaDevices.enumerateDevices()).filter(
+		(d) => d.kind === 'videoinput'
+	);
+	const other = cameras.find((c) => c.deviceId && c.deviceId !== firstId)?.deviceId;
+	const second = other ? await open({ deviceId: { exact: other } }) : 'no other camera';
+	return {
+		cameras: cameras.length,
+		first,
+		second,
+		different: second === 'opened' && id !== firstId
 	};
 }
