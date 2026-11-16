@@ -1,6 +1,7 @@
 // The probes behind docs/camera.md's ✅ cells (#143), shared by the Chromium checks in
-// camera-support.test.ts and the Firefox ones in e2e-firefox/. Each runs in the page through
-// `page.evaluate`, so it must not use anything from outside its own body.
+// camera-support.test.ts and camera-switch.test.ts and the Firefox ones in e2e-firefox/. Each
+// runs in the page through `page.evaluate`, so it must not use anything from outside its own
+// body.
 
 /** What @xcwds/plugin-camera relies on, from the browser's (fake) camera. */
 export async function probeCamera() {
