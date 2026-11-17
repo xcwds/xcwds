@@ -33,7 +33,7 @@ test('Firefox has what the camera plugin uses, as docs/camera.md says', async ({
 		offscreen: true,
 		jpeg: 'image/jpeg',
 		webp: 'image/webp',
-		persist: true,
+		persist: 'no answer, prompt',
 		share: false
 	});
 });

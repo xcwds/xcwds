@@ -67,9 +67,25 @@ export async function probeCamera() {
 		offscreen: typeof OffscreenCanvas === 'function',
 		jpeg: await blobType('image/jpeg'),
 		webp: await blobType('image/webp'),
-		persist: typeof navigator.storage.persist === 'function',
+		persist: await probePersist(),
 		share: typeof navigator.share === 'function'
 	};
+
+	// What `navigator.storage.persist()` answers on a site the browser has never seen: granted or
+	// refused, or `no answer` when it's still waiting after 3 seconds (a prompt the test can't see).
+	// Declared inside probeCamera, which must not use anything from outside its own body.
+	async function probePersist() {
+		if (typeof navigator.storage?.persist !== 'function') return 'missing';
+		const answer = await Promise.race([
+			navigator.storage.persist().then((granted) => (granted ? 'granted' : 'refused')),
+			new Promise<string>((done) => setTimeout(() => done('no answer'), 3000))
+		]);
+		const state = await navigator.permissions.query({ name: 'persistent-storage' }).then(
+			(status) => status.state,
+			() => 'unknown'
+		);
+		return `${answer}, ${state}`;
+	}
 }
 
 /** What @xcwds/plugin-recorder relies on, from the browser's (fake) microphone (#150). */
