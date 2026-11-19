@@ -151,8 +151,10 @@
 							onclick={() => {
 								if (field.type === 'choice')
 									field.options = field.options.filter((o) => o.id !== option.id);
-							}}>Remove</button
+							}}
 						>
+							Remove
+						</button>
 					</li>
 				{/each}
 			</ul>
@@ -166,8 +168,10 @@
 							...field.options,
 							{ id: newId(), label: `Option ${field.options.length + 1}` }
 						];
-				}}>Add option</button
+				}}
 			>
+				Add option
+			</button>
 		</div>
 	{/if}
 
@@ -177,21 +181,27 @@
 			class={button}
 			disabled={index === 0}
 			aria-label="Move field {index + 1} up"
-			onclick={() => onmove(-1)}>Move up</button
+			onclick={() => onmove(-1)}
 		>
+			Move up
+		</button>
 		<button
 			type="button"
 			class={button}
 			disabled={index === count - 1}
 			aria-label="Move field {index + 1} down"
-			onclick={() => onmove(1)}>Move down</button
+			onclick={() => onmove(1)}
 		>
+			Move down
+		</button>
 		<button
 			type="button"
 			class={button}
 			disabled={count <= 1}
 			aria-label="Remove field {index + 1}"
-			onclick={onremove}>Remove</button
+			onclick={onremove}
 		>
+			Remove
+		</button>
 	</div>
 </fieldset>

@@ -36,8 +36,10 @@
 			class="{button} min-w-14 text-2xl"
 			aria-label="One less: {block.label}"
 			disabled={shown.value === 0}
-			onclick={() => change(-1)}>−</button
+			onclick={() => change(-1)}
 		>
+			−
+		</button>
 		<p class="flex-1 text-center" aria-live="polite" data-testid="counter-value">
 			<span class="text-4xl font-semibold tabular-nums">{shown.value}</span>
 			{#if block.goal !== undefined}
@@ -48,17 +50,19 @@
 			type="button"
 			class="{button} min-w-14 text-2xl"
 			aria-label="One more: {block.label}"
-			onclick={() => change(1)}>+</button
+			onclick={() => change(1)}
 		>
+			+
+		</button>
 	</div>
 	{#if reached}
 		<p class="text-center text-sm font-medium" data-testid="counter-goal">Goal reached</p>
 	{/if}
 	{#if shown.history.length}
 		<details class="text-sm">
-			<summary class="flex min-h-11 cursor-pointer items-center"
-				>{block.reset === 'weekly' ? 'Past weeks' : 'Past days'}</summary
-			>
+			<summary class="flex min-h-11 cursor-pointer items-center">
+				{block.reset === 'weekly' ? 'Past weeks' : 'Past days'}
+			</summary>
 			<ul class="flex flex-col gap-1">
 				{#each shown.history.slice(0, PAST) as past (past.period)}
 					<li class="flex justify-between gap-3">

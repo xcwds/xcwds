@@ -65,21 +65,27 @@
 							class={small}
 							aria-label="Move {tool.name} up"
 							disabled={i === 0}
-							onclick={() => tools?.shortcuts?.movePin(tool.path, -1)}>↑</button
+							onclick={() => tools?.shortcuts?.movePin(tool.path, -1)}
 						>
+							↑
+						</button>
 						<button
 							type="button"
 							class={small}
 							aria-label="Move {tool.name} down"
 							disabled={i === pinned.length - 1}
-							onclick={() => tools?.shortcuts?.movePin(tool.path, 1)}>↓</button
+							onclick={() => tools?.shortcuts?.movePin(tool.path, 1)}
 						>
+							↓
+						</button>
 						<button
 							type="button"
 							class={small}
 							aria-label="Unpin {tool.name}"
-							onclick={() => tools?.shortcuts?.togglePin(tool.path)}>✕</button
+							onclick={() => tools?.shortcuts?.togglePin(tool.path)}
 						>
+							✕
+						</button>
 					{/if}
 				</li>
 			{/each}

@@ -25,8 +25,10 @@
 	<button
 		type="button"
 		class="min-h-11 self-start rounded-xl border px-3"
-		onclick={() => app.timers?.create('Journal reminder', 60_000)}>Remind me in a minute</button
+		onclick={() => app.timers?.create('Journal reminder', 60_000)}
 	>
+		Remind me in a minute
+	</button>
 	<!-- Sets its own spellcheck, which @xcwds/plugin-lock keeps. Titles the header, but not the
 	     tab: a private page's <title> stays "Journal". -->
 	<label class="flex flex-col gap-1">

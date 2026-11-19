@@ -46,14 +46,18 @@
 				<button
 					type="button"
 					class="min-h-11 rounded-full pr-1 pl-3"
-					onclick={() => shell?.toasts.dismiss(t.id)}>{message(t)}</button
+					onclick={() => shell?.toasts.dismiss(t.id)}
 				>
+					{message(t)}
+				</button>
 				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 				<a
 					href={`${href(t.action.path)}${t.action.hash ?? ''}`}
 					class="flex min-h-11 items-center rounded-full px-3 font-semibold underline"
-					onclick={() => shell?.toasts.dismiss(t.id)}>{t.action.label}</a
+					onclick={() => shell?.toasts.dismiss(t.id)}
 				>
+					{t.action.label}
+				</a>
 			</div>
 		{:else}
 			<button

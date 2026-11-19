@@ -50,16 +50,18 @@
 			save on their device. You describe it in one config file, and every feature is a plugin, as in <a
 				class="underline"
 				href="https://fastify.dev"
-				rel="noreferrer">Fastify</a
-			>. This site is one: install it, and the docs work offline.
+				rel="noreferrer"
+			>
+				Fastify
+			</a>. This site is one: install it, and the docs work offline.
 		</p>
 		<pre class="overflow-x-auto rounded-xl bg-(--xcwds-shell-card) px-4 py-3 text-sm"><code
 				>npm create @xcwds my-app</code
 			></pre>
 		<p class="text-sm text-(--xcwds-shell-muted)">
-			<a class="underline" href={resolve('/docs/[slug]', { slug: 'getting-started' })}
-				>Getting started</a
-			> takes it from there to an app on your phone.
+			<a class="underline" href={resolve('/docs/[slug]', { slug: 'getting-started' })}>
+				Getting started
+			</a> takes it from there to an app on your phone.
 		</p>
 	</section>
 	<PageList pages={start} />

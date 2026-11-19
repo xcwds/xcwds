@@ -176,28 +176,35 @@
 				{#if status === 'recording'}
 					<button type="button" class={button} onclick={() => recorder?.pause()}>{t.pause}</button>
 				{:else}
-					<button type="button" class={button} onclick={() => recorder?.resume()}>{t.resume}</button
-					>
+					<button type="button" class={button} onclick={() => recorder?.resume()}>
+						{t.resume}
+					</button>
 				{/if}
 				<button
 					type="button"
 					class="min-h-11 rounded-xl bg-(--xcwds-shell-accent) px-4 font-medium text-white hover:not-disabled:opacity-90 active:opacity-90"
-					onclick={stop}>{t.stop}</button
+					onclick={stop}
 				>
+					{t.stop}
+				</button>
 				<button
 					type="button"
 					class={confirming
 						? 'min-h-11 rounded-xl bg-red-700 px-4 font-medium text-white hover:not-disabled:bg-red-800 active:bg-red-800'
 						: button}
-					onclick={discard}>{confirming ? t.confirmDiscard : t.discard}</button
+					onclick={discard}
 				>
+					{confirming ? t.confirmDiscard : t.discard}
+				</button>
 			{:else}
 				<button
 					type="button"
 					class="min-h-11 rounded-xl bg-red-700 px-6 font-medium text-white hover:not-disabled:bg-red-800 active:bg-red-800 disabled:opacity-40"
 					onclick={start}
-					disabled={saving}>{saving ? t.saving : t.record}</button
+					disabled={saving}
 				>
+					{saving ? t.saving : t.record}
+				</button>
 			{/if}
 		</div>
 		<p class="min-h-11 text-center text-sm" aria-live="polite" data-testid="recorder-status">

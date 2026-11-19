@@ -327,23 +327,29 @@
 					type="button"
 					class={primary}
 					disabled={!pending.found.length}
-					onclick={() => apply('merge')}>Merge</button
+					onclick={() => apply('merge')}
 				>
+					Merge
+				</button>
 				<button
 					type="button"
 					class={button}
 					disabled={!pending.found.length}
-					onclick={() => apply('replace')}>Replace everything</button
+					onclick={() => apply('replace')}
 				>
+					Replace everything
+				</button>
 			</div>
 			<p class="text-xs text-(--xcwds-shell-muted)">
 				Merge keeps data that isn't in the backup. Replace clears everything first{#if sealedGroups}<span
 						data-testid="replace-sealed"
-						>, including {sealedGroups} on this device, which only the encrypted part could bring back</span
-					>{/if}.
+					>
+						, including {sealedGroups} on this device, which only the encrypted part could bring back
+					</span>{/if}.
 			</p>
-			<button type="button" class="{button} text-sm" onclick={() => (pending = null)}>Cancel</button
-			>
+			<button type="button" class="{button} text-sm" onclick={() => (pending = null)}>
+				Cancel
+			</button>
 		</div>
 	{/if}
 
@@ -364,8 +370,10 @@
 					class="{button} text-sm"
 					disabled={!hasData(group)}
 					aria-label="Clear {group.label}"
-					onclick={() => clearGroup(group)}>Clear</button
+					onclick={() => clearGroup(group)}
 				>
+					Clear
+				</button>
 			</li>
 		{/each}
 	</ul>

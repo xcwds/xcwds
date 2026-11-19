@@ -436,26 +436,34 @@
 						type="button"
 						class="min-h-11 rounded-xl bg-(--xcwds-shell-card) px-4 font-medium hover:not-disabled:bg-(--xcwds-shell-hover-bg) active:bg-(--xcwds-shell-hover-bg) disabled:opacity-40"
 						onclick={shareSelected}
-						disabled={!ready || sharing}>{shares ? t.share : t.save}</button
+						disabled={!ready || sharing}
 					>
+						{shares ? t.share : t.save}
+					</button>
 					<button
 						type="button"
 						class="min-h-11 rounded-xl bg-red-700 px-4 font-medium text-white hover:not-disabled:bg-red-800 active:bg-red-800 disabled:opacity-40"
 						onclick={removeSelected}
-						disabled={!chosen.length || removingMany}>{t.delete}</button
+						disabled={!chosen.length || removingMany}
 					>
+						{t.delete}
+					</button>
 					<button
 						type="button"
 						class="min-h-11 rounded-xl bg-(--xcwds-shell-card) px-4 font-medium hover:not-disabled:bg-(--xcwds-shell-hover-bg) active:bg-(--xcwds-shell-hover-bg) disabled:opacity-40"
-						onclick={endSelect}>{t.done}</button
+						onclick={endSelect}
 					>
+						{t.done}
+					</button>
 				{:else}
 					<button
 						type="button"
 						class="min-h-11 rounded-xl bg-(--xcwds-shell-card) px-4 font-medium hover:not-disabled:bg-(--xcwds-shell-hover-bg) active:bg-(--xcwds-shell-hover-bg) disabled:opacity-40"
 						onclick={() => picker?.click()}
-						disabled={adding}>{adding ? t.adding : t.add}</button
+						disabled={adding}
 					>
+						{adding ? t.adding : t.add}
+					</button>
 					{#if list?.length}
 						<button
 							type="button"
@@ -463,8 +471,10 @@
 							onclick={() => {
 								message = '';
 								selecting = true;
-							}}>{t.select}</button
+							}}
 						>
+							{t.select}
+						</button>
 					{/if}
 				{/if}
 			</div>
@@ -493,8 +503,10 @@
 							{#if photo.id in selected}
 								<span
 									class="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-(--xcwds-shell-accent) text-sm text-white"
-									aria-hidden="true">✓</span
+									aria-hidden="true"
 								>
+									✓
+								</span>
 							{/if}
 						</button>
 					</li>
@@ -511,8 +523,10 @@
 				<button
 					type="button"
 					class="min-h-11 rounded-xl bg-(--xcwds-shell-card) px-4 font-medium hover:not-disabled:bg-(--xcwds-shell-hover-bg) active:bg-(--xcwds-shell-hover-bg)"
-					onclick={restore}>{t.undo}</button
+					onclick={restore}
 				>
+					{t.undo}
+				</button>
 			{:else}
 				{message}
 			{/if}
@@ -551,30 +565,40 @@
 						type="button"
 						class="min-h-11 rounded-xl bg-white/15 px-4 font-medium hover:not-disabled:bg-white/25 active:bg-white/25 disabled:opacity-40"
 						onclick={() => step(-1)}
-						disabled={index <= 0}>{t.previous}</button
+						disabled={index <= 0}
 					>
+						{t.previous}
+					</button>
 					<button
 						type="button"
 						class="min-h-11 rounded-xl bg-white/15 px-4 font-medium hover:not-disabled:bg-white/25 active:bg-white/25 disabled:opacity-40"
 						onclick={() => step(1)}
-						disabled={!list || index >= list.length - 1}>{t.next}</button
+						disabled={!list || index >= list.length - 1}
 					>
+						{t.next}
+					</button>
 					<button
 						type="button"
 						class="min-h-11 rounded-xl bg-white/15 px-4 font-medium hover:not-disabled:bg-white/25 active:bg-white/25 disabled:opacity-40"
 						onclick={share}
-						disabled={file?.id !== shown.id || sharing}>{shares ? t.share : t.save}</button
+						disabled={file?.id !== shown.id || sharing}
 					>
+						{shares ? t.share : t.save}
+					</button>
 					<button
 						type="button"
 						class="min-h-11 rounded-xl bg-red-700 px-4 font-medium hover:not-disabled:bg-red-800 active:bg-red-800"
-						onclick={remove}>{t.delete}</button
+						onclick={remove}
 					>
+						{t.delete}
+					</button>
 					<button
 						type="button"
 						class="min-h-11 rounded-xl bg-white px-4 font-medium text-black hover:not-disabled:bg-gray-200 active:bg-gray-200"
-						onclick={close}>{t.close}</button
+						onclick={close}
 					>
+						{t.close}
+					</button>
 				</div>
 				<p
 					class="min-h-6 px-3 pb-3 text-center text-sm"

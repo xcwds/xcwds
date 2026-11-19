@@ -188,9 +188,9 @@
 			{/if}
 			<div class="flex flex-wrap gap-2">
 				<button type="button" class={primary} onclick={add}>Add app</button>
-				<button type="button" class={button} onclick={() => void go(blocks.path, true)}
-					>Cancel</button
-				>
+				<button type="button" class={button} onclick={() => void go(blocks.path, true)}>
+					Cancel
+				</button>
 			</div>
 		{:else}
 			{#if error}

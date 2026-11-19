@@ -87,27 +87,29 @@
 				data-testid="timer"
 			>
 				<span class="min-w-0 flex-1 truncate font-medium">{name}</span>
-				<span class="font-mono text-xl tabular-nums" role="timer" aria-label="{name} remaining"
-					>{ringing ? 'Done' : formatDuration(left)}</span
-				>
+				<span class="font-mono text-xl tabular-nums" role="timer" aria-label="{name} remaining">
+					{ringing ? 'Done' : formatDuration(left)}
+				</span>
 				{#if ringing}
-					<button type="button" class={button} onclick={() => timers?.add(item.id, MINUTE)}
-						>+1 min</button
-					>
+					<button type="button" class={button} onclick={() => timers?.add(item.id, MINUTE)}>
+						+1 min
+					</button>
 					<button type="button" class={button} onclick={() => timers?.remove(item.id)}>Stop</button>
 				{:else}
-					<button type="button" class={button} onclick={() => timers?.toggle(item.id)}
-						>{running(item.state) ? 'Pause' : 'Resume'}</button
-					>
-					<button type="button" class={button} onclick={() => timers?.add(item.id, MINUTE)}
-						>+1 min</button
-					>
+					<button type="button" class={button} onclick={() => timers?.toggle(item.id)}>
+						{running(item.state) ? 'Pause' : 'Resume'}
+					</button>
+					<button type="button" class={button} onclick={() => timers?.add(item.id, MINUTE)}>
+						+1 min
+					</button>
 					<button
 						type="button"
 						class={button}
 						aria-label="Remove {item.label}"
-						onclick={() => timers?.remove(item.id)}>✕</button
+						onclick={() => timers?.remove(item.id)}
 					>
+						✕
+					</button>
 				{/if}
 			</li>
 		{/each}

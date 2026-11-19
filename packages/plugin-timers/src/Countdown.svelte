@@ -18,6 +18,6 @@
 	);
 </script>
 
-<span class="font-mono tabular-nums {className}" role="timer" aria-label="{label} remaining"
-	>{text}</span
->
+<span class="font-mono tabular-nums {className}" role="timer" aria-label="{label} remaining">
+	{text}
+</span>

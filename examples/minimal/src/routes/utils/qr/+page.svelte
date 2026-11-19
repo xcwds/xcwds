@@ -46,13 +46,17 @@
 			<button
 				type="button"
 				class="min-h-11 rounded-xl border px-3"
-				onclick={() => saveQr(text, { format: 'svg' })}>Download SVG</button
+				onclick={() => saveQr(text, { format: 'svg' })}
 			>
+				Download SVG
+			</button>
 			<button
 				type="button"
 				class="min-h-11 rounded-xl border px-3"
-				onclick={() => saveQr(text, { format: 'png' })}>Download PNG</button
+				onclick={() => saveQr(text, { format: 'png' })}
 			>
+				Download PNG
+			</button>
 		</div>
 	{/if}
 
@@ -68,8 +72,10 @@
 		type="button"
 		class="min-h-11 self-start rounded-xl border px-3"
 		disabled={reading}
-		onclick={() => picker?.click()}>{reading ? 'Reading…' : 'Read a code from an image'}</button
+		onclick={() => picker?.click()}
 	>
+		{reading ? 'Reading…' : 'Read a code from an image'}
+	</button>
 	{#if error}
 		<p class="text-sm text-red-700 dark:text-red-400">{error}</p>
 	{:else if found === null}

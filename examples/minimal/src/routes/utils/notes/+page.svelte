@@ -34,8 +34,10 @@
 		<button
 			type="button"
 			class="min-h-11 self-start rounded-xl border px-3"
-			onclick={() => app.tools?.remove(GROCERIES)}>Remove Groceries from tools</button
+			onclick={() => app.tools?.remove(GROCERIES)}
 		>
+			Remove Groceries from tools
+		</button>
 	{:else}
 		<button
 			type="button"
@@ -46,8 +48,10 @@
 					name: 'Groceries',
 					emoji: '🛒',
 					blurb: 'A note made a tool.'
-				})}>Add Groceries to tools</button
+				})}
 		>
+			Add Groceries to tools
+		</button>
 	{/if}
 	<label class="flex flex-col gap-1">
 		Note

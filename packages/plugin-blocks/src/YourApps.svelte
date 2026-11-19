@@ -98,9 +98,9 @@
 			<h2 id="your-apps-heading" class="sr-only">Your apps</h2>
 			<div class="flex flex-wrap gap-2">
 				<a href={href(blocks.editPathOf())} class="{primary} flex items-center">New app</a>
-				<a href={href(`${blocks.path}/import`)} class="{button} flex items-center"
-					>Add from a file</a
-				>
+				<a href={href(`${blocks.path}/import`)} class="{button} flex items-center">
+					Add from a file
+				</a>
 			</div>
 			{#if list && !list.length && !sealed}
 				<p class={muted} data-testid="your-apps-empty">
@@ -118,11 +118,11 @@
 								<span aria-hidden="true" class="text-2xl">{summary.emoji ?? '🧩'}</span>
 								<span class="flex flex-col">
 									<span class="font-medium">{summary.name}</span>
-									<span class={muted}
-										>{[summary.private ? 'Private' : '', sizeText(usage?.apps[summary.id] ?? 0)]
+									<span class={muted}>
+										{[summary.private ? 'Private' : '', sizeText(usage?.apps[summary.id] ?? 0)]
 											.filter(Boolean)
-											.join(' · ')}</span
-									>
+											.join(' · ')}
+									</span>
 								</span>
 							</a>
 							{#if design && !(design.private && locked)}
@@ -132,8 +132,10 @@
 								type="button"
 								class={button}
 								aria-label="Delete {summary.name}"
-								onclick={() => remove(summary)}>Delete</button
+								onclick={() => remove(summary)}
 							>
+								Delete
+							</button>
 						</li>
 					{/each}
 					{#if sealed}
@@ -186,9 +188,9 @@
 								<span aria-hidden="true" class="text-2xl">{template.emoji ?? '🧩'}</span>
 								<span class="flex flex-col">
 									<span class="font-medium">Add {template.name}</span>
-									<span class={muted}
-										>{describe(template)}{template.private ? ' · Private' : ''}</span
-									>
+									<span class={muted}>
+										{describe(template)}{template.private ? ' · Private' : ''}
+									</span>
 								</span>
 							</button>
 						</li>

@@ -154,8 +154,10 @@
 	</div>
 	<p class="text-sm" aria-live="polite">
 		{#if live}{t.scanning}{:else if status === 'denied' || status === 'unavailable' || status === 'error'}<span
-				class="text-red-700 dark:text-red-400">{error}</span
-			>{/if}
+				class="text-red-700 dark:text-red-400"
+			>
+				{error}
+			</span>{/if}
 	</p>
 	{#if live}
 		<button

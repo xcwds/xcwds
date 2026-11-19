@@ -77,18 +77,22 @@
 				class={small}
 				aria-label="Less {field.label}"
 				disabled={n - step < c.min}
-				onclick={() => set(Math.max(c.min, snap(n - step, step)))}>−</button
+				onclick={() => set(Math.max(c.min, snap(n - step, step)))}
 			>
-			<output class="min-w-14 text-center text-lg tabular-nums" aria-live="polite"
-				>{n}{c.unit ? ` ${c.unit}` : ''}</output
-			>
+				−
+			</button>
+			<output class="min-w-14 text-center text-lg tabular-nums" aria-live="polite">
+				{n}{c.unit ? ` ${c.unit}` : ''}
+			</output>
 			<button
 				type="button"
 				class={small}
 				aria-label="More {field.label}"
 				disabled={n + step > c.max}
-				onclick={() => set(Math.min(c.max, snap(n + step, step)))}>+</button
+				onclick={() => set(Math.min(c.max, snap(n + step, step)))}
 			>
+				+
+			</button>
 		</div>
 	</div>
 {:else if field.control?.type === 'switches'}
@@ -102,8 +106,9 @@
 			<label class="flex min-h-11 items-center justify-between gap-3">
 				<span class="flex flex-col">
 					<span class="font-medium">{option.label}</span>
-					{#if option.hint}<span class="text-sm text-(--xcwds-shell-muted)">{option.hint}</span
-						>{/if}
+					{#if option.hint}<span class="text-sm text-(--xcwds-shell-muted)">
+							{option.hint}
+						</span>{/if}
 				</span>
 				<input
 					type="checkbox"

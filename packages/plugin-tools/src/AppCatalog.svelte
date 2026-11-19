@@ -203,8 +203,10 @@
 						class={button}
 						disabled={locked}
 						aria-label="Remove {a.name}'s data"
-						onclick={() => removeData(a)}>Remove data</button
+						onclick={() => removeData(a)}
 					>
+						Remove data
+					</button>
 				</div>
 			{/if}
 		</li>

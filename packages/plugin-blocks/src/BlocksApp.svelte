@@ -129,8 +129,10 @@
 				<a
 					href={href(blocks.editPathOf(definition))}
 					class="{button} flex items-center self-start"
-					data-testid="blocks-edit">Edit app</a
+					data-testid="blocks-edit"
 				>
+					Edit app
+				</a>
 			</div>
 		{/key}
 	{/if}

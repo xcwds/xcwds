@@ -47,9 +47,9 @@
 			{/if}
 		</nav>
 		<p class="edit">
-			<a href="https://github.com/xcwds/xcwds/blob/main/{page.file}" rel="noreferrer"
-				>Edit this page on GitHub</a
-			>
+			<a href="https://github.com/xcwds/xcwds/blob/main/{page.file}" rel="noreferrer">
+				Edit this page on GitHub
+			</a>
 		</p>
 	</article>
 	{#if page.headings.length > 1}

@@ -13,7 +13,8 @@
 			target="_blank"
 			rel="noopener noreferrer"
 			class="underline-offset-2 {runClass({ ...run, underline: true })}"
-			>{#if run.code}<code>{run.text}</code>{:else}{run.text}{/if}</a
-		>{:else if run.code}<code class={cls}>{run.text}</code>{:else if cls}<span class={cls}
-			>{run.text}</span
-		>{:else}{run.text}{/if}{/each}
+		>
+			{#if run.code}<code>{run.text}</code>{:else}{run.text}{/if}
+		</a>{:else if run.code}<code class={cls}>{run.text}</code>{:else if cls}<span class={cls}>
+			{run.text}
+		</span>{:else}{run.text}{/if}{/each}

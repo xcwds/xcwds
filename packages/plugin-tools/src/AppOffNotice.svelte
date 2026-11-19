@@ -42,7 +42,9 @@
 		<button
 			type="button"
 			class="min-h-11 rounded-xl bg-(--xcwds-shell-accent) px-3 font-semibold text-white"
-			onclick={() => turnOn(shown)}>Turn on</button
+			onclick={() => turnOn(shown)}
 		>
+			Turn on
+		</button>
 	</div>
 {/if}

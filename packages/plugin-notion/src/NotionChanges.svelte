@@ -60,9 +60,9 @@
 					{conflictMessage(conflict.item, conflict.checked, blocks)}
 				</p>
 			{/each}
-			<button type="button" class="{button} self-start" onclick={() => notion.clearConflicts()}
-				>Dismiss</button
-			>
+			<button type="button" class="{button} self-start" onclick={() => notion.clearConflicts()}>
+				Dismiss
+			</button>
 		</div>
 	{/if}
 
@@ -109,12 +109,14 @@
 									type="button"
 									class={button}
 									disabled={!connected}
-									onclick={() => notion.retry(item.id)}>Retry</button
+									onclick={() => notion.retry(item.id)}
 								>
+									Retry
+								</button>
 							{/if}
-							<button type="button" class={button} onclick={() => notion.discard(item.id)}
-								>Discard</button
-							>
+							<button type="button" class={button} onclick={() => notion.discard(item.id)}>
+								Discard
+							</button>
 						</div>
 					</li>
 				{/each}

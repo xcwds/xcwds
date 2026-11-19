@@ -101,8 +101,9 @@
 								active === section.path
 							)}"
 						>
-							{#if section.emoji}<span aria-hidden="true" class="text-xl">{section.emoji}</span
-								>{/if}
+							{#if section.emoji}<span aria-hidden="true" class="text-xl">
+									{section.emoji}
+								</span>{/if}
 							{section.label}
 						</a>
 					</li>
@@ -201,8 +202,9 @@
 								<span
 									aria-hidden="true"
 									class="text-xl {active === section.path ? '' : 'opacity-70'}"
-									>{section.emoji}</span
 								>
+									{section.emoji}
+								</span>
 							{/if}
 							{section.label}
 						</a>
