@@ -53,8 +53,10 @@
 			href={url}
 			target="_blank"
 			rel="noopener noreferrer"
-			class="inline-flex min-h-11 items-center underline underline-offset-2">Open in Notion</a
-		>{/if}
+			class="inline-flex min-h-11 items-center underline underline-offset-2"
+		>
+			Open in Notion
+		</a>{/if}
 {/snippet}
 
 {#each groupBlocks(blocks) as group, i (i)}
@@ -83,8 +85,9 @@
 						<svelte:element
 							this={headingTag(block.level)}
 							class="inline font-semibold {colorClass(block.color)}"
-							><RichText runs={block.text} /></svelte:element
 						>
+							<RichText runs={block.text} />
+						</svelte:element>
 					</summary>
 					{@render children(block)}
 				</details>
@@ -93,8 +96,10 @@
 					this={headingTag(block.level)}
 					class="mt-2 font-semibold {['text-xl', 'text-lg', 'text-base'][
 						block.level - 1
-					]} {colorClass(block.color)}"><RichText runs={block.text} /></svelte:element
+					]} {colorClass(block.color)}"
 				>
+					<RichText runs={block.text} />
+				</svelte:element>
 			{/if}
 		{:else if block.type === 'todo'}
 			<div>
@@ -110,9 +115,9 @@
 					{:else}
 						<input type="checkbox" class="mt-1 size-4 shrink-0" checked={block.checked} disabled />
 					{/if}
-					<span class={block.checked ? 'line-through opacity-70' : ''}
-						><RichText runs={block.text} /></span
-					>
+					<span class={block.checked ? 'line-through opacity-70' : ''}>
+						<RichText runs={block.text} />
+					</span>
 				</label>
 				{@render children(block)}
 			</div>
@@ -155,9 +160,9 @@
 						<thead>
 							<tr>
 								{#each block.rows[0] as cell, c (c)}
-									<th scope="col" class="border border-current/20 p-2 text-start font-semibold"
-										><RichText runs={cell} /></th
-									>
+									<th scope="col" class="border border-current/20 p-2 text-start font-semibold">
+										<RichText runs={cell} />
+									</th>
 								{/each}
 							</tr>
 						</thead>
@@ -167,9 +172,9 @@
 							<tr>
 								{#each row as cell, c (c)}
 									{#if block.rowHeader && c === 0}
-										<th scope="row" class="border border-current/20 p-2 text-start font-semibold"
-											><RichText runs={cell} /></th
-										>
+										<th scope="row" class="border border-current/20 p-2 text-start font-semibold">
+											<RichText runs={cell} />
+										</th>
 									{:else}
 										<td class="border border-current/20 p-2"><RichText runs={cell} /></td>
 									{/if}
@@ -192,9 +197,9 @@
 		{:else if block.type === 'bookmark' || block.type === 'embed'}
 			<p>
 				<RichText runs={[{ text: block.url, href: block.url }]} />
-				{#if block.caption.length}<span class="block text-sm opacity-70"
-						><RichText runs={block.caption} /></span
-					>{/if}
+				{#if block.caption.length}<span class="block text-sm opacity-70">
+						<RichText runs={block.caption} />
+					</span>{/if}
 			</p>
 		{:else if block.type === 'equation'}
 			<p><code class="font-mono">{block.expression}</code></p>
@@ -226,8 +231,9 @@
 							target="_blank"
 							rel="noopener noreferrer"
 							class="inline-flex min-h-11 items-center underline underline-offset-2"
-							>Open it on {externalHost(external)}</a
 						>
+							Open it on {externalHost(external)}
+						</a>
 					</p>
 				{:else}
 					<p
@@ -245,9 +251,9 @@
 		{:else if block.type === 'file'}
 			<p class="rounded-xl border border-dashed border-current/30 p-3 text-sm" data-notion="file">
 				{fileLabel(block.notionType)} not shown here yet.
-				{#if block.caption.length}<span class="block opacity-70"
-						><RichText runs={block.caption} /></span
-					>{/if}
+				{#if block.caption.length}<span class="block opacity-70">
+						<RichText runs={block.caption} />
+					</span>{/if}
 				{@render notInNotion()}
 			</p>
 		{:else}

@@ -161,8 +161,10 @@
 								aria-label="Move item {i + 1} up"
 								onclick={() => {
 									if (block.type === 'checklist') block.items = move(block.items, i, -1);
-								}}>Move up</button
+								}}
 							>
+								Move up
+							</button>
 							<button
 								type="button"
 								class={button}
@@ -170,14 +172,18 @@
 								aria-label="Move item {i + 1} down"
 								onclick={() => {
 									if (block.type === 'checklist') block.items = move(block.items, i, 1);
-								}}>Move down</button
+								}}
 							>
+								Move down
+							</button>
 							<button
 								type="button"
 								class={button}
 								aria-label="Remove item {i + 1}"
-								onclick={() => removeItem(i)}>Remove</button
+								onclick={() => removeItem(i)}
 							>
+								Remove
+							</button>
 						</div>
 					</li>
 				{/each}
@@ -192,8 +198,10 @@
 							...block.items,
 							{ id: newId(), label: `Item ${block.items.length + 1}` }
 						];
-				}}>Add item</button
+				}}
 			>
+				Add item
+			</button>
 		</div>
 	{:else if block.type === 'counter'}
 		<div class="grid grid-cols-3 gap-3">
@@ -248,8 +256,10 @@
 				disabled={block.fields.length >= LIMITS.fields}
 				onclick={() => {
 					if (block.type === 'log') block.fields = [...block.fields, blankField('number')];
-				}}>Add field</button
+				}}
 			>
+				Add field
+			</button>
 		</div>
 	{/if}
 </div>

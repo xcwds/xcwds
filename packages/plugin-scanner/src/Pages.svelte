@@ -357,31 +357,39 @@
 									class={button}
 									aria-label={t.action(t.up, n)}
 									disabled={working || index === 0}
-									onclick={() => move(page, -1)}>{t.up}</button
+									onclick={() => move(page, -1)}
 								>
+									{t.up}
+								</button>
 								<button
 									type="button"
 									class={button}
 									aria-label={t.action(t.down, n)}
 									disabled={working || index === list.length - 1}
-									onclick={() => move(page, 1)}>{t.down}</button
+									onclick={() => move(page, 1)}
 								>
+									{t.down}
+								</button>
 								{#if onRetake}
 									<button
 										type="button"
 										class={button}
 										aria-label={t.action(t.retake, n)}
 										disabled={working}
-										onclick={() => onRetake(page.id)}>{t.retake}</button
+										onclick={() => onRetake(page.id)}
 									>
+										{t.retake}
+									</button>
 								{/if}
 								<button
 									type="button"
 									class={button}
 									aria-label={t.action(t.delete, n)}
 									disabled={working}
-									onclick={() => remove(page)}>{t.delete}</button
+									onclick={() => remove(page)}
 								>
+									{t.delete}
+								</button>
 							</div>
 						</div>
 					</li>
@@ -396,8 +404,9 @@
 			>
 				{#if undo}
 					{t.deleted}
-					<button type="button" class={button} onclick={restore} disabled={working}>{t.undo}</button
-					>
+					<button type="button" class={button} onclick={restore} disabled={working}>
+						{t.undo}
+					</button>
 				{:else}
 					{message}
 				{/if}
@@ -455,8 +464,10 @@
 							? 'min-h-11 rounded-xl bg-red-700 px-4 font-medium text-white hover:not-disabled:bg-red-800 active:bg-red-800 disabled:opacity-40'
 							: button}
 						onclick={startOver}
-						disabled={working}>{confirming ? t.confirmStartOver : t.startOver}</button
+						disabled={working}
 					>
+						{confirming ? t.confirmStartOver : t.startOver}
+					</button>
 				</div>
 				<p class="text-sm" aria-live="polite" data-testid="scan-note">
 					{#if files && !files.ok}

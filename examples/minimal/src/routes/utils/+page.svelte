@@ -8,6 +8,8 @@
 	<a
 		href={resolve('/my-apps')}
 		class="flex min-h-11 items-center self-start rounded-xl bg-(--xcwds-shell-card) px-4 hover:bg-(--xcwds-shell-hover-bg)"
-		data-testid="your-apps-link">🧩 Your apps</a
+		data-testid="your-apps-link"
 	>
+		🧩 Your apps
+	</a>
 </main>

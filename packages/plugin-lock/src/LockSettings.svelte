@@ -190,8 +190,10 @@
 				Locked.
 				<a
 					class="inline-flex min-h-11 items-center px-1 font-medium underline"
-					href={href(app.lockScreen?.path ?? '/unlock')}>Unlock</a
+					href={href(app.lockScreen?.path ?? '/unlock')}
 				>
+					Unlock
+				</a>
 			</p>
 			<Forgot />
 		{:else if lock}

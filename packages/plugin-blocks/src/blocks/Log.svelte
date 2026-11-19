@@ -161,8 +161,9 @@
 								/>
 								<span
 									class="flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-(--xcwds-shell-border) peer-checked:bg-(--xcwds-shell-accent) peer-checked:text-(--xcwds-shell-bg) peer-focus-visible:outline-2 peer-focus-visible:outline-(--xcwds-shell-focus)"
-									>{n}</span
 								>
+									{n}
+								</span>
 							</label>
 						{/each}
 					</div>
@@ -187,8 +188,9 @@
 								/>
 								<span
 									class="flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-(--xcwds-shell-border) peer-checked:bg-(--xcwds-shell-accent) peer-checked:text-(--xcwds-shell-bg) peer-focus-visible:outline-2 peer-focus-visible:outline-(--xcwds-shell-focus)"
-									>{text}</span
 								>
+									{text}
+								</span>
 							</label>
 						{/each}
 					</div>
@@ -264,22 +266,26 @@
 							type="button"
 							class={button}
 							aria-label="Edit the entry from {when}"
-							onclick={() => edit(entry)}>Edit</button
+							onclick={() => edit(entry)}
 						>
+							Edit
+						</button>
 						<button
 							type="button"
 							class={button}
 							aria-label="Delete the entry from {when}"
-							onclick={() => remove(entry.id)}>Delete</button
+							onclick={() => remove(entry.id)}
 						>
+							Delete
+						</button>
 					</div>
 				</li>
 			{/each}
 		</ul>
 		{#if entries.length > shown}
-			<button type="button" class="{button} self-start" onclick={() => (shown += PAGE)}
-				>Show more</button
-			>
+			<button type="button" class="{button} self-start" onclick={() => (shown += PAGE)}>
+				Show more
+			</button>
 		{/if}
 	{:else}
 		<p class={muted}>No entries yet.</p>

@@ -45,8 +45,10 @@
 							{href}
 							target="_blank"
 							rel="noopener noreferrer"
-							class="underline underline-offset-2">{propertyText(property)}</a
+							class="underline underline-offset-2"
 						>
+							{propertyText(property)}
+						</a>
 					{:else}{propertyText(property)}{/if}
 				</dd>
 			{/each}
@@ -60,8 +62,10 @@
 					href={url}
 					target="_blank"
 					rel="noopener noreferrer"
-					class="inline-flex min-h-11 items-center underline underline-offset-2">Open in Notion</a
-				>{/if}
+					class="inline-flex min-h-11 items-center underline underline-offset-2"
+				>
+					Open in Notion
+				</a>{/if}
 		</p>
 	{/if}
 </article>

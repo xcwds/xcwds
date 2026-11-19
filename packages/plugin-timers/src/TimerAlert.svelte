@@ -54,8 +54,10 @@
 			<a
 				href={href(timers.page)}
 				class="{action} flex items-center underline"
-				aria-label={openLabel}>Open</a
+				aria-label={openLabel}
 			>
+				Open
+			</a>
 		{/if}
 	</div>
 {/each}

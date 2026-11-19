@@ -502,8 +502,10 @@ const SCANNER = `<script lang="ts">
 				<button
 					type="button"
 					class="min-h-11 rounded-xl bg-(--xcwds-shell-card) px-4 font-medium"
-					onclick={() => (retake = undefined)}>Cancel retake</button
+					onclick={() => (retake = undefined)}
 				>
+					Cancel retake
+				</button>
 			</p>
 		{/if}
 		<Camera onCapture={(p: Photo) => void (photo = p.blob)} />

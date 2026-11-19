@@ -37,8 +37,10 @@
 					class:ring-2={days === n}
 					class:ring-(--xcwds-shell-accent)={days === n}
 					aria-pressed={days === n}
-					onclick={() => (days = n)}>{n} days</button
+					onclick={() => (days = n)}
 				>
+					{n} days
+				</button>
 			{/each}
 		</div>
 	</div>
@@ -70,17 +72,19 @@
 			type="button"
 			class="{button} self-start text-sm"
 			aria-expanded={table}
-			onclick={() => (table = !table)}>{table ? 'Hide table' : 'Show as table'}</button
+			onclick={() => (table = !table)}
 		>
+			{table ? 'Hide table' : 'Show as table'}
+		</button>
 		{#if table}
 			<table class="text-sm">
 				<caption class="sr-only">{field.label}, last {days} days</caption>
 				<thead>
-					<tr
-						><th class="pr-4 text-left font-medium">When</th><th class="text-left font-medium"
-							>{field.label}</th
-						></tr
-					>
+					<tr>
+						<th class="pr-4 text-left font-medium">When</th><th class="text-left font-medium">
+							{field.label}
+						</th>
+					</tr>
 				</thead>
 				<tbody>
 					{#each [...points].reverse() as p, i (i)}

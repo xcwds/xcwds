@@ -43,8 +43,9 @@
 							<span
 								data-testid="whats-new-badge"
 								class="rounded-full bg-(--xcwds-shell-accent) px-2 text-xs font-semibold text-white"
-								>New</span
 							>
+								New
+							</span>
 						{/if}
 					</p>
 					<ul class="list-disc pl-5">

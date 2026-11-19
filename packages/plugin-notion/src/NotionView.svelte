@@ -106,8 +106,10 @@
 				type="button"
 				class="min-h-11 rounded-xl border border-current/20 px-4 font-medium hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/10"
 				disabled={status.downloading || !connected}
-				onclick={() => notion.refresh(source.id, { force: true })}>Refresh</button
+				onclick={() => notion.refresh(source.id, { force: true })}
 			>
+				Refresh
+			</button>
 		</div>
 		{#if copy}
 			{#if source.kind !== 'page' && !fromToday(copy.createdTime)}

@@ -280,9 +280,9 @@
 				<span aria-hidden="true">{preview.app.emoji ?? '🧩'}</span>{preview.app.name}
 			</p>
 			<BlockList app={preview.app} data={preview.data} {now} update={previewUpdate} />
-			<button type="button" class="{primary} self-start" onclick={() => (preview = undefined)}
-				>Back to editing</button
-			>
+			<button type="button" class="{primary} self-start" onclick={() => (preview = undefined)}>
+				Back to editing
+			</button>
 		</div>
 	{:else}
 		{#if restored}
@@ -334,8 +334,10 @@
 									: ''}"
 								aria-label="Use {emoji}"
 								aria-pressed={draft.emoji === emoji}
-								onclick={() => (draft.emoji = emoji)}>{emoji}</button
+								onclick={() => (draft.emoji = emoji)}
 							>
+								{emoji}
+							</button>
 						{/each}
 					</div>
 				</div>
@@ -375,21 +377,27 @@
 								class={button}
 								disabled={i === 0}
 								aria-label="Move {block.label || 'block'} up"
-								onclick={() => (draft.blocks = move(draft.blocks, i, -1))}>Move up</button
+								onclick={() => (draft.blocks = move(draft.blocks, i, -1))}
 							>
+								Move up
+							</button>
 							<button
 								type="button"
 								class={button}
 								disabled={i === draft.blocks.length - 1}
 								aria-label="Move {block.label || 'block'} down"
-								onclick={() => (draft.blocks = move(draft.blocks, i, 1))}>Move down</button
+								onclick={() => (draft.blocks = move(draft.blocks, i, 1))}
 							>
+								Move down
+							</button>
 							<button
 								type="button"
 								class={button}
 								aria-label="Remove {block.label || 'block'}"
-								onclick={() => removeBlock(i)}>Remove block</button
+								onclick={() => removeBlock(i)}
 							>
+								Remove block
+							</button>
 						</div>
 					</section>
 				{/each}

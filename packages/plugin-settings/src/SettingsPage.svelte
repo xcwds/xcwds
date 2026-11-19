@@ -132,9 +132,9 @@
 						{#if page?.options.source}
 							<dt class="text-(--xcwds-shell-muted)">Source</dt>
 							<dd>
-								<a class="underline" href={page.options.source} rel="external noopener"
-									>{page.options.source.replace(/^https:\/\//, '')}</a
-								>
+								<a class="underline" href={page.options.source} rel="external noopener">
+									{page.options.source.replace(/^https:\/\//, '')}
+								</a>
 							</dd>
 						{/if}
 					</dl>

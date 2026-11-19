@@ -286,9 +286,9 @@
 									autofocus
 								/>
 								<button type="submit" class={button} disabled={busy}>{t.saveName}</button>
-								<button type="button" class={button} onclick={() => (renaming = null)}
-									>{t.cancel}</button
-								>
+								<button type="button" class={button} onclick={() => (renaming = null)}>
+									{t.cancel}
+								</button>
 							</form>
 						{:else}
 							<div class="flex flex-wrap items-baseline justify-between gap-x-3">
@@ -309,28 +309,33 @@
 								onclick={() => play(r)}
 								aria-expanded={open?.id === r.id}
 								aria-label="{open?.id === r.id ? t.close : t.play} {title(r)}"
-								>{open?.id === r.id ? t.close : t.play}</button
 							>
+								{open?.id === r.id ? t.close : t.play}
+							</button>
 							{#if open?.id === r.id}
-								<button type="button" class={button} onclick={() => share(r)} disabled={sharing}
-									>{shares ? t.share : t.save}</button
-								>
+								<button type="button" class={button} onclick={() => share(r)} disabled={sharing}>
+									{shares ? t.share : t.save}
+								</button>
 							{/if}
 							{#if renaming !== r.id}
 								<button
 									type="button"
 									class={button}
 									onclick={() => startRename(r)}
-									aria-label="{t.rename} {title(r)}">{t.rename}</button
+									aria-label="{t.rename} {title(r)}"
 								>
+									{t.rename}
+								</button>
 							{/if}
 							<button
 								type="button"
 								class="min-h-11 rounded-xl px-4 font-medium text-red-700 hover:not-disabled:bg-(--xcwds-shell-hover-bg) active:bg-(--xcwds-shell-hover-bg) disabled:opacity-40 dark:text-red-400"
 								onclick={() => remove(r)}
 								disabled={busy}
-								aria-label="{t.delete} {title(r)}">{t.delete}</button
+								aria-label="{t.delete} {title(r)}"
 							>
+								{t.delete}
+							</button>
 						</div>
 					</li>
 				{/each}

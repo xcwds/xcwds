@@ -168,16 +168,18 @@
 					</p>
 					<div class="flex flex-wrap gap-2">
 						<button type="button" class={button} onclick={disconnect}>Disconnect</button>
-						<button type="button" class={button} onclick={() => (confirmDisconnect = false)}
-							>Cancel</button
-						>
+						<button type="button" class={button} onclick={() => (confirmDisconnect = false)}>
+							Cancel
+						</button>
 					</div>
 				{:else}
 					<button
 						type="button"
 						class="{button} self-start"
-						onclick={() => (confirmDisconnect = true)}>Disconnect…</button
+						onclick={() => (confirmDisconnect = true)}
 					>
+						Disconnect…
+					</button>
 				{/if}
 			{:else}
 				<ol class="flex list-decimal flex-col gap-1 ps-6 text-sm">
@@ -203,9 +205,9 @@
 							bind:value={token}
 						/>
 					</label>
-					<button class="{button} self-start" disabled={connecting || !token.trim()}
-						>{connecting ? 'Testing…' : 'Test connection'}</button
-					>
+					<button class="{button} self-start" disabled={connecting || !token.trim()}>
+						{connecting ? 'Testing…' : 'Test connection'}
+					</button>
 				</form>
 			{/if}
 			<p data-testid="connect-note" role="status" class="empty:hidden">{connectNote}</p>
@@ -223,8 +225,10 @@
 							<a
 								class="flex min-h-11 items-center font-semibold underline underline-offset-2"
 								href={viewHref(notion.page, source.id)}
-								data-testid="source-label">{source.label}</a
+								data-testid="source-label"
 							>
+								{source.label}
+							</a>
 							<p class="text-sm opacity-70" aria-live="polite" data-testid="source-status">
 								{#if status.downloading}Downloading…
 								{:else if status.error}{status.message}
@@ -240,19 +244,21 @@
 									type="button"
 									class={button}
 									disabled={status.downloading || !view.connected}
-									onclick={() => notion.refresh(source.id, { force: true })}>Refresh</button
+									onclick={() => notion.refresh(source.id, { force: true })}
 								>
+									Refresh
+								</button>
 								{#if confirmRemove === source.id}
-									<button type="button" class={button} onclick={() => remove(source.id)}
-										>Remove {source.label}</button
-									>
-									<button type="button" class={button} onclick={() => (confirmRemove = undefined)}
-										>Cancel</button
-									>
+									<button type="button" class={button} onclick={() => remove(source.id)}>
+										Remove {source.label}
+									</button>
+									<button type="button" class={button} onclick={() => (confirmRemove = undefined)}>
+										Cancel
+									</button>
 								{:else}
-									<button type="button" class={button} onclick={() => (confirmRemove = source.id)}
-										>Remove…</button
-									>
+									<button type="button" class={button} onclick={() => (confirmRemove = source.id)}>
+										Remove…
+									</button>
 								{/if}
 							</div>
 						</li>
@@ -311,8 +317,9 @@
 						<input class={field} bind:value={titleFilter} maxlength="200" />
 					</label>
 				{/if}
-				<button class="{button} self-start" disabled={adding}>{adding ? 'Checking…' : 'Add'}</button
-				>
+				<button class="{button} self-start" disabled={adding}>
+					{adding ? 'Checking…' : 'Add'}
+				</button>
 			</form>
 			<p data-testid="source-note" role="status" class="empty:hidden">{sourceNote}</p>
 		</section>

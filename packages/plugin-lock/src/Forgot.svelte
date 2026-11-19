@@ -50,8 +50,9 @@
 
 <div class="flex flex-col gap-2" data-testid="lock-forgot">
 	{#if step === 0}
-		<button type="button" class="{ui.secondary} self-start" onclick={start}>Forgot passcode?</button
-		>
+		<button type="button" class="{ui.secondary} self-start" onclick={start}>
+			Forgot passcode?
+		</button>
 	{:else}
 		<div role="alert" class="flex flex-col gap-2 text-sm">
 			{#if step === 1}
