@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // The only way an agent run merges a PR (`gh pr merge` is disallowed in every tool profile).
 // Squash-merges only when every rule in `refusals` passes, and prints why when it refuses.
+// The bot's own PRs that change workflows or `.github/agents/` are the owner's to merge (#258): runs
+// take their prompts, tool profiles and scripts from `main`, so merging one could widen what later
+// runs may do.
 //
 // Usage: merge-pr <number> [--repo owner/name]
 // Reads AGENT_BOT_SLUG (the app's slug) and AGENT_OWNER (the repos' owner), which agent.yml sets.
@@ -18,9 +21,13 @@ const FIELDS = [
 	'headRefOid',
 	'author',
 	'mergeable',
-	'statusCheckRollup'
+	'statusCheckRollup',
+	'changedFiles',
+	'url'
 ];
 const PASSING = new Set(['SUCCESS', 'NEUTRAL', 'SKIPPED']);
+/** Paths the bot may change in a PR but never merge itself. */
+const OWNER_ONLY = /^\.github\/(agents|workflows)\//;
 
 /** The account's login without gh's `app/` prefix or the `[bot]` suffix. */
 const bare = (login) => login.replace(/^app\//, '').replace(/\[bot\]$/, '');
@@ -40,7 +47,8 @@ function checkProblem(check) {
 
 /**
  * Every reason this PR must not be merged (empty when it may be).
- * @param {object} pr `gh pr view --json` output with FIELDS
+ * @param {object} pr `gh pr view --json` output with FIELDS, plus `files`: the PR's changed files
+ *   from the REST API (`filename`, and `previous_filename` for a rename)
  * @param {{ bot: string, owner: string, runId?: string }} who the app's slug, the repos' owner and
  *   this workflow run's id (its own checks, when it runs on the PR, never count)
  */
@@ -58,6 +66,23 @@ export function refusals(pr, { bot, owner, runId }) {
 	const login = bare(pr.author.login);
 	const allowed = pr.author.is_bot ? [bot, 'renovate'].includes(login) : login === owner;
 	if (!allowed) reasons.push(`its author ${pr.author.login} isn't the bot, Renovate or the owner`);
+	if (pr.author.is_bot && login === bot) {
+		const files = pr.files ?? [];
+		const guarded = new Set(
+			files
+				.flatMap((file) => [file.filename, file.previous_filename])
+				.filter((path) => path && OWNER_ONLY.test(path))
+		);
+		if (guarded.size > 0) {
+			reasons.push(
+				`it changes ${[...guarded].join(', ')}: the owner merges the bot's PRs that change workflows or .github/agents/`
+			);
+		} else if (files.length < pr.changedFiles) {
+			reasons.push(
+				`only ${files.length} of its ${pr.changedFiles} changed files could be listed, so a workflow change can't be ruled out`
+			);
+		}
+	}
 	if (pr.isDraft) reasons.push('it is a draft');
 
 	const checks = (pr.statusCheckRollup ?? []).filter(
@@ -98,6 +123,20 @@ async function main() {
 		if (pr.mergeable !== 'UNKNOWN') break;
 		await new Promise((resolve) => setTimeout(resolve, 5000));
 	}
+	// The REST list, unlike `gh pr view --json files` (the first 100), pages through every file and
+	// names a rename's old path.
+	const [, slug] = pr.url.match(/github\.com\/([^/]+\/[^/]+)\/pull\//) ?? [];
+	if (!slug) throw new Error(`can't tell the repo from ${pr.url}`);
+	pr.files = gh([
+		'api',
+		'--paginate',
+		`repos/${slug}/pulls/${pr.number}/files`,
+		'--jq',
+		'.[] | {filename, previous_filename}'
+	])
+		.split('\n')
+		.filter(Boolean)
+		.map((line) => JSON.parse(line));
 
 	const reasons = refusals(pr, { bot, owner, runId: process.env.GITHUB_RUN_ID });
 	if (reasons.length > 0) {

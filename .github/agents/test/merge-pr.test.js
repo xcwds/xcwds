@@ -16,6 +16,12 @@ const green = {
 		{ __typename: 'CheckRun', name: 'checks', status: 'COMPLETED', conclusion: 'SUCCESS' },
 		{ __typename: 'CheckRun', name: 'node-22', status: 'COMPLETED', conclusion: 'SKIPPED' },
 		{ __typename: 'StatusContext', context: 'renovate/stability-days', state: 'SUCCESS' }
+	],
+	changedFiles: 2,
+	url: 'https://github.com/xcwds/xcwds/pull/7',
+	files: [
+		{ filename: 'packages/core/src/index.ts', previous_filename: null },
+		{ filename: '.github/labels.md', previous_filename: null }
 	]
 };
 
@@ -87,6 +93,49 @@ describe('merge-pr', () => {
 			[]
 		);
 		expect(refusals(pr({ statusCheckRollup: [own(43)] }), who)).toHaveLength(1);
+	});
+
+	describe("the bot's PRs that change workflows or .github/agents/", () => {
+		const changing = (...files) => pr({ changedFiles: files.length, files });
+		const file = (filename, previous_filename = null) => ({ filename, previous_filename });
+
+		it('refuses them, naming the files', () => {
+			const reasons = refusals(
+				changing(
+					file('.github/workflows/ci.yml'),
+					file('.github/agents/common.md'),
+					file('README.md')
+				),
+				who
+			);
+			expect(reasons).toEqual([expect.stringContaining('the owner merges')]);
+			expect(reasons[0]).toContain('.github/workflows/ci.yml, .github/agents/common.md');
+			expect(refusals(changing(file('.github/agents/bin/merge-pr.mjs')), who)).toHaveLength(1);
+		});
+
+		it('refuses a rename into or out of them', () => {
+			expect(refusals(changing(file('old.yml', '.github/workflows/ci.yml')), who)).toEqual([
+				expect.stringContaining('.github/workflows/ci.yml')
+			]);
+			expect(refusals(changing(file('.github/agents/x.md', 'docs/x.md')), who)).toHaveLength(1);
+		});
+
+		it('refuses when not every changed file could be listed', () => {
+			expect(refusals(pr({ changedFiles: 3 }), who)).toEqual([
+				expect.stringContaining('only 2 of its 3 changed files')
+			]);
+		});
+
+		it('leaves look-alike paths, and Renovate and the owner, alone', () => {
+			expect(
+				refusals(changing(file('.github/labels.md'), file('docs/.github/workflows/x.yml')), who)
+			).toEqual([]);
+			const workflow = changing(file('.github/workflows/ci.yml'));
+			expect(
+				refusals({ ...workflow, author: { login: 'app/renovate', is_bot: true } }, who)
+			).toEqual([]);
+			expect(refusals({ ...workflow, author: { login: 'xcwds', is_bot: false } }, who)).toEqual([]);
+		});
 	});
 
 	it('refuses a conflict, an unknown merge state, a draft or a closed PR', () => {
