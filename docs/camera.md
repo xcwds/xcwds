@@ -83,7 +83,8 @@ browser here records AAC, so the probe has no file of its own to play. A real AA
 by hand too, in Playwright's Chromium 159 (a Chrome for Testing build, which has the AAC decoder)
 and in Google Chrome 157. Open-source Chromium builds without the proprietary codecs may not play
 it. Firefox answers `'probably'` too, though the very first launch of a fresh install answered
-`''` once, so the recorder never decides by `canPlayType` (it keeps the type it recorded).
+`''` once. That doesn't reach the recorder, which never decides by `canPlayType` (it keeps the
+type it recorded).
 
 `navigator.storage.persist()` is checked on a fresh profile, so on a site the browser hasn't
 seen before. Chromium answers at once with a refusal and shows no prompt; the
