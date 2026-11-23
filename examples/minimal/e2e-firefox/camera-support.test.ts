@@ -51,6 +51,8 @@ test('Firefox has what the recorder plugin uses, as docs/camera.md says (#150)',
 		plays: true,
 		playsWebm: 'probably',
 		playsOgg: 'probably',
+		// The very first launch of a new install answered '' once; every launch since, 'probably'.
+		playsMp4Aac: 'probably',
 		wakeLock: true,
 		locks: true,
 		share: false

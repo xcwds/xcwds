@@ -122,6 +122,7 @@ export async function probeRecorder() {
 		plays,
 		playsWebm: canPlay('audio/webm; codecs="opus"'),
 		playsOgg: canPlay('audio/ogg; codecs="opus"'),
+		playsMp4Aac: canPlay('audio/mp4; codecs="mp4a.40.2"'),
 		wakeLock: 'wakeLock' in navigator,
 		locks: 'locks' in navigator,
 		share: typeof navigator.share === 'function'

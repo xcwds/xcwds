@@ -43,17 +43,17 @@ video, no Web Share with files means Save.
 
 ### Microphone and recording
 
-| Feature                                                              | Chrome, Android                       | Firefox, Android         | Safari, iOS (browser · Home Screen app)                                | Chrome, computer                                                            | Firefox, computer                          |
-| -------------------------------------------------------------------- | ------------------------------------- | ------------------------ | ---------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------ |
-| [`getUserMedia`][gum] audio                                          | 📚 yes                                | 📚 yes                   | 📚 yes · 📱 check (may ask on every launch)                            | ✅ yes (Chromium 159, Linux)                                                | ✅ yes (Firefox 160, Linux)                |
-| `echoCancellation`, `noiseSuppression`, `autoGainControl` turned off | 📚 yes                                | 📚 yes                   | 📱 check                                                               | ✅ yes, all three (Chromium 159)                                            | ✅ yes, all three (Firefox 160)            |
-| [`MediaRecorder`][mr] [types][mr-type]: WebM/Opus · Ogg/Opus · MP4   | 📚 yes · no · yes since Chrome 126    | 📚 yes · yes · no        | 📚 no · no · yes (AAC); 📱 check WebM, which newer versions may record | ✅ yes · no · yes, Opus in MP4 (Chromium 159)                               | ✅ yes · yes · no (Firefox 160)            |
-| Chunks every `timeslice`, joined into one file that plays            | 📚 yes                                | 📚 yes                   | 📱 check (MP4 chunks are only playable joined)                         | ✅ yes (Chromium 159)                                                       | ✅ yes (Firefox 160)                       |
-| `<audio>` [plays][cpt] WebM/Opus · Ogg/Opus · MP4 AAC                | 📚 yes · yes · yes                    | 📚 yes · yes · yes       | 📱 check · 📱 check · 📚 yes                                           | ✅ yes · yes (Chromium 159) · 📚 yes in Chrome, no in plain Chromium builds | ✅ yes · yes (Firefox 160) · 📚 yes        |
-| The microphone when the page is hidden or the phone locks            | 📱 check (reported to keep recording) | 📱 check                 | 📱 check (reported to stop: the plugin saves and says so)              | 📚 keeps recording                                                          | 📚 keeps recording                         |
-| [Screen Wake Lock][wake]                                             | 📚 yes                                | 📚 yes since Firefox 126 | 📚 yes since Safari 16.4 · 📱 check                                    | ✅ yes (Chromium 159)                                                       | ✅ yes (Firefox 160), 📚 since Firefox 126 |
-| [Web Locks][locks] (`navigator.locks`)                               | 📚 yes                                | 📚 yes                   | 📚 yes since Safari 15.4                                               | ✅ yes (Chromium 159)                                                       | ✅ yes (Firefox 160)                       |
-| [Web Share][share] with audio files                                  | 📚 yes                                | 📱 check                 | 📚 yes                                                                 | 📚 as for photos; ✅ no Web Share on Linux (Chromium 159)                   | ✅ no Web Share on Linux (Firefox 160)     |
+| Feature                                                              | Chrome, Android                       | Firefox, Android         | Safari, iOS (browser · Home Screen app)                                | Chrome, computer                                          | Firefox, computer                          |
+| -------------------------------------------------------------------- | ------------------------------------- | ------------------------ | ---------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------ |
+| [`getUserMedia`][gum] audio                                          | 📚 yes                                | 📚 yes                   | 📚 yes · 📱 check (may ask on every launch)                            | ✅ yes (Chromium 159, Linux)                              | ✅ yes (Firefox 160, Linux)                |
+| `echoCancellation`, `noiseSuppression`, `autoGainControl` turned off | 📚 yes                                | 📚 yes                   | 📱 check                                                               | ✅ yes, all three (Chromium 159)                          | ✅ yes, all three (Firefox 160)            |
+| [`MediaRecorder`][mr] [types][mr-type]: WebM/Opus · Ogg/Opus · MP4   | 📚 yes · no · yes since Chrome 126    | 📚 yes · yes · no        | 📚 no · no · yes (AAC); 📱 check WebM, which newer versions may record | ✅ yes · no · yes, Opus in MP4 (Chromium 159)             | ✅ yes · yes · no (Firefox 160)            |
+| Chunks every `timeslice`, joined into one file that plays            | 📚 yes                                | 📚 yes                   | 📱 check (MP4 chunks are only playable joined)                         | ✅ yes (Chromium 159)                                     | ✅ yes (Firefox 160)                       |
+| `<audio>` [plays][cpt] WebM/Opus · Ogg/Opus · MP4 AAC                | 📚 yes · yes · yes                    | 📚 yes · yes · yes       | 📱 check · 📱 check · 📚 yes                                           | ✅ yes · yes · yes (Chromium 159)                         | ✅ yes · yes · yes (Firefox 160)           |
+| The microphone when the page is hidden or the phone locks            | 📱 check (reported to keep recording) | 📱 check                 | 📱 check (reported to stop: the plugin saves and says so)              | 📚 keeps recording                                        | 📚 keeps recording                         |
+| [Screen Wake Lock][wake]                                             | 📚 yes                                | 📚 yes since Firefox 126 | 📚 yes since Safari 16.4 · 📱 check                                    | ✅ yes (Chromium 159)                                     | ✅ yes (Firefox 160), 📚 since Firefox 126 |
+| [Web Locks][locks] (`navigator.locks`)                               | 📚 yes                                | 📚 yes                   | 📚 yes since Safari 15.4                                               | ✅ yes (Chromium 159)                                     | ✅ yes (Firefox 160)                       |
+| [Web Share][share] with audio files                                  | 📚 yes                                | 📱 check                 | 📚 yes                                                                 | 📚 as for photos; ✅ no Web Share on Linux (Chromium 159) | ✅ no Web Share on Linux (Firefox 160)     |
 
 The recorder checks these at run time too: it takes the first type `MediaRecorder` accepts (WebM,
 then Ogg, then MP4) and saves the type it got with each recording, a recording that stops on its
@@ -77,6 +77,14 @@ installed Firefox with its fake camera and microphone (`media.navigator.streams.
 (Playwright's experimental `moz-firefox` channel) with whichever version is installed, so it
 isn't part of `pnpm test:e2e` or CI: run it when you change a Firefox cell, and give the version
 it ran. Firefox's fake camera does report a facing (`environment`), unlike Chromium's.
+
+MP4 AAC playback is `canPlayType('audio/mp4; codecs="mp4a.40.2"')`, as for WebM and Ogg; no
+browser here records AAC, so the probe has no file of its own to play. A real AAC `.m4a` played
+by hand too, in Playwright's Chromium 159 (a Chrome for Testing build, which has the AAC decoder)
+and in Google Chrome 157. Open-source Chromium builds without the proprietary codecs may not play
+it. Firefox answers `'probably'` too, though the very first launch of a fresh install answered
+`''` once. That doesn't reach the recorder, which never decides by `canPlayType` (it keeps the
+type it recorded).
 
 `navigator.storage.persist()` is checked on a fresh profile, so on a site the browser hasn't
 seen before. Chromium answers at once with a refusal and shows no prompt; the

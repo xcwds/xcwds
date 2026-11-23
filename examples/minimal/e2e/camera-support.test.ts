@@ -62,6 +62,7 @@ test('Chromium has what the recorder plugin uses, as docs/camera.md says (#150)'
 		plays: true,
 		playsWebm: 'probably',
 		playsOgg: 'probably',
+		playsMp4Aac: 'probably',
 		wakeLock: true,
 		locks: true,
 		share: false
