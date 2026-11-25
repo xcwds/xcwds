@@ -6,7 +6,7 @@
 import { expect, test } from '@playwright/test';
 import { serveStatic, type StaticServer } from '@xcwds/testing/playwright';
 import { fileURLToPath } from 'node:url';
-import { probeCamera, probeRecorder } from './probes.js';
+import { probeCamera, probePtz, probeRecorder } from './probes.js';
 
 // A per-file `launchOptions` replaces the config's, so this repeats its Chromium and flag.
 test.use({
@@ -46,6 +46,28 @@ test('Chromium has what the camera plugin uses, as docs/camera.md says', async (
 		webp: 'image/webp',
 		persist: 'refused, denied',
 		share: false
+	});
+});
+
+test('Chromium reports pan, tilt and zoom only with their permission, as docs/camera.md says', async ({
+	page,
+	context
+}) => {
+	await page.goto(server.url('/'));
+	// Without the pan-tilt-zoom permission, asking for them changes nothing.
+	expect(await page.evaluate(probePtz)).toEqual({ permission: 'denied', controls: [] });
+	// Playwright has no name for that permission, so grant it over CDP, in this context.
+	const cdp = await context.newCDPSession(page);
+	const { targetInfo } = await cdp.send('Target.getTargetInfo');
+	await cdp.send('Browser.setPermission', {
+		browserContextId: targetInfo.browserContextId,
+		origin: new URL(server.url('/')).origin,
+		permission: { name: 'camera', panTiltZoom: true },
+		setting: 'granted'
+	});
+	expect(await page.evaluate(probePtz)).toEqual({
+		permission: 'granted',
+		controls: ['zoom', 'pan', 'tilt']
 	});
 });
 
