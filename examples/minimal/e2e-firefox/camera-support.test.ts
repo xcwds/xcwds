@@ -22,7 +22,7 @@ test('Firefox has what the camera plugin uses, as docs/camera.md says', async ({
 		largest: '4096x2160',
 		constrained: true,
 		facing: ['environment'],
-		zoom: false,
+		ptz: [],
 		torch: false,
 		focus: false,
 		capture: false,

@@ -33,7 +33,7 @@ test('Chromium has what the camera plugin uses, as docs/camera.md says', async (
 		largest: '3840x2160',
 		constrained: true,
 		facing: [],
-		zoom: false,
+		ptz: [],
 		torch: false,
 		focus: true,
 		capture: true,

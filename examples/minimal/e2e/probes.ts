@@ -56,7 +56,8 @@ export async function probeCamera() {
 		largest,
 		constrained,
 		facing: caps.facingMode ?? [],
-		zoom: 'zoom' in caps,
+		// Pan, tilt and zoom: the controls the camera reports, in the docs' order.
+		ptz: ['zoom', 'pan', 'tilt'].filter((control) => control in caps),
 		torch: 'torch' in caps,
 		focus: 'focusMode' in caps && 'exposureMode' in caps,
 		capture,
