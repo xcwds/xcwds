@@ -56,7 +56,8 @@ export async function probeCamera() {
 		largest,
 		constrained,
 		facing: caps.facingMode ?? [],
-		zoom: 'zoom' in caps,
+		// Pan, tilt and zoom: the controls the camera reports, in the docs' order.
+		ptz: ['zoom', 'pan', 'tilt'].filter((control) => control in caps),
 		torch: 'torch' in caps,
 		focus: 'focusMode' in caps && 'exposureMode' in caps,
 		capture,
@@ -160,4 +161,26 @@ export async function probeSwitch() {
 		second,
 		different: second === 'opened' && id !== firstId
 	};
+}
+
+/**
+ * Pan, tilt and zoom when the page asks for them (`pan`/`tilt`/`zoom: true`), and the camera's
+ * pan-tilt-zoom permission. Chromium reports them only once the site has that permission, and then
+ * to every stream, asked for or not; without it, even a camera that has them reports none.
+ */
+export async function probePtz() {
+	let permission: string;
+	try {
+		const descriptor = { name: 'camera', panTiltZoom: true } as unknown as PermissionDescriptor;
+		permission = (await navigator.permissions.query(descriptor)).state;
+	} catch (e) {
+		permission = (e as Error).name;
+	}
+	const video = { pan: true, tilt: true, zoom: true } as MediaTrackConstraints;
+	const stream = await navigator.mediaDevices.getUserMedia({ video });
+	const track = stream.getVideoTracks()[0]!;
+	const caps = track.getCapabilities() as MediaTrackCapabilities & Record<string, unknown>;
+	const controls = ['zoom', 'pan', 'tilt'].filter((control) => control in caps);
+	track.stop();
+	return { permission, controls };
 }
