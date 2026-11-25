@@ -164,9 +164,9 @@ export async function probeSwitch() {
 }
 
 /**
- * Pan, tilt and zoom when the page asks for them. Chromium reports them only to a page that asks
- * (`pan`/`tilt`/`zoom: true`) and holds the camera's pan-tilt-zoom permission, so `probeCamera`,
- * which asks for neither, sees none even on a camera that has them.
+ * Pan, tilt and zoom when the page asks for them (`pan`/`tilt`/`zoom: true`), and the camera's
+ * pan-tilt-zoom permission. Chromium reports them only once the site has that permission, and then
+ * to every stream, asked for or not; without it, even a camera that has them reports none.
  */
 export async function probePtz() {
 	let permission: string;

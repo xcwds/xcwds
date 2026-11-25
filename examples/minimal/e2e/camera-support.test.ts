@@ -69,6 +69,8 @@ test('Chromium reports pan, tilt and zoom only with their permission, as docs/ca
 		permission: 'granted',
 		controls: ['zoom', 'pan', 'tilt']
 	});
+	// The permission is what counts: a stream that doesn't ask for them reports them too.
+	expect((await page.evaluate(probeCamera)).ptz).toEqual(['zoom', 'pan', 'tilt']);
 });
 
 test('Chromium has what the recorder plugin uses, as docs/camera.md says (#150)', async ({
