@@ -5,7 +5,7 @@
 import { expect, test } from '@playwright/test';
 import { serveStatic, type StaticServer } from '@xcwds/testing/playwright';
 import { fileURLToPath } from 'node:url';
-import { probeCamera, probeRecorder } from '../e2e/probes.js';
+import { probeCamera, probePtz, probeRecorder } from '../e2e/probes.js';
 
 const build = fileURLToPath(new URL('../build', import.meta.url));
 let server: StaticServer;
@@ -22,7 +22,7 @@ test('Firefox has what the camera plugin uses, as docs/camera.md says', async ({
 		largest: '4096x2160',
 		constrained: true,
 		facing: ['environment'],
-		zoom: false,
+		ptz: [],
 		torch: false,
 		focus: false,
 		capture: false,
@@ -36,6 +36,13 @@ test('Firefox has what the camera plugin uses, as docs/camera.md says', async ({
 		persist: 'no answer, prompt',
 		share: false
 	});
+});
+
+test('Firefox reports no pan, tilt or zoom even when asked, as docs/camera.md says', async ({
+	page
+}) => {
+	await page.goto(server.url('/'));
+	expect((await page.evaluate(probePtz)).controls).toEqual([]);
 });
 
 test('Firefox has what the recorder plugin uses, as docs/camera.md says (#150)', async ({
