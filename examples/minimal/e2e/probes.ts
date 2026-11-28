@@ -184,3 +184,20 @@ export async function probePtz() {
 	track.stop();
 	return { permission, controls };
 }
+
+/**
+ * The site's camera permission, then whether the camera opens. A headless Chromium refuses a
+ * camera it would have to ask for, so `opened` means the site already had a grant.
+ */
+export async function probePermission() {
+	const state = (await navigator.permissions.query({ name: 'camera' as PermissionName })).state;
+	let camera: string;
+	try {
+		const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+		for (const track of stream.getTracks()) track.stop();
+		camera = 'opened';
+	} catch (e) {
+		camera = (e as Error).name;
+	}
+	return { state, camera };
+}
