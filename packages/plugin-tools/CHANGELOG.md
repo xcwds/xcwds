@@ -1,5 +1,13 @@
 # @xcwds/plugin-tools
 
+## 0.10.1
+
+### Patch Changes
+
+- 15954d5: Reformat Svelte components for prettier-plugin-svelte 4.2, which puts element content on its own lines. Svelte 5 trims whitespace at the start and end of an element, so nothing renders differently. Apps from `npm create @xcwds` with the scanner get the same layout.
+- Updated dependencies [15954d5]
+  - @xcwds/plugin-shell@0.8.1
+
 ## 0.10.0
 
 ### Minor Changes
